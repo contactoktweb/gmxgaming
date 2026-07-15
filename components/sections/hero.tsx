@@ -1,118 +1,215 @@
 'use client'
 
-import { motion } from 'motion/react'
+import { useRef } from 'react'
+import { motion, useScroll, useTransform } from 'motion/react'
 import { GmxButton } from '@/components/gmx-button'
 
-const container = {
+const TICKER_ITEMS = [
+  'LIGAS', 'TORNEOS', 'EVENTOS', 'MOBILE LEGENDS', 'HONOR OF KINGS', 'ESPORTS'
+]
+
+// Animations
+const containerVariants = {
   hidden: {},
-  visible: { transition: { staggerChildren: 0.14, delayChildren: 0.1 } },
-}
-const fadeUp = {
-  hidden: { opacity: 0, y: 40 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.7, ease: [0.22, 1, 0.36, 1] } },
-}
-const titleChar = {
-  hidden: { opacity: 0.3, x: -7 },
-  visible: { opacity: 1, x: 0, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } },
+  visible: { transition: { staggerChildren: 0.12, delayChildren: 0.5 } },
 }
 
-const TITLE_LINES = ['AQUÍ COMIENZA', 'EL CAMINO']
+const fadeUpVariants = {
+  hidden: { opacity: 0, y: 30 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.22, 1, 0.36, 1] } },
+}
+
+const titleLineVariants = {
+  hidden: { y: '110%' },
+  visible: { y: '0%', transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] } }
+}
+
+const titleCharVariants = {
+  hidden: { opacity: 0, x: -10 },
+  visible: { opacity: 1, x: 0, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] } }
+}
 
 export function Hero({ ready }: { ready: boolean }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  
+  const { scrollYProgress } = useScroll({
+    target: containerRef,
+    offset: ['start start', 'end start'],
+  })
+
+  // Parallax transforms mapped to scroll position
+  const bgY = useTransform(scrollYProgress, [0, 1], ['0%', '25%'])
+  const playerY = useTransform(scrollYProgress, [0, 1], ['0%', '-10%'])
+  const playerScale = useTransform(scrollYProgress, [0, 1], [1, 0.95])
+  const textY = useTransform(scrollYProgress, [0, 1], ['0%', '15%'])
+
   return (
-    <section id="hero" className="relative flex min-h-[100svh] items-center overflow-hidden">
-      {/* Background */}
-      <div className="absolute inset-0 -z-20">
+    <section ref={containerRef} id="hero" className="relative flex min-h-[100svh] w-full flex-col justify-center overflow-hidden bg-deep">
+      
+      {/* LAYER 1: Background Layer */}
+      <motion.div 
+        className="absolute inset-0 z-0 origin-center"
+        style={{ y: bgY }}
+        initial={{ scale: 1.05 }}
+        animate={ready ? { scale: 1 } : {}}
+        transition={{ duration: 1.8, ease: 'easeOut' }}
+      >
+        <div className="absolute inset-0 z-10 bg-deep/70" /> {/* Dark overlay */}
+        <div className="absolute inset-0 z-10 mix-blend-screen bg-[radial-gradient(circle_at_45%_50%,rgba(255,45,32,0.18),transparent_65%)]" /> {/* Red spotlight */}
+        <div className="pointer-events-none absolute inset-0 z-10 bg-[radial-gradient(circle_at_center,transparent_20%,#050505_100%)]" /> {/* Vignette */}
         <img
           src="/images/hero-bg.png"
-          alt=""
-          className="h-full w-full object-cover"
+          alt="GMX Gaming Arena"
+          className="h-full w-full object-cover opacity-60"
         />
-      </div>
-      <div className="absolute inset-0 -z-10 bg-gradient-to-r from-deep via-deep/85 to-deep/40" />
-      <div className="absolute inset-0 -z-10 bg-gradient-to-t from-background via-transparent to-background/40" />
+      </motion.div>
 
-      {/* Decorative giant background word */}
-      <span className="pointer-events-none absolute -right-6 top-1/2 -z-10 hidden -translate-y-1/2 font-display text-[22vw] font-700 uppercase leading-none text-white/[0.03] lg:block">
-        GMX
-      </span>
+      {/* LAYER 2: Main Visual (Asymmetrical Right) */}
+      <motion.div 
+        className="absolute bottom-0 right-0 z-10 w-[120%] max-w-[600px] origin-bottom sm:w-full md:max-w-[700px] lg:right-[5%] lg:max-w-[850px] xl:right-[10%]"
+        style={{ y: playerY, scale: playerScale }}
+        initial={{ opacity: 0, y: 80, scale: 1.05 }}
+        animate={ready ? { opacity: 1, y: 0, scale: 1 } : {}}
+        transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
+      >
+        <div className="relative w-full" style={{ maskImage: 'linear-gradient(to top, transparent 2%, black 35%)', WebkitMaskImage: 'linear-gradient(to top, transparent 2%, black 35%)' }}>
+          <img
+            src="/images/hero-player.png"
+            alt="Jugador Profesional de GMX"
+            className="w-full object-contain object-bottom drop-shadow-[0_0_20px_rgba(255,45,32,0.2)]"
+          />
+        </div>
+      </motion.div>
 
-      <div className="mx-auto grid w-full max-w-[1400px] grid-cols-1 items-center gap-12 px-5 pb-16 pt-32 lg:grid-cols-[42%_58%] lg:px-10">
-        {/* Left visual */}
-        <motion.div
-          initial={{ opacity: 0, x: -80 }}
-          animate={ready ? { opacity: 1, x: 0 } : {}}
-          transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
-          className="relative order-2 lg:order-1"
-        >
-          <div className="relative mx-auto max-w-sm overflow-hidden clip-corner lg:max-w-none">
-            <div className="absolute inset-0 z-10 bg-gradient-to-t from-deep via-transparent to-transparent" />
-            <img
-              src="/images/hero-player.png"
-              alt="Jugador profesional de GMX Gaming"
-              className="w-full object-cover"
-            />
-            <div className="absolute left-4 top-4 z-20 border border-primary/60 bg-deep/60 px-3 py-1.5 font-display text-[11px] font-600 uppercase tracking-[0.2em] text-primary backdrop-blur-sm">
-              PRO PLAYER
-            </div>
-          </div>
+      {/* LAYER 3: Editorial Content (Asymmetrical Left) */}
+      <motion.div 
+        className="relative z-20 mx-auto flex w-full max-w-[1400px] flex-col px-6 pt-32 pb-40 lg:px-12"
+        style={{ y: textY }}
+        variants={containerVariants}
+        initial="hidden"
+        animate={ready ? 'visible' : 'hidden'}
+      >
+        
+        {/* HUD: Top Left Technical Details */}
+        <motion.div variants={fadeUpVariants} className="absolute left-6 top-24 hidden items-center gap-4 text-[10px] font-500 tracking-[0.3em] text-faint lg:flex xl:left-12">
+          <span>EST. 2024</span>
+          <span className="h-px w-8 bg-border" />
+          <span>GMX GAMING / ESPORTS / COMPETITION</span>
         </motion.div>
 
-        {/* Right content */}
-        <motion.div
-          variants={container}
-          initial="hidden"
-          animate={ready ? 'visible' : 'hidden'}
-          className="order-1 lg:order-2"
-        >
-          <motion.div variants={fadeUp} className="mb-5 flex items-center gap-3">
-            <span className="h-px w-10 bg-primary" />
-            <span className="font-display text-xs font-600 uppercase tracking-[0.3em] text-primary sm:text-sm">
-              ¡Bienvenidos a GMX Gaming!
+        {/* HUD: Competitive Floating Panel */}
+        <motion.div variants={fadeUpVariants} className="absolute right-6 top-[35%] hidden flex-col gap-3 border-l border-primary/40 pl-4 text-[10px] font-600 tracking-[0.2em] text-muted-foreground lg:flex xl:right-12">
+          <span className="hover:text-white transition-colors">01 / COMPITE</span>
+          <span className="hover:text-white transition-colors">02 / CRECE</span>
+          <span className="hover:text-white transition-colors">03 / DOMINA</span>
+        </motion.div>
+
+        <div className="mt-auto max-w-[700px] lg:max-w-[850px] xl:max-w-[1000px]">
+          
+          <motion.div variants={fadeUpVariants} className="mb-6 flex items-center gap-4 lg:mb-8">
+            <span className="h-px w-10 bg-primary lg:w-16" />
+            <span className="font-display text-xs font-700 uppercase tracking-[0.3em] text-primary sm:text-sm">
+              ¡BIENVENIDOS A GMX GAMING!
             </span>
           </motion.div>
 
-          <motion.h1
-            variants={container}
-            className="font-display text-5xl font-700 uppercase leading-[0.95] tracking-tight text-white sm:text-6xl lg:text-7xl xl:text-8xl"
-          >
-            {TITLE_LINES.map((line, li) => (
-              <span key={li} className="block">
-                {Array.from(line).map((c, ci) => (
-                  <motion.span key={ci} variants={titleChar} className="inline-block whitespace-pre">
-                    {c === ' ' ? '\u00A0' : c}
-                  </motion.span>
+          <h1 className="font-display text-[14vw] font-black uppercase leading-[0.85] tracking-tight text-white md:text-[8rem] lg:text-[9.5rem] xl:text-[11rem]">
+            {/* Title Line 1 */}
+            <div className="overflow-hidden pb-1">
+              <motion.div variants={titleLineVariants} className="origin-left">
+                {Array.from("AQUÍ").map((char, i) => (
+                  <motion.span key={i} variants={titleCharVariants} className="inline-block">{char}</motion.span>
                 ))}
-              </span>
-            ))}
-          </motion.h1>
+              </motion.div>
+            </div>
+            
+            {/* Title Line 2 */}
+            <div className="overflow-hidden pb-1">
+              <motion.div variants={titleLineVariants} className="origin-left ml-[2vw] lg:ml-[1vw]">
+                {Array.from("COMIENZA").map((char, i) => (
+                  <motion.span key={i} variants={titleCharVariants} className="inline-block">{char}</motion.span>
+                ))}
+              </motion.div>
+            </div>
+            
+            {/* Title Line 3 & 4 */}
+            <div className="overflow-hidden pb-4">
+              <motion.div variants={titleLineVariants} className="flex flex-wrap items-center gap-[3vw] origin-left lg:gap-8">
+                <span>
+                  {Array.from("EL").map((char, i) => (
+                    <motion.span key={i} variants={titleCharVariants} className="inline-block">{char}</motion.span>
+                  ))}
+                </span>
+                <span className="text-primary drop-shadow-[0_0_15px_rgba(255,45,32,0.4)]">
+                  {Array.from("CAMINO").map((char, i) => (
+                    <motion.span key={i} variants={titleCharVariants} className="inline-block">{char}</motion.span>
+                  ))}
+                </span>
+              </motion.div>
+            </div>
+          </h1>
 
-          <motion.p
-            variants={fadeUp}
-            className="mt-6 max-w-lg font-display text-base font-500 uppercase tracking-[0.12em] text-muted-foreground sm:text-lg"
-          >
-            Conviértete en jugador profesional de eSports
+          <motion.h2 variants={fadeUpVariants} className="mt-8 max-w-2xl font-display text-sm font-600 uppercase tracking-[0.2em] text-white sm:text-base lg:text-xl">
+            CONVIÉRTETE EN JUGADOR PROFESIONAL DE ESPORTS
+          </motion.h2>
+
+          <motion.p variants={fadeUpVariants} className="mt-5 max-w-[480px] text-sm font-400 leading-relaxed text-muted-foreground sm:text-base lg:mt-6">
+            Compite, crece y demuestra tu nivel dentro de una comunidad creada para llevar el talento gamer al siguiente nivel.
           </motion.p>
 
-          <motion.div variants={fadeUp} className="mt-9 flex flex-col gap-4 sm:flex-row">
-            <GmxButton href="#registro">CREA TU USUARIO</GmxButton>
-            <GmxButton href="#torneos" variant="secondary">
-              VER TORNEOS
+          <motion.div variants={fadeUpVariants} className="mt-10 flex flex-col items-start gap-4 sm:flex-row sm:items-center lg:mt-12">
+            <GmxButton href="#registro" className="w-full sm:w-auto">CREA TU USUARIO</GmxButton>
+            <GmxButton href="#torneos" variant="secondary" className="w-full sm:w-auto border-white/20 hover:border-white">
+              EXPLORA LOS TORNEOS
             </GmxButton>
           </motion.div>
-        </motion.div>
-      </div>
 
-      {/* Scroll hint */}
+        </div>
+      </motion.div>
+
+      {/* BOTTOM TICKER */}
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={ready ? { opacity: 1 } : {}}
+        transition={{ delay: 1.8, duration: 1 }}
+        className="absolute bottom-0 z-30 flex w-full items-center overflow-hidden border-t border-white/10 bg-deep/80 py-3 backdrop-blur-md"
+      >
+        <div className="flex w-max animate-marquee-left items-center">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="flex shrink-0 items-center">
+              {TICKER_ITEMS.map((item, j) => (
+                <div key={j} className="flex items-center">
+                  <span className="mx-6 font-display text-xs font-600 uppercase tracking-[0.2em] text-faint hover:text-white transition-colors cursor-default">
+                    {item}
+                  </span>
+                  <span className="text-[10px] text-primary/50">×</span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </motion.div>
+
+      {/* Scroll Indicator */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={ready ? { opacity: 1 } : {}}
-        transition={{ delay: 1.2, duration: 0.6 }}
-        className="absolute bottom-6 left-1/2 hidden -translate-x-1/2 flex-col items-center gap-2 lg:flex"
+        transition={{ delay: 2.2, duration: 1 }}
+        className="absolute bottom-24 right-6 z-30 hidden flex-col items-center gap-4 xl:right-12 lg:flex"
       >
-        <span className="text-[10px] font-500 uppercase tracking-[0.4em] text-faint">Scroll</span>
-        <span className="h-10 w-px animate-pulse bg-gradient-to-b from-primary to-transparent" />
+        <span className="font-display text-[9px] font-600 uppercase tracking-[0.3em] text-faint" style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}>
+          SCROLL TO EXPLORE
+        </span>
+        <span className="h-14 w-[1px] animate-pulse bg-gradient-to-b from-primary to-transparent" />
       </motion.div>
+
+      {/* Corner Technical Borders (HUD) */}
+      <div className="pointer-events-none absolute inset-6 z-20 hidden border border-white/5 lg:block xl:inset-10" />
+      <div className="pointer-events-none absolute left-5 top-5 z-20 hidden h-4 w-4 border-l border-t border-primary lg:block xl:left-9 xl:top-9" />
+      <div className="pointer-events-none absolute right-5 top-5 z-20 hidden h-4 w-4 border-r border-t border-primary lg:block xl:right-9 xl:top-9" />
+      <div className="pointer-events-none absolute bottom-5 right-5 z-20 hidden h-4 w-4 border-b border-r border-primary lg:block xl:bottom-9 xl:right-9" />
+      <div className="pointer-events-none absolute bottom-5 left-5 z-20 hidden h-4 w-4 border-b border-l border-primary lg:block xl:bottom-9 xl:left-9" />
+
     </section>
   )
 }
