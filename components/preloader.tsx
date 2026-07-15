@@ -43,15 +43,16 @@ export function Preloader({ onDone }: { onDone?: () => void }) {
             }
             transition={{ duration: 0.5, ease: 'easeInOut' }}
           >
-            {/* Spinner */}
-            <div className="h-14 w-14 rounded-full border-2 border-white/10 border-t-primary animate-spin-fast" />
+            {/* Glowing Dual-Arc Spinner */}
+            <div className="h-16 w-16 rounded-full border-2 border-transparent border-y-primary animate-spin-fast filter drop-shadow-[0_0_12px_#ff2d20]" />
 
             {/* GMX GAMING letters */}
-            <div className="flex font-display text-3xl font-700 uppercase tracking-[0.25em] text-white sm:text-5xl">
+            <div className="flex font-display text-3xl font-black uppercase tracking-[0.25em] text-white sm:text-5xl">
               {LETTERS.map((l, i) => (
                 <motion.span
                   key={i}
-                  className="inline-block"
+                  className="inline-block animate-neon-glow"
+                  style={{ animationDelay: `${i * 0.08}s` }}
                   initial={{ opacity: 0, y: 18 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.15 + i * 0.12, duration: 0.4, ease: 'easeOut' }}
@@ -62,7 +63,7 @@ export function Preloader({ onDone }: { onDone?: () => void }) {
             </div>
 
             <motion.span
-              className="text-[11px] font-500 uppercase tracking-[0.6em] text-faint"
+              className="text-[11px] font-700 uppercase tracking-[0.6em] text-primary/80 animate-pulse-opacity"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 1.4, duration: 0.6 }}

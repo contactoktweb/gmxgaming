@@ -145,6 +145,34 @@
   animation: spin-fast 0.9s linear infinite;
 }
 
+/* Red neon glow pulse animation for GMX GAMING preloader */
+@keyframes neon-glow-pulse {
+  0%, 100% {
+    text-shadow: 0 0 6px rgba(255, 45, 32, 0.4), 0 0 15px rgba(255, 45, 32, 0.2);
+    color: #ffffff;
+  }
+  50% {
+    text-shadow: 0 0 15px rgba(255, 45, 32, 0.95), 0 0 30px rgba(255, 45, 32, 0.7), 0 0 45px rgba(255, 45, 32, 0.4);
+    color: var(--primary);
+  }
+}
+.animate-neon-glow {
+  animation: neon-glow-pulse 1.8s ease-in-out infinite;
+}
+
+/* Subtly breathing opacity animation for subtext */
+@keyframes pulse-opacity {
+  0%, 100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+.animate-pulse-opacity {
+  animation: pulse-opacity 1.8s ease-in-out infinite;
+}
+
 /* Angular clip for aggressive buttons/cards */
 .clip-corner {
   clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
