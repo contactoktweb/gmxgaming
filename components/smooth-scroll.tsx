@@ -3,6 +3,13 @@
 import { useEffect } from 'react'
 import Lenis from 'lenis'
 
+// Global Lenis instance to allow external control (e.g., pausing when a modal is open)
+declare global {
+  interface Window {
+    __lenis?: Lenis
+  }
+}
+
 export function SmoothScroll() {
   useEffect(() => {
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -13,7 +20,14 @@ export function SmoothScroll() {
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       smoothWheel: true,
       touchMultiplier: 1.5,
+      // Allow native scroll inside elements marked with data-lenis-prevent
+      prevent: (node: Element) => {
+        return node.closest('[data-lenis-prevent]') !== null
+      },
     })
+
+    // Expose instance globally so modals can pause/resume it
+    window.__lenis = lenis
 
     let rafId = 0
     function raf(time: number) {
@@ -39,6 +53,7 @@ export function SmoothScroll() {
     return () => {
       cancelAnimationFrame(rafId)
       document.removeEventListener('click', onClick)
+      window.__lenis = undefined
       lenis.destroy()
     }
   }, [])

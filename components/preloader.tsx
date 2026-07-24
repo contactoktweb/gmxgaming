@@ -5,21 +5,31 @@ import { AnimatePresence, motion } from 'motion/react'
 
 const LETTERS = ['G', 'M', 'X', ' ', 'G', 'A', 'M', 'I', 'N', 'G']
 
+let hasShownPreloader = false
+
 export function Preloader({ onDone }: { onDone?: () => void }) {
-  const [phase, setPhase] = useState<'loading' | 'reveal' | 'done'>('loading')
+  const [phase, setPhase] = useState<'loading' | 'reveal' | 'done'>(
+    hasShownPreloader ? 'done' : 'loading'
+  )
 
   useEffect(() => {
+    if (hasShownPreloader) {
+      onDone?.()
+      return
+    }
+
     document.body.style.overflow = 'hidden'
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const loadMs = reduce ? 700 : 2200
     const t1 = setTimeout(() => setPhase('reveal'), loadMs)
     return () => clearTimeout(t1)
-  }, [])
+  }, [onDone])
 
   useEffect(() => {
     if (phase === 'reveal') {
       const t = setTimeout(() => {
         setPhase('done')
+        hasShownPreloader = true
         document.body.style.overflow = ''
         onDone?.()
       }, 1000)

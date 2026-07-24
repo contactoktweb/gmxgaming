@@ -28,7 +28,7 @@ export function CtaPrimary() {
             className="mt-4 font-display text-4xl font-700 uppercase leading-[0.95] tracking-tight text-white sm:text-5xl lg:text-6xl xl:text-7xl"
           />
           <Reveal direction="up" delay={0.2} className="mt-9">
-            <GmxButton href="#registro">CREA TU USUARIO</GmxButton>
+            <GmxButton href="/registro/alta-de-jugador">CREA TU USUARIO</GmxButton>
           </Reveal>
         </div>
 

@@ -158,7 +158,7 @@ export function Hero({ ready }: { ready: boolean }) {
           </motion.p>
 
           <motion.div variants={fadeUpVariants} className="mt-10 flex flex-col items-start gap-4 sm:flex-row sm:items-center lg:mt-12">
-            <GmxButton href="#registro" className="w-full sm:w-auto">CREA TU USUARIO</GmxButton>
+            <GmxButton href="/registro/alta-de-jugador" className="w-full sm:w-auto">CREA TU USUARIO</GmxButton>
             <GmxButton href="#torneos" variant="secondary" className="w-full sm:w-auto border-white/20 hover:border-white">
               EXPLORA LOS TORNEOS
             </GmxButton>

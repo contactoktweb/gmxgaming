@@ -28,21 +28,30 @@ export function Teams() {
       <div className="relative flex overflow-hidden">
         <div className="flex shrink-0 gap-6 pr-6 animate-marquee-left">
           {doubled.map((t, i) => (
-            <div
+            <a
               key={i}
+              href={t.link || '#'}
+              target={t.link ? '_blank' : undefined}
+              rel={t.link ? 'noopener noreferrer' : undefined}
               className="group flex h-40 w-72 shrink-0 flex-col items-center justify-center gap-3 border border-border bg-surface transition-colors duration-300 hover:border-primary hover:bg-elevated clip-corner"
               data-cursor
             >
-              <span className="flex h-14 w-14 items-center justify-center bg-elevated font-display text-2xl font-700 text-primary transition-transform duration-300 group-hover:scale-110">
-                {t.name.charAt(0)}
-              </span>
+              {t.logo ? (
+                <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-border bg-background transition-transform duration-300 group-hover:scale-110">
+                  <img src={t.logo} alt={t.name} className="h-full w-full object-cover" />
+                </div>
+              ) : (
+                <span className="flex h-14 w-14 items-center justify-center bg-elevated font-display text-2xl font-700 text-primary transition-transform duration-300 group-hover:scale-110">
+                  {t.name.charAt(0)}
+                </span>
+              )}
               <span className="font-display text-lg font-700 uppercase tracking-tight text-white">
                 {t.name}
               </span>
               <span className="text-[10px] font-500 uppercase tracking-[0.2em] text-faint">
                 {t.game}
               </span>
-            </div>
+            </a>
           ))}
         </div>
         {/* edge fades */}

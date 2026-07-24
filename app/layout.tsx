@@ -1,6 +1,7 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import { Oswald, Inter } from 'next/font/google'
+import { AuthProvider } from '@/lib/auth-context'
 import './globals.css'
 
 const display = Oswald({
@@ -20,6 +21,9 @@ export const metadata: Metadata = {
   description:
     'GMX Gaming: ligas, torneos y eventos de eSports competitivos. Conviértete en jugador profesional. Aquí comienza el camino.',
   generator: 'v0.app',
+  icons: {
+    icon: '/logos/Favicon.png',
+  },
 }
 
 export const viewport: Viewport = {
@@ -36,8 +40,10 @@ export default function RootLayout({
   return (
     <html lang="es" className={`${display.variable} ${body.variable} bg-background`}>
       <body className="font-sans antialiased">
-        {children}
-        {process.env.NODE_ENV === 'production' && <Analytics />}
+        <AuthProvider>
+          {children}
+          {process.env.NODE_ENV === 'production' && <Analytics />}
+        </AuthProvider>
       </body>
     </html>
   )

@@ -38,7 +38,7 @@ export function SiteFooter() {
       <div className="mx-auto max-w-[1400px] px-5 py-16 lg:px-10 lg:py-20">
         <Stagger className="grid grid-cols-1 gap-12 sm:grid-cols-2 lg:grid-cols-4" stagger={0.15} amount={0.1}>
           <StaggerItem className="lg:pr-8">
-            <GmxLogo />
+            <GmxLogo variant="footer" />
             <p className="mt-6 max-w-xs text-sm leading-relaxed text-muted-foreground">
               GMX Gaming, la organización número 1 en ligas, torneos y eventos de eSports en MOBAs de
               habla hispana.
@@ -82,7 +82,20 @@ export function SiteFooter() {
 
       <div className="border-t border-border">
         <div className="mx-auto flex max-w-[1400px] flex-col items-center justify-between gap-4 px-5 py-6 text-xs text-faint sm:flex-row lg:px-10">
-          <p>Copyright © 2025 GMX Gaming. Todos los Derechos Reservados.</p>
+          <p>Copyright &copy; {new Date().getFullYear()} GMX Gaming. Todos los Derechos Reservados.</p>
+          
+          <a
+            href="https://www.kytcode.lat"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 transition-colors hover:text-white"
+          >
+            Desarrollado por K&T
+            <svg className="h-3 w-3 text-white fill-current" viewBox="0 0 24 24">
+              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+            </svg>
+          </a>
+
           <div className="flex gap-6">
             <a href="#" className="transition-colors hover:text-white">Privacidad</a>
             <a href="#" className="transition-colors hover:text-white">Términos</a>
