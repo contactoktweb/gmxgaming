@@ -57,32 +57,32 @@ export function About() {
         </div>
 
         {/* Images column */}
-        <div className="relative h-[420px] sm:h-[520px]">
+        <div className="relative h-[320px] sm:h-[450px] lg:h-[520px] mt-8 lg:mt-0">
           <motion.div
             style={{ y: y1 }}
-            initial={{ opacity: 0, x: '-100%' }}
+            initial={{ opacity: 0, x: -40 }}
             whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true, amount: 0.3 }}
+            viewport={{ once: true, amount: 0.1 }}
             transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
-            className="absolute left-0 top-0 w-[62%] overflow-hidden clip-corner"
+            className="absolute left-0 top-0 w-[65%] sm:w-[62%] h-[60%] sm:h-auto overflow-hidden clip-corner"
           >
             <img src="/images/about-1.png" alt="Equipo de GMX celebrando victoria" className="h-full w-full object-cover" />
           </motion.div>
 
           <motion.div
             style={{ y: y2 }}
-            initial={{ opacity: 0, y: 120 }}
+            initial={{ opacity: 0, y: 40 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.3 }}
+            viewport={{ once: true, amount: 0.1 }}
             transition={{ duration: 0.9, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
-            className="absolute bottom-0 right-0 w-[55%] overflow-hidden border border-border clip-corner"
+            className="absolute bottom-0 right-0 w-[60%] sm:w-[55%] h-[55%] sm:h-auto overflow-hidden border border-border clip-corner"
           >
             <img src="/images/about-2.png" alt="Detalle de gaming competitivo" className="h-full w-full object-cover" />
           </motion.div>
 
-          <div className="absolute right-2 top-6 border border-primary/50 bg-deep/70 px-4 py-3 backdrop-blur-sm">
-            <p className="font-display text-3xl font-700 leading-none text-primary">+10K</p>
-            <p className="mt-1 text-[10px] font-500 uppercase tracking-[0.2em] text-muted-foreground">
+          <div className="absolute right-0 sm:right-2 top-4 sm:top-6 border border-primary/50 bg-deep/70 px-3 sm:px-4 py-2 sm:py-3 backdrop-blur-sm z-10">
+            <p className="font-display text-2xl sm:text-3xl font-700 leading-none text-primary">+10K</p>
+            <p className="mt-1 text-[9px] sm:text-[10px] font-500 uppercase tracking-[0.2em] text-muted-foreground">
               Jugadores
             </p>
           </div>
