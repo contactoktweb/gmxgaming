@@ -55,7 +55,7 @@ export function AltaContratoForm() {
         </div>
       )}
 
-    >
+
       {/* Hidden Fields */}
       <input type="hidden" name="frm_action" value="create" />
       <input type="hidden" name="form_id" value="27" />
