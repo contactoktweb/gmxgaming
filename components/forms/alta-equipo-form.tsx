@@ -4,19 +4,50 @@ import { useState } from 'react'
 import { Upload, Image as ImageIcon, Loader2, CheckCircle2 } from 'lucide-react'
 import { GmxButton } from '@/components/gmx-button'
 import { PhoneInput } from '@/components/forms/phone-input'
+import { createClient } from '@/utils/supabase/client'
+import { useAuth } from '@/lib/auth-context'
 
 export function AltaEquipoForm() {
   const [formStatus, setFormStatus] = useState<'idle' | 'loading' | 'success'>('idle')
+  const { user } = useAuth()
+  const supabase = createClient()
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setFormStatus('loading')
     
-    // Simulate API call
-    setTimeout(() => {
+    const form = e.currentTarget
+    const formData = new FormData(form)
+
+    const payload = {
+      nombreEquipo: formData.get('item_meta[622]'),
+      pais: formData.get('item_meta[623]'),
+      tipoEquipo: formData.get('item_meta[782]'),
+      logo: 'https://placehold.co/400x400/png?text=LOGO+EQUIPO',
+      juegos: formData.getAll('item_meta[633][]'),
+      managerNombre: formData.get('item_meta[625][first]') + ' ' + formData.get('item_meta[625][last]'),
+      managerSeudonimo: formData.get('item_meta[626]'),
+      managerDiscord: formData.get('item_meta[627]'),
+      managerWhatsApp: formData.get('item_meta[628]'),
+      managerCorreo: formData.get('item_meta[629]'),
+    }
+    
+    const { error } = await supabase.from('validations').insert({
+      type: 'equipo',
+      target_name: payload.nombreEquipo as string,
+      submitted_by: user?.name || payload.managerCorreo,
+      status: 'pending',
+      details: payload
+    })
+
+    if (!error) {
       setFormStatus('success')
-    }, 2000)
+    } else {
+      setFormStatus('idle')
+      alert('Error al enviar el registro del equipo.')
+    }
   }
+  
   return (
     <form
       onSubmit={handleSubmit}
@@ -47,26 +78,6 @@ export function AltaEquipoForm() {
           </GmxButton>
         </div>
       )}
-
-      {/* Hidden Fields for formidable form compatibility */}
-      <input type="hidden" name="frm_action" value="create" />
-      <input type="hidden" name="form_id" value="13" />
-      <input type="hidden" name="frm_hide_fields_13" id="frm_hide_fields_13" value="" />
-      <input type="hidden" name="form_key" value="altadeequipo" />
-      <input type="hidden" name="item_meta[0]" value="" />
-      <input type="hidden" id="frm_submit_entry_13" name="frm_submit_entry_13" value="059eb65444" />
-      <input type="hidden" name="_wp_http_referer" value="/altadeequipo/" />
-      <input type="hidden" name="item_meta[639]" value="1131" />
-      <input
-        type="hidden"
-        name="frm_state"
-        value="JoJeEFk1PyCCMVFC40ijfPfSyJ2zqkdASvTp2AO9sNW2iTH89KIwPLUTuHzoxVch"
-      />
-      <input
-        type="hidden"
-        name="item_key"
-        value=""
-      />
 
       <div className="text-center">
         <h2 className="font-display text-4xl font-700 uppercase tracking-tight text-white sm:text-5xl">
@@ -356,19 +367,6 @@ export function AltaEquipoForm() {
             </span>
           </label>
         </div>
-      </div>
-
-      {/* CAMPOS DE GESTIÓN GMX (Hidden / Pre-filled) */}
-      <div className="hidden">
-        <select name="item_meta[631]" defaultValue="ACTIVO">
-          <option value="ACTIVO">ACTIVO</option>
-        </select>
-        <input type="url" name="item_meta[632]" defaultValue="https://gmxgaming.com/" />
-        <select name="item_meta[715]" defaultValue="NO">
-          <option value="NO">NO</option>
-        </select>
-        {/* Anti-spam / Honeypot */}
-        <input type="text" name="item_meta[903]" value="" className="sr-only" tabIndex={-1} autoComplete="off" />
       </div>
 
       <div className="pt-8 text-center sm:text-left">

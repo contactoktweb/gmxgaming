@@ -1,20 +1,24 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Camera, CheckCircle2, AlertCircle, Image as ImageIcon, ShieldAlert, ArrowRight, User, X, Upload } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { GmxButton } from '@/components/gmx-button'
+import { useAuth } from '@/lib/auth-context'
+import { createClient } from '@/utils/supabase/client'
 
 export function UserProfile() {
+  const { user } = useAuth()
   const [coverPhoto, setCoverPhoto] = useState<string | null>(null)
-  const [profilePhoto, setProfilePhoto] = useState<string | null>(null)
-  const [name, setName] = useState('Keyner')
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(user?.avatar || null)
+  const [name, setName] = useState(user?.name || 'Usuario')
   const [bio, setBio] = useState('Cuéntanos un poco sobre ti...')
 
   // Edit Modal State
   const [isEditing, setIsEditing] = useState(false)
   const [showNotification, setShowNotification] = useState(false)
+  const supabase = createClient()
   
   const [editForm, setEditForm] = useState({
     name: '',
@@ -23,6 +27,13 @@ export function UserProfile() {
     coverPhoto: null as string | null,
     imagesChanged: false
   })
+
+  useEffect(() => {
+    if (user) {
+      setName(user.name)
+      setProfilePhoto(user.avatar || null)
+    }
+  }, [user])
 
   useEffect(() => {
     if (isEditing) {
@@ -53,10 +64,17 @@ export function UserProfile() {
     setIsEditing(true)
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setName(editForm.name)
     setBio(editForm.bio)
     
+    if (user) {
+      await supabase.from('profiles').update({
+        name: editForm.name,
+        avatar: editForm.profilePhoto || user.avatar
+      }).eq('id', user.id)
+    }
+
     if (editForm.profilePhoto !== profilePhoto || editForm.coverPhoto !== coverPhoto) {
       setProfilePhoto(editForm.profilePhoto)
       setCoverPhoto(editForm.coverPhoto)
@@ -87,8 +105,6 @@ export function UserProfile() {
       setTimeout(() => setShowNotification(false), 5000)
     }
   }
-
-
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">

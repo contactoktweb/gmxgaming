@@ -2,10 +2,12 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
+import { createClient } from '@/utils/supabase/client'
 
 export type Role = 'admin' | 'jugador'
 
 export interface User {
+  id: string
   name: string
   email: string
   role: Role
@@ -14,8 +16,8 @@ export interface User {
 
 interface AuthContextType {
   user: User | null
-  login: (email: string) => Promise<boolean>
-  logout: () => void
+  login: (email: string, password?: string) => Promise<boolean>
+  logout: () => Promise<void>
   isLoading: boolean
 }
 
@@ -26,61 +28,88 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
   const pathname = usePathname()
+  const supabase = createClient()
 
   useEffect(() => {
-    // Check local storage for session on mount
-    const storedUser = localStorage.getItem('gmx_session')
-    if (storedUser) {
-      setUser(JSON.parse(storedUser))
+    let mounted = true;
+
+    async function getInitialSession() {
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (session?.user) {
+        await fetchProfile(session.user)
+      } else {
+        if (mounted) {
+          setUser(null)
+          setIsLoading(false)
+        }
+      }
     }
-    setIsLoading(false)
+
+    async function fetchProfile(authUser: any) {
+      if (!mounted) return;
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', authUser.id)
+        .single()
+
+      if (mounted) {
+        setUser({
+          id: authUser.id,
+          name: profile?.name || authUser.email?.split('@')[0] || 'Usuario',
+          email: authUser.email || '',
+          role: profile?.role === 'admin' ? 'admin' : 'jugador',
+          avatar: profile?.avatar || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
+        })
+        setIsLoading(false)
+      }
+    }
+
+    getInitialSession()
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session?.user) {
+          await fetchProfile(session.user)
+        } else {
+          setUser(null)
+          setIsLoading(false)
+        }
+      }
+    )
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe()
+    }
   }, [])
 
-  const login = async (email: string) => {
-    // Simulate network request
-    await new Promise(resolve => setTimeout(resolve, 800))
+  const login = async (email: string, password?: string) => {
+    // If no password provided (shouldn't happen with real form, but for typing), fail
+    if (!password) return false;
 
-    let loggedInUser: User | null = null
+    setIsLoading(true)
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
 
-    if (email.toLowerCase() === 'admin@gmx.com') {
-      loggedInUser = {
-        name: 'Admin GMX',
-        email: 'admin@gmx.com',
-        role: 'admin',
-        avatar: 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
-      }
-    } else if (email.toLowerCase() === 'jugador@gmx.com') {
-      loggedInUser = {
-        name: 'Jugador',
-        email: 'jugador@gmx.com',
-        role: 'jugador',
-        avatar: 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
-      }
-    } else {
-      // By default, let any email login as jugador for demo purposes if not strictly admin
-      loggedInUser = {
-        name: email.split('@')[0],
-        email,
-        role: 'jugador',
-        avatar: 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
-      }
+    if (error) {
+      setIsLoading(false)
+      return false
     }
 
-    if (loggedInUser) {
-      setUser(loggedInUser)
-      localStorage.setItem('gmx_session', JSON.stringify(loggedInUser))
-      return true
-    }
-
-    return false
+    return true
   }
 
-  const logout = () => {
+  const logout = async () => {
+    setIsLoading(true)
+    await supabase.auth.signOut()
     setUser(null)
-    localStorage.removeItem('gmx_session')
+    setIsLoading(false)
     
-    // Redirect to login if on a protected route
-    if (pathname === '/micuenta') {
+    if (pathname === '/micuenta' || pathname.startsWith('/dashboard')) {
       router.push('/login')
     } else {
       router.refresh()

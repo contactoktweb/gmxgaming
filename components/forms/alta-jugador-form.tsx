@@ -8,12 +8,17 @@ import { GmxButton } from '@/components/gmx-button'
 import { PhoneInput } from '@/components/forms/phone-input'
 import { FileUpload } from '@/components/forms/file-upload'
 import { cn } from '@/lib/utils'
+import { createClient } from '@/utils/supabase/client'
+import { useAuth } from '@/lib/auth-context'
 
 function FormContent() {
   const [isStaff, setIsStaff] = useState(false)
   const [formStatus, setFormStatus] = useState<'idle' | 'loading' | 'success'>('idle')
   const searchParams = useSearchParams()
   const defaultEmail = searchParams.get('email') || ''
+  const { user } = useAuth()
+  const supabase = createClient()
+
   const COUNTRIES = [
     'México', 'Colombia', 'Argentina', 'Perú', 'Venezuela', 'Chile', 
     'Ecuador', 'Guatemala', 'Cuba', 'Bolivia', 'República Dominicana',
@@ -29,14 +34,49 @@ function FormContent() {
     'TEAM QUETZAL KING', 'THE HUNGRY KINGS', 'U2 eSPORT', 'U2 STAR', 'VOID ESPORTS MX'
   ]
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setFormStatus('loading')
     
-    // Simulate API call
-    setTimeout(() => {
+    const form = e.currentTarget
+    const formData = new FormData(form)
+    
+    const payload = {
+      nombreCompleto: formData.get('item_meta[674][first]') + ' ' + formData.get('item_meta[674][last]'),
+      genero: formData.get('item_meta[783]'),
+      seudonimo: formData.get('item_meta[679]'),
+      fechaNacimiento: formData.get('item_meta[675]'),
+      paisNacimiento: formData.get('item_meta[677]'),
+      paisResidencia: formData.get('item_meta[722]'),
+      discord: formData.get('item_meta[684]'),
+      correo: formData.get('item_meta[676]'),
+      telefono: formData.get('item_meta[685]'),
+      uid: formData.get('item_meta[698]'),
+      idJuego: formData.get('item_meta[697]'),
+      serverJuego: formData.get('item_meta[784]'),
+      equipo: formData.get('item_meta[672]'),
+      rol: formData.get('item_meta[700]'),
+      esStaff: isStaff ? 'SÍ' : 'NO',
+      actividades: formData.getAll('item_meta[739][]'),
+      aeropuerto: formData.get('item_meta[781]'),
+      fotografia: 'https://placehold.co/400x400/png?text=FOTO+JUGADOR',
+      documentoIdentidad: 'https://placehold.co/600x400/png?text=INE',
+    }
+
+    const { error } = await supabase.from('validations').insert({
+      type: 'jugador',
+      target_name: `${payload.seudonimo} - ${payload.equipo}`,
+      submitted_by: user?.name || payload.correo,
+      status: 'pending',
+      details: payload
+    })
+    
+    if (!error) {
       setFormStatus('success')
-    }, 2000)
+    } else {
+      setFormStatus('idle')
+      alert('Hubo un error al enviar tu solicitud. Intenta de nuevo.')
+    }
   }
 
   return (
@@ -69,15 +109,6 @@ function FormContent() {
           </GmxButton>
         </div>
       )}
-
-      {/* Hidden Fields */}
-      <input type="hidden" name="frm_action" value="create" />
-      <input type="hidden" name="form_id" value="18" />
-      <input type="hidden" name="frm_hide_fields_18" id="frm_hide_fields_18" value='["frm_field_739_container"]' />
-      <input type="hidden" name="form_key" value="altadejugador" />
-      <input type="hidden" name="item_meta[0]" value="" />
-      <input type="hidden" id="frm_submit_entry_18" name="frm_submit_entry_18" value="059eb65444" />
-      <input type="hidden" name="_wp_http_referer" value="/altadejugador/" />
 
       <div className="text-center">
         <h2 className="font-display text-4xl font-700 uppercase tracking-tight text-white sm:text-5xl">

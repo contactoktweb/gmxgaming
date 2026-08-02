@@ -3,9 +3,14 @@
 import { useState } from 'react'
 import { Loader2, CheckCircle2 } from 'lucide-react'
 import { GmxButton } from '@/components/gmx-button'
+import { createClient } from '@/utils/supabase/client'
+import { useAuth } from '@/lib/auth-context'
 
 export function AltaContratoForm() {
   const [formStatus, setFormStatus] = useState<'idle' | 'loading' | 'success'>('idle')
+  const { user } = useAuth()
+  const supabase = createClient()
+
   const TEAMS = [
     '- NINGUNO -', 'Aftur Bellum', 'Artaud', 'Døpamine', 'EVEN FLOW', 
     'EXCIDIUM', 'FIMTHYAR AGRAVVE', 'GMX ESPORTS', 'Los Zoldycks', 
@@ -14,14 +19,34 @@ export function AltaContratoForm() {
     'TEAM QUETZAL KING', 'THE HUNGRY KINGS', 'U2 eSPORT', 'U2 STAR', 'VOID ESPORTS MX'
   ]
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setFormStatus('loading')
     
-    // Simulate API call
-    setTimeout(() => {
+    const form = e.currentTarget
+    const formData = new FormData(form)
+
+    const payload = {
+      equipo: formData.get('item_meta[879]'),
+      fechaTermino: formData.get('item_meta[882]'),
+      jugador: formData.get('item_meta[888][]'),
+      roles: formData.getAll('item_meta[902][]'),
+    }
+
+    const { error } = await supabase.from('validations').insert({
+      type: 'contrato',
+      target_name: `${payload.jugador} - ${payload.equipo}`,
+      submitted_by: user?.name || 'Desconocido',
+      status: 'pending',
+      details: payload
+    })
+
+    if (!error) {
       setFormStatus('success')
-    }, 2000)
+    } else {
+      setFormStatus('idle')
+      alert('Error al enviar el contrato.')
+    }
   }
 
   return (
@@ -54,20 +79,6 @@ export function AltaContratoForm() {
           </GmxButton>
         </div>
       )}
-
-
-      {/* Hidden Fields */}
-      <input type="hidden" name="frm_action" value="create" />
-      <input type="hidden" name="form_id" value="27" />
-      <input type="hidden" name="frm_hide_fields_27" id="frm_hide_fields_27" value="" />
-      <input type="hidden" name="form_key" value="altacontrato" />
-      <input type="hidden" name="item_meta[0]" value="" />
-      <input type="hidden" id="frm_submit_entry_27" name="frm_submit_entry_27" value="059eb65444" />
-      <input type="hidden" name="_wp_http_referer" value="/altadecontrato/" />
-      <input type="hidden" name="item_meta[877]" value="1131" />
-      <input type="hidden" name="item_key" value="" />
-      <input type="text" name="item_meta[903]" value="" className="sr-only" tabIndex={-1} autoComplete="off" />
-      <input name="frm_state" type="hidden" value="JoJeEFk1PyCCMVFC40ijfDzSooa+d1TxigOeFixwCzW2iTH89KIwPLUTuHzoxVch" />
 
       <div className="text-center">
         <h2 className="font-display text-4xl font-700 uppercase tracking-tight text-white sm:text-5xl">
@@ -128,12 +139,11 @@ export function AltaContratoForm() {
                 id="field_vk1mg"
                 name="item_meta[888][]"
                 required
-                defaultValue=""
+                defaultValue={user?.name || ''}
                 className="w-full appearance-none rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 <option value="" disabled>Selecciona tu Nombre de Jugador</option>
-                {/* Dynamically populated by WP usually, we provide a fallback option or leave it empty so they have to be logged in */}
-                <option value="ID_JUGADOR_TEMP">Mi Jugador (Demo)</option>
+                <option value={user?.name || 'Mi Jugador (Demo)'}>{user?.name || 'Mi Jugador (Demo)'}</option>
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-muted-foreground">
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

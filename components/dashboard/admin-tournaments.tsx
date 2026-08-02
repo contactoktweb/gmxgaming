@@ -3,39 +3,39 @@
 import { useState, useEffect } from 'react'
 import { Trophy, Calendar, Users, Edit, Plus, Trash2, CheckCircle2, Eye, X, AlertCircle, Gamepad2, Link } from 'lucide-react'
 import { GmxButton } from '@/components/gmx-button'
+import { createClient } from '@/utils/supabase/client'
 import { cn } from '@/lib/utils'
 
 interface Tournament {
   id: string
   name: string
   game: string
-  date: string
-  teams: number
   status: 'upcoming' | 'ongoing' | 'finished'
-  payload?: any
+  prize: string
+  start_date: string
+  end_date: string
+  participants: number
 }
 
-const mockTournaments: Tournament[] = [
-  { 
-    id: '1', name: 'GMX PRO LEAGUE S1', game: 'Mobile Legends', date: '2024-08-15', teams: 16, status: 'upcoming',
-    payload: { premioPool: '$1,000 USD', organizador: 'GMX Gaming', reglasUrl: 'https://reglas.gmx.com' }
-  },
-  { 
-    id: '2', name: 'Copa Regional', game: 'Mobile Legends', date: '2024-07-20', teams: 8, status: 'ongoing',
-    payload: { premioPool: '$500 USD', organizador: 'GMX Latam', reglasUrl: 'https://reglas.gmx.com/regional' }
-  },
-  { 
-    id: '3', name: 'Torneo Relámpago', game: 'Mobile Legends', date: '2024-06-10', teams: 32, status: 'finished',
-    payload: { premioPool: '10,000 Diamantes', organizador: 'Comunidad GMX', reglasUrl: 'https://reglas.gmx.com/relampago' }
-  },
-]
-
 export function AdminTournaments() {
-  const [tournaments, setTournaments] = useState<Tournament[]>(mockTournaments)
+  const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [isCreating, setIsCreating] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null)
   const [confirmAction, setConfirmAction] = useState<{ id: string, name: string } | null>(null)
+  const [loading, setLoading] = useState(true)
+  const supabase = createClient()
+
+  const fetchTournaments = async () => {
+    setLoading(true)
+    const { data } = await supabase.from('tournaments').select('*').order('created_at', { ascending: false })
+    if (data) setTournaments(data as Tournament[])
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    fetchTournaments()
+  }, [])
 
   useEffect(() => {
     if (selectedTournament || confirmAction) {
@@ -46,18 +46,34 @@ export function AdminTournaments() {
     return () => { window.__lenis?.start() }
   }, [selectedTournament, confirmAction])
 
-  const handleCreate = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    // Simulate creation
-    setShowSuccess(true)
-    setTimeout(() => {
-      setShowSuccess(false)
-      setIsCreating(false)
-    }, 2000)
+    const form = e.currentTarget
+    const formData = new FormData(form)
+    
+    const newTournament = {
+      name: formData.get('name') as string,
+      game: formData.get('game') as string,
+      start_date: formData.get('start_date') as string,
+      participants: parseInt(formData.get('participants') as string, 10),
+      status: 'upcoming'
+    }
+
+    const { error } = await supabase.from('tournaments').insert(newTournament)
+    
+    if (!error) {
+      setShowSuccess(true)
+      fetchTournaments()
+      setTimeout(() => {
+        setShowSuccess(false)
+        setIsCreating(false)
+      }, 2000)
+    }
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (confirmAction) {
+      await supabase.from('tournaments').delete().eq('id', confirmAction.id)
       setTournaments(prev => prev.filter(t => t.id !== confirmAction.id))
       setConfirmAction(null)
     }
@@ -81,19 +97,19 @@ export function AdminTournaments() {
             <div className="grid gap-6 sm:grid-cols-2">
               <div className="space-y-2">
                 <label className="text-sm font-500 text-white">Nombre del Torneo</label>
-                <input type="text" required className="w-full rounded-md border border-border bg-background px-4 py-3 text-white focus:border-primary focus:outline-none" />
+                <input name="name" type="text" required className="w-full rounded-md border border-border bg-background px-4 py-3 text-white focus:border-primary focus:outline-none" />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-500 text-white">Juego</label>
-                <input type="text" defaultValue="Mobile Legends" required className="w-full rounded-md border border-border bg-background px-4 py-3 text-white focus:border-primary focus:outline-none" />
+                <input name="game" type="text" defaultValue="Mobile Legends" required className="w-full rounded-md border border-border bg-background px-4 py-3 text-white focus:border-primary focus:outline-none" />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-500 text-white">Fecha de Inicio</label>
-                <input type="date" required className="w-full rounded-md border border-border bg-background px-4 py-3 text-white focus:border-primary focus:outline-none" />
+                <input name="start_date" type="date" required className="w-full rounded-md border border-border bg-background px-4 py-3 text-white focus:border-primary focus:outline-none" />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-500 text-white">Cupo de Equipos</label>
-                <input type="number" required min="2" className="w-full rounded-md border border-border bg-background px-4 py-3 text-white focus:border-primary focus:outline-none" />
+                <input name="participants" type="number" required min="2" className="w-full rounded-md border border-border bg-background px-4 py-3 text-white focus:border-primary focus:outline-none" />
               </div>
             </div>
             
@@ -128,61 +144,68 @@ export function AdminTournaments() {
           </GmxButton>
         </div>
         
-        <div className="grid gap-4">
-          {tournaments.map(tournament => (
-            <div key={tournament.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-lg border border-border bg-background p-4 sm:p-5 hover:border-primary/50 transition-colors">
-              <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                  <Trophy className="h-6 w-6 text-primary" />
-                </div>
-                <div>
-                  <h3 className="font-600 text-white">{tournament.name}</h3>
-                  <div className="flex flex-wrap items-center gap-3 mt-1 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Gamepad2 className="w-3 h-3" /> {tournament.game}
-                    </span>
-                    <span className="hidden sm:inline">•</span>
-                    <span className="flex items-center gap-1">
-                      <Calendar className="w-3 h-3" /> {tournament.date}
-                    </span>
-                    <span className="hidden sm:inline">•</span>
-                    <span className="flex items-center gap-1">
-                      <Users className="w-3 h-3" /> {tournament.teams} equipos
-                    </span>
+        {loading ? (
+          <div className="flex justify-center items-center py-12">
+            <p className="text-muted-foreground animate-pulse">Cargando torneos...</p>
+          </div>
+        ) : tournaments.length === 0 ? (
+          <div className="flex justify-center items-center py-12">
+            <p className="text-muted-foreground">No hay torneos registrados aún.</p>
+          </div>
+        ) : (
+          <div className="grid gap-4">
+            {tournaments.map(tournament => (
+              <div key={tournament.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-lg border border-border bg-background p-4 sm:p-5 hover:border-primary/50 transition-colors">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                    <Trophy className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-600 text-white">{tournament.name}</h3>
+                    <div className="flex flex-wrap items-center gap-3 mt-1 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Gamepad2 className="w-3 h-3" /> {tournament.game}
+                      </span>
+                      <span className="hidden sm:inline">•</span>
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3" /> {tournament.start_date || 'TBD'}
+                      </span>
+                      <span className="hidden sm:inline">•</span>
+                      <span className="flex items-center gap-1">
+                        <Users className="w-3 h-3" /> {tournament.participants} equipos
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="flex items-center gap-2 sm:justify-end">
-                <span className={`px-2.5 py-1 text-[10px] font-600 uppercase tracking-widest rounded-full mr-2 ${
-                  tournament.status === 'upcoming' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
-                  tournament.status === 'ongoing' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                  'bg-white/5 text-muted-foreground border border-white/10'
-                }`}>
-                  {tournament.status === 'upcoming' ? 'Próximo' : tournament.status === 'ongoing' ? 'En Curso' : 'Finalizado'}
-                </span>
-                
-                <button 
-                  onClick={() => setSelectedTournament(tournament)}
-                  title="Ver Detalles" 
-                  className="p-2 text-muted-foreground hover:text-white hover:bg-white/5 rounded-md transition-colors"
-                >
-                  <Eye className="w-4 h-4" />
-                </button>
-                <button title="Editar" className="p-2 text-muted-foreground hover:text-white hover:bg-white/5 rounded-md transition-colors">
-                  <Edit className="w-4 h-4" />
-                </button>
-                <button 
-                  onClick={() => setConfirmAction({ id: tournament.id, name: tournament.name })} 
-                  title="Eliminar" 
-                  className="p-2 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-md transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-2 sm:justify-end">
+                  <span className={`px-2.5 py-1 text-[10px] font-600 uppercase tracking-widest rounded-full mr-2 ${
+                    tournament.status === 'upcoming' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                    tournament.status === 'ongoing' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                    'bg-white/5 text-muted-foreground border border-white/10'
+                  }`}>
+                    {tournament.status === 'upcoming' ? 'Próximo' : tournament.status === 'ongoing' ? 'En Curso' : 'Finalizado'}
+                  </span>
+                  
+                  <button 
+                    onClick={() => setSelectedTournament(tournament)}
+                    title="Ver Detalles" 
+                    className="p-2 text-muted-foreground hover:text-white hover:bg-white/5 rounded-md transition-colors"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => setConfirmAction({ id: tournament.id, name: tournament.name })} 
+                    title="Eliminar" 
+                    className="p-2 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-md transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Details Modal */}
@@ -225,43 +248,15 @@ export function AdminTournaments() {
                   <p className="text-xs text-muted-foreground uppercase tracking-widest font-600 mb-1 flex items-center gap-1.5">
                     <Calendar className="w-3 h-3" /> Fecha
                   </p>
-                  <p className="text-sm font-500 text-white truncate">{selectedTournament.date}</p>
+                  <p className="text-sm font-500 text-white truncate">{selectedTournament.start_date || 'TBD'}</p>
                 </div>
                 <div className="rounded-lg border border-border bg-background p-3">
                   <p className="text-xs text-muted-foreground uppercase tracking-widest font-600 mb-1 flex items-center gap-1.5">
                     <Users className="w-3 h-3" /> Equipos
                   </p>
-                  <p className="text-sm font-500 text-white truncate">{selectedTournament.teams}</p>
+                  <p className="text-sm font-500 text-white truncate">{selectedTournament.participants}</p>
                 </div>
               </div>
-
-              {selectedTournament.payload && (
-                <div className="space-y-4 pt-6 border-t border-border">
-                  <h4 className="text-sm font-600 text-white uppercase tracking-widest">Información Adicional</h4>
-                  <div className="grid gap-4">
-                    {Object.entries(selectedTournament.payload).map(([key, value]) => {
-                      const isUrl = typeof value === 'string' && value.startsWith('http');
-                      
-                      return (
-                        <div key={key} className="flex justify-between items-center rounded-lg border border-border bg-background px-4 py-3">
-                          <span className="text-xs font-600 uppercase tracking-widest text-muted-foreground">
-                            {key.replace(/([A-Z])/g, ' $1').trim()}
-                          </span>
-                          {isUrl ? (
-                            <a href={value as string} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm font-500 text-primary hover:text-white transition-colors">
-                              Enlace <Link className="w-3 h-3" />
-                            </a>
-                          ) : (
-                            <span className="text-sm font-500 text-white">
-                              {value as string}
-                            </span>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -308,4 +303,3 @@ export function AdminTournaments() {
     </div>
   )
 }
-// Just adding Gamepad2 to imports

@@ -4,86 +4,42 @@ import { useState, useEffect } from 'react'
 import { Check, X, UserCheck, ShieldCheck, ScrollText, Eye, FileText, Image as ImageIcon, AlertCircle, Maximize2, ZoomIn } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { GmxButton } from '@/components/gmx-button'
+import { createClient } from '@/utils/supabase/client'
 import { cn } from '@/lib/utils'
 
-type ValidationType = 'jugador' | 'equipo' | 'contrato'
+type ValidationType = 'jugador' | 'equipo' | 'contrato' | string
 
 interface PendingRequest {
   id: string
   type: ValidationType
-  name: string
-  date: string
-  status: 'pending' | 'approved' | 'rejected'
-  details?: string
-  validatedBy?: string
-  payload?: any // Mock data payload for visualization
+  target_name: string
+  created_at: string
+  status: 'pending' | 'approved' | 'rejected' | string
+  submitted_by?: string
+  details?: any
 }
-
-const mockRequests: PendingRequest[] = [
-  { 
-    id: '1', 
-    type: 'jugador', 
-    name: 'Sinner (MOBILE LEGENDS)', 
-    date: '2024-07-24', 
-    status: 'pending', 
-    details: 'Equipo: STARBOYS',
-    payload: {
-      nombreCompleto: 'Juan Perez',
-      correo: 'sinner@starboys.com',
-      telefono: '+52 555 123 4567',
-      paisResidencia: 'México',
-      fechaNacimiento: '2000-05-15',
-      rol: 'Jungla',
-      idJuego: '9928374',
-      serverJuego: '1234',
-      fotografia: 'https://placehold.co/400x400/png?text=FOTO+JUGADOR',
-      documentoIdentidad: 'https://placehold.co/600x400/png?text=INE',
-      pasaporte: 'https://placehold.co/600x400/png?text=PASAPORTE'
-    }
-  },
-  { 
-    id: '2', 
-    type: 'equipo', 
-    name: 'TEAM QUETZAL KING', 
-    date: '2024-07-23', 
-    status: 'pending', 
-    details: 'Manager: Luis Perez',
-    payload: {
-      manager: 'Luis Perez',
-      correo: 'contacto@quetzalking.com',
-      telefono: '+57 300 123 4567',
-      pais: 'Colombia',
-      tipoEquipo: 'Varonil / Mixto',
-      juegos: 'MLBB',
-      logoEquipo: 'https://placehold.co/400x400/png?text=LOGO+EQUIPO',
-      comprobantePago: 'https://placehold.co/600x400/png?text=COMPROBANTE'
-    }
-  },
-  { 
-    id: '3', 
-    type: 'contrato', 
-    name: 'Stark - TEAM LIMIT', 
-    date: '2024-07-23', 
-    status: 'pending', 
-    details: 'Fin: 2024-12-31',
-    payload: {
-      jugador: 'Stark',
-      equipo: 'TEAM LIMIT',
-      fechaInicio: '2024-07-23',
-      fechaFin: '2024-12-31',
-      documentoContrato: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
-    }
-  },
-]
 
 export function AdminValidations() {
   const { user } = useAuth()
-  const [requests, setRequests] = useState<PendingRequest[]>(mockRequests)
+  const [requests, setRequests] = useState<PendingRequest[]>([])
+  const [loading, setLoading] = useState(true)
+  const supabase = createClient()
   
   // Modals state
   const [selectedRequest, setSelectedRequest] = useState<PendingRequest | null>(null)
   const [confirmAction, setConfirmAction] = useState<{ id: string, action: 'approved' | 'rejected', name: string } | null>(null)
   const [lightboxImage, setLightboxImage] = useState<{ src: string, label: string } | null>(null)
+
+  const fetchValidations = async () => {
+    setLoading(true)
+    const { data } = await supabase.from('validations').select('*').order('created_at', { ascending: false })
+    if (data) setRequests(data as PendingRequest[])
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    fetchValidations()
+  }, [])
 
   useEffect(() => {
     if (selectedRequest || confirmAction) {
@@ -96,12 +52,14 @@ export function AdminValidations() {
     }
   }, [selectedRequest, confirmAction])
 
-  const handleExecuteAction = () => {
+  const handleExecuteAction = async () => {
     if (!confirmAction) return
+    
+    await supabase.from('validations').update({ status: confirmAction.action }).eq('id', confirmAction.id)
     
     setRequests(prev => prev.map(req => {
       if (req.id === confirmAction.id) {
-        return { ...req, status: confirmAction.action, validatedBy: user?.name }
+        return { ...req, status: confirmAction.action }
       }
       return req
     }))
@@ -115,6 +73,7 @@ export function AdminValidations() {
       case 'jugador': return <UserCheck className="w-5 h-5 text-emerald-400" />
       case 'equipo': return <ShieldCheck className="w-5 h-5 text-blue-400" />
       case 'contrato': return <ScrollText className="w-5 h-5 text-purple-400" />
+      default: return <FileText className="w-5 h-5 text-muted-foreground" />
     }
   }
 
@@ -125,91 +84,90 @@ export function AdminValidations() {
           Validaciones Pendientes
         </h2>
         
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-background">
-              <tr>
-                <th className="px-4 py-3 font-600 text-muted-foreground">TIPO</th>
-                <th className="px-4 py-3 font-600 text-muted-foreground">NOMBRE / REFERENCIA</th>
-                <th className="px-4 py-3 font-600 text-muted-foreground">DETALLES</th>
-                <th className="px-4 py-3 font-600 text-muted-foreground">FECHA</th>
-                <th className="px-4 py-3 font-600 text-muted-foreground">ESTADO</th>
-                <th className="px-4 py-3 font-600 text-muted-foreground text-right">ACCIONES</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {requests.map(req => (
-                <tr key={req.id} className="transition-colors hover:bg-white/5">
-                  <td className="px-4 py-4">
-                    <div className="flex items-center gap-2 uppercase font-500 text-xs">
-                      {getTypeIcon(req.type)}
-                      {req.type}
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 font-500 text-white">{req.name}</td>
-                  <td className="px-4 py-4 text-muted-foreground">{req.details}</td>
-                  <td className="px-4 py-4 text-muted-foreground">{req.date}</td>
-                  <td className="px-4 py-4">
-                    {req.status === 'pending' ? (
-                      <span className="inline-flex items-center rounded-full bg-yellow-400/10 px-2 py-1 text-xs font-500 text-yellow-400 ring-1 ring-inset ring-yellow-400/20">
-                        Pendiente
-                      </span>
-                    ) : req.status === 'approved' ? (
-                      <div className="flex flex-col gap-1">
+        {loading ? (
+          <div className="flex justify-center items-center py-12">
+            <p className="text-muted-foreground animate-pulse">Cargando validaciones...</p>
+          </div>
+        ) : requests.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            No hay solicitudes pendientes.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-background">
+                <tr>
+                  <th className="px-4 py-3 font-600 text-muted-foreground">TIPO</th>
+                  <th className="px-4 py-3 font-600 text-muted-foreground">NOMBRE / REFERENCIA</th>
+                  <th className="px-4 py-3 font-600 text-muted-foreground">ENVIADO POR</th>
+                  <th className="px-4 py-3 font-600 text-muted-foreground">FECHA</th>
+                  <th className="px-4 py-3 font-600 text-muted-foreground">ESTADO</th>
+                  <th className="px-4 py-3 font-600 text-muted-foreground text-right">ACCIONES</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {requests.map(req => (
+                  <tr key={req.id} className="transition-colors hover:bg-white/5">
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-2 uppercase font-500 text-xs">
+                        {getTypeIcon(req.type)}
+                        {req.type}
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 font-500 text-white">{req.target_name}</td>
+                    <td className="px-4 py-4 text-muted-foreground">{req.submitted_by || 'N/A'}</td>
+                    <td className="px-4 py-4 text-muted-foreground">{new Date(req.created_at).toLocaleDateString()}</td>
+                    <td className="px-4 py-4">
+                      {req.status === 'pending' ? (
+                        <span className="inline-flex items-center rounded-full bg-yellow-400/10 px-2 py-1 text-xs font-500 text-yellow-400 ring-1 ring-inset ring-yellow-400/20">
+                          Pendiente
+                        </span>
+                      ) : req.status === 'approved' ? (
                         <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-2 py-1 text-xs font-500 text-emerald-400 ring-1 ring-inset ring-emerald-400/20 w-fit">
                           Aprobado
                         </span>
-                        <span className="text-[10px] text-muted-foreground">por {req.validatedBy}</span>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col gap-1">
+                      ) : (
                         <span className="inline-flex items-center rounded-full bg-red-400/10 px-2 py-1 text-xs font-500 text-red-400 ring-1 ring-inset ring-red-400/20 w-fit">
                           Rechazado
                         </span>
-                        <span className="text-[10px] text-muted-foreground">por {req.validatedBy}</span>
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-4 text-right">
-                    <div className="flex justify-end gap-2">
-                      <button
-                        onClick={() => setSelectedRequest(req)}
-                        title="Ver Detalles"
-                        className="flex h-8 w-8 items-center justify-center rounded border border-border bg-background text-muted-foreground transition-colors hover:border-primary hover:text-primary"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </button>
-                      
-                      {req.status === 'pending' && (
-                        <>
-                          <button
-                            onClick={() => setConfirmAction({ id: req.id, action: 'approved', name: req.name })}
-                            title="Aprobar"
-                            className="flex h-8 w-8 items-center justify-center rounded border border-emerald-500/20 bg-emerald-500/10 text-emerald-500 transition-colors hover:bg-emerald-500 hover:text-white"
-                          >
-                            <Check className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => setConfirmAction({ id: req.id, action: 'rejected', name: req.name })}
-                            title="Rechazar"
-                            className="flex h-8 w-8 items-center justify-center rounded border border-red-500/20 bg-red-500/10 text-red-500 transition-colors hover:bg-red-500 hover:text-white"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </>
                       )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {requests.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              No hay solicitudes pendientes.
-            </div>
-          )}
-        </div>
+                    </td>
+                    <td className="px-4 py-4 text-right">
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => setSelectedRequest(req)}
+                          title="Ver Detalles"
+                          className="flex h-8 w-8 items-center justify-center rounded border border-border bg-background text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                        
+                        {req.status === 'pending' && (
+                          <>
+                            <button
+                              onClick={() => setConfirmAction({ id: req.id, action: 'approved', name: req.target_name })}
+                              title="Aprobar"
+                              className="flex h-8 w-8 items-center justify-center rounded border border-emerald-500/20 bg-emerald-500/10 text-emerald-500 transition-colors hover:bg-emerald-500 hover:text-white"
+                            >
+                              <Check className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => setConfirmAction({ id: req.id, action: 'rejected', name: req.target_name })}
+                              title="Rechazar"
+                              className="flex h-8 w-8 items-center justify-center rounded border border-red-500/20 bg-red-500/10 text-red-500 transition-colors hover:bg-red-500 hover:text-white"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Details Modal */}
@@ -224,7 +182,7 @@ export function AdminValidations() {
                   {getTypeIcon(selectedRequest.type)}
                   Detalles de Solicitud
                 </h3>
-                <p className="text-sm text-muted-foreground mt-1">{selectedRequest.name}</p>
+                <p className="text-sm text-muted-foreground mt-1">{selectedRequest.target_name}</p>
               </div>
               <button 
                 onClick={() => setSelectedRequest(null)}
@@ -234,10 +192,10 @@ export function AdminValidations() {
               </button>
             </div>
 
-            {/* Body con Scroll - data-lenis-prevent tells Lenis to allow native scroll here */}
+            {/* Body con Scroll */}
             <div data-lenis-prevent data-modal-scrollbody className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6">
               <div className="grid sm:grid-cols-2 gap-6">
-                {Object.entries(selectedRequest.payload || {}).map(([key, value]) => {
+                {Object.entries(selectedRequest.details || {}).map(([key, value]) => {
                   const isImage = typeof value === 'string' && (value.startsWith('http') || value.startsWith('data:image')) && !value.endsWith('.pdf');
                   const isPdf = typeof value === 'string' && value.endsWith('.pdf');
                   
@@ -289,7 +247,7 @@ export function AdminValidations() {
                 <GmxButton 
                   variant="secondary"
                   onClick={() => {
-                    setConfirmAction({ id: selectedRequest.id, action: 'rejected', name: selectedRequest.name })
+                    setConfirmAction({ id: selectedRequest.id, action: 'rejected', name: selectedRequest.target_name })
                     setSelectedRequest(null)
                   }}
                   className="border-red-500/20 text-red-500 hover:border-red-500 hover:text-white hover:bg-red-500/20"
@@ -298,7 +256,7 @@ export function AdminValidations() {
                 </GmxButton>
                 <GmxButton 
                   onClick={() => {
-                    setConfirmAction({ id: selectedRequest.id, action: 'approved', name: selectedRequest.name })
+                    setConfirmAction({ id: selectedRequest.id, action: 'approved', name: selectedRequest.target_name })
                     setSelectedRequest(null)
                   }}
                 >
