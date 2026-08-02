@@ -9,13 +9,15 @@ interface FileUploadProps {
   required?: boolean
   accept?: string
   icon?: React.ReactNode
+  onFileSelect?: (file: File | null) => void
 }
 
 export function FileUpload({ 
   name, 
   required, 
   accept = "image/jpeg,image/png,image/gif,application/pdf,.jpg,.jpeg,.jpe,.png,.gif,.pdf", 
-  icon 
+  icon,
+  onFileSelect
 }: FileUploadProps) {
   const [preview, setPreview] = useState<string | null>(null)
   const [fileName, setFileName] = useState<string | null>(null)
@@ -29,6 +31,7 @@ export function FileUpload({
     if (!file) {
       setPreview(null)
       setFileName(null)
+      if (onFileSelect) onFileSelect(null)
       return
     }
 
@@ -37,11 +40,13 @@ export function FileUpload({
       setError('El archivo supera el tamaño máximo de 5MB.')
       setPreview(null)
       setFileName(null)
+      if (onFileSelect) onFileSelect(null)
       if (fileInputRef.current) fileInputRef.current.value = ''
       return
     }
 
     setFileName(file.name)
+    if (onFileSelect) onFileSelect(file)
 
     // Previsualización si es imagen
     if (file.type.startsWith('image/')) {
@@ -58,6 +63,7 @@ export function FileUpload({
     setPreview(null)
     setFileName(null)
     setError(null)
+    if (onFileSelect) onFileSelect(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 

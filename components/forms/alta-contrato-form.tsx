@@ -1,26 +1,87 @@
 'use client'
 
-import { useState } from 'react'
-import { Loader2, CheckCircle2 } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Loader2, CheckCircle2, HelpCircle, AlertTriangle } from 'lucide-react'
 import { GmxButton } from '@/components/gmx-button'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
+import { cn } from '@/lib/utils'
+
+function FieldTooltip({ text }: { text: string }) {
+  return (
+    <div className="group relative inline-block ml-2 align-middle">
+      <HelpCircle className="h-4 w-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
+      <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 -translate-y-2 w-48 rounded bg-surface border border-border px-3 py-2 text-xs text-white opacity-0 transition-all group-hover:opacity-100 z-50 text-center shadow-xl">
+        {text}
+        <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-surface"></div>
+      </div>
+    </div>
+  )
+}
 
 export function AltaContratoForm() {
-  const [formStatus, setFormStatus] = useState<'idle' | 'loading' | 'success'>('idle')
+  const [formStatus, setFormStatus] = useState<'idle' | 'loading' | 'success' | 'blocked'>('idle')
   const { user } = useAuth()
   const supabase = createClient()
+  
+  const [selectedRoles, setSelectedRoles] = useState<string[]>(['JUGADOR(A)'])
+  const [playerGender, setPlayerGender] = useState<string>('Masculino')
+  const [blockMessage, setBlockMessage] = useState('')
+  const [teams, setTeams] = useState<any[]>([])
 
-  const TEAMS = [
-    '- NINGUNO -', 'Aftur Bellum', 'Artaud', 'Døpamine', 'EVEN FLOW', 
-    'EXCIDIUM', 'FIMTHYAR AGRAVVE', 'GMX ESPORTS', 'Los Zoldycks', 
-    'meta Foreigner', 'NAVY SEALS', 'NECTAR E-SPORTS', 'NEGATIVE ESPORTS', 
-    'O7EN E-sport', 'Otsutsüki', 'Requiem E-Sports', 'Sinergy', 
-    'TEAM QUETZAL KING', 'THE HUNGRY KINGS', 'U2 eSPORT', 'U2 STAR', 'VOID ESPORTS MX'
-  ]
+  useEffect(() => {
+    async function init() {
+      if (!user) return
+
+      // Obtener equipos
+      const { data: teamsData } = await supabase.from('teams').select('id, name, type')
+      if (teamsData) {
+        setTeams(teamsData)
+      }
+
+      // Validar limites de contratos
+      const { data: profile } = await supabase.from('profiles').select('gender').eq('id', user.id).single()
+      if (profile && profile.gender) {
+        setPlayerGender(profile.gender)
+      }
+
+      // Obtener contratos activos o pendientes
+      const { data: contracts } = await supabase.from('contracts').select('*, teams(type)').eq('player_id', user.id).in('status', ['active', 'pending_manager'])
+      
+      if (contracts && contracts.length > 0) {
+        if (profile?.gender === 'Masculino' || !profile?.gender) {
+          setBlockMessage('Ya tienes un contrato activo o en proceso. Los jugadores de la división varonil/mixta solo pueden tener 1 contrato activo a la vez.')
+          setFormStatus('blocked')
+        } else if (profile?.gender === 'Femenino') {
+          // Check divisiones
+          const hasVaronil = contracts.some((c: any) => c.teams?.type === 'Varonil / Mixto')
+          const hasFemenil = contracts.some((c: any) => c.teams?.type === 'Femenil')
+          
+          if (hasVaronil && hasFemenil) {
+            setBlockMessage('Has alcanzado el límite máximo de contratos (1 Femenil y 1 Varonil/Mixto).')
+            setFormStatus('blocked')
+          }
+        }
+      }
+    }
+    init()
+  }, [user])
+
+  const handleRoleToggle = (rol: string) => {
+    setSelectedRoles(prev => 
+      prev.includes(rol) 
+        ? prev.filter(r => r !== rol) 
+        : [...prev, rol]
+    )
+  }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (selectedRoles.length === 0) {
+      alert('Debes seleccionar al menos un rol en el equipo.')
+      return
+    }
+
     setFormStatus('loading')
     
     const form = e.currentTarget
@@ -30,9 +91,11 @@ export function AltaContratoForm() {
       equipo: formData.get('item_meta[879]'),
       fechaTermino: formData.get('item_meta[882]'),
       jugador: formData.get('item_meta[888][]'),
-      roles: formData.getAll('item_meta[902][]'),
+      roles: selectedRoles,
+      linea: selectedRoles.includes('JUGADOR(A)') ? formData.get('item_meta_linea') : null
     }
 
+    // Insertar en validaciones (o directamente en contracts con status pending)
     const { error } = await supabase.from('validations').insert({
       type: 'contrato',
       target_name: `${payload.jugador} - ${payload.equipo}`,
@@ -47,6 +110,25 @@ export function AltaContratoForm() {
       setFormStatus('idle')
       alert('Error al enviar el contrato.')
     }
+  }
+
+  if (formStatus === 'blocked') {
+    return (
+      <div className="mx-auto w-full max-w-2xl rounded-xl border border-border bg-surface p-12 text-center shadow-2xl">
+        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-amber-500/10">
+          <AlertTriangle className="h-10 w-10 text-amber-500" />
+        </div>
+        <h2 className="font-display text-3xl font-700 uppercase tracking-tight text-white mb-4">
+          LÍMITE DE CONTRATOS ALCANZADO
+        </h2>
+        <p className="text-muted-foreground mb-8">
+          {blockMessage}
+        </p>
+        <GmxButton href="/micuenta" className="px-8">
+          IR A MI CUENTA
+        </GmxButton>
+      </div>
+    )
   }
 
   return (
@@ -69,10 +151,10 @@ export function AltaContratoForm() {
             <CheckCircle2 className="h-10 w-10 text-emerald-500" />
           </div>
           <h2 className="font-display text-3xl font-700 uppercase tracking-tight text-white mb-2 text-center">
-            ACUERDO ENVIADO EXITOSAMENTE
+            ACUERDO ENVIADO AL MANAGER
           </h2>
           <p className="text-muted-foreground text-center max-w-md px-4 mb-8">
-            Tu contrato ha sido registrado correctamente. Nuestro equipo revisará la solicitud y se pondrá en contacto contigo a través de Discord o correo electrónico.
+            Tu contrato ha sido registrado correctamente y se encuentra pendiente de aprobación. El Manager del equipo deberá revisarlo y aceptarlo en su panel de control para que sea válido.
           </p>
           <GmxButton href="/micuenta" className="px-8">
             IR A MI CUENTA
@@ -105,7 +187,11 @@ export function AltaContratoForm() {
                 className="w-full appearance-none rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 <option value="" disabled>Selecciona tu equipo</option>
-                {TEAMS.map(t => <option key={t} value={t}>{t}</option>)}
+                {teams.length > 0 ? (
+                  teams.map(t => <option key={t.id} value={t.name}>{t.name} ({t.type})</option>)
+                ) : (
+                  <option value="Demo Team">Demo Team</option>
+                )}
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-muted-foreground">
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -118,7 +204,8 @@ export function AltaContratoForm() {
           {/* Fecha de Termino */}
           <div className="space-y-2">
             <label htmlFor="field_bgj19" className="text-sm font-500 text-white">
-              Fecha de Término del Contrato <span className="text-primary">*</span>
+              Duración Máxima del Contrato <span className="text-primary">*</span>
+              <FieldTooltip text="Fecha límite en la que el contrato expira." />
             </label>
             <input
               type="date"
@@ -157,18 +244,21 @@ export function AltaContratoForm() {
           </div>
 
           {/* Roles en el Equipo */}
-          <div className="space-y-4 sm:col-span-2">
+          <div className="space-y-4 sm:col-span-2 pt-4 border-t border-border/50">
             <label className="text-sm font-500 text-white">
               Roles en el Equipo <span className="text-primary">*</span>
+              <FieldTooltip text="Puedes seleccionar varios roles, pero al menos uno es obligatorio." />
             </label>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {['JUGADOR(A)', 'COACH', 'ANALISTA', 'PSICOLOGO DEPORTIVO'].map((rol, i) => (
-                <label key={rol} className="flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-background p-4 transition-colors hover:border-primary">
+              {['JUGADOR(A)', 'COACH', 'ANALISTA', 'PSICOLOGO DEPORTIVO'].map((rol) => (
+                <label key={rol} className={cn(
+                  "flex cursor-pointer items-center gap-3 rounded-lg border p-4 transition-colors",
+                  selectedRoles.includes(rol) ? "border-primary bg-primary/5" : "border-border bg-background hover:border-primary/50"
+                )}>
                   <input
                     type="checkbox"
-                    name="item_meta[902][]"
-                    value={rol}
-                    defaultChecked={i === 0}
+                    checked={selectedRoles.includes(rol)}
+                    onChange={() => handleRoleToggle(rol)}
                     className="h-5 w-5 rounded border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
                   />
                   <span className="text-sm font-600 text-white">{rol}</span>
@@ -176,6 +266,36 @@ export function AltaContratoForm() {
               ))}
             </div>
           </div>
+
+          {/* Linea del jugador si es Jugador */}
+          {selectedRoles.includes('JUGADOR(A)') && (
+            <div className="space-y-2 sm:col-span-2 animate-in fade-in slide-in-from-top-2">
+              <label htmlFor="field_linea" className="text-sm font-500 text-white">
+                Línea del Jugador <span className="text-primary">*</span>
+              </label>
+              <div className="relative">
+                <select
+                  id="field_linea"
+                  name="item_meta_linea"
+                  required
+                  defaultValue=""
+                  className="w-full appearance-none rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="" disabled>Selecciona tu línea principal</option>
+                  <option value="Oro">Línea de Oro / Tirador</option>
+                  <option value="Experiencia">Línea de Experiencia / Combatiente</option>
+                  <option value="Mid">Línea Media / Mago</option>
+                  <option value="Jungla">Jungla / Asesino</option>
+                  <option value="Roamer">Roamer / Tanque / Soporte</option>
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-muted-foreground">
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -214,7 +334,7 @@ export function AltaContratoForm() {
           className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden bg-primary px-8 py-5 font-display text-[15px] font-600 uppercase tracking-[0.18em] text-white transition-colors duration-300 clip-corner hover:bg-primary-dark sm:w-auto mt-4"
         >
           <span className="relative z-10 flex items-center gap-2">
-            ACEPTAR ACUERDO Y ENVIAR
+            ACEPTAR ACUERDO Y ENVIAR AL MANAGER
           </span>
         </button>
       </div>

@@ -1,16 +1,79 @@
 'use client'
 
-import { useState } from 'react'
-import { Upload, Image as ImageIcon, Loader2, CheckCircle2 } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Upload, Image as ImageIcon, Loader2, CheckCircle2, HelpCircle } from 'lucide-react'
 import { GmxButton } from '@/components/gmx-button'
 import { PhoneInput } from '@/components/forms/phone-input'
+import { FileUpload } from '@/components/forms/file-upload'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
+import { cn } from '@/lib/utils'
+
+function FieldTooltip({ text }: { text: string }) {
+  return (
+    <div className="group relative inline-block ml-2 align-middle">
+      <HelpCircle className="h-4 w-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
+      <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 -translate-y-2 w-48 rounded bg-surface border border-border px-3 py-2 text-xs text-white opacity-0 transition-all group-hover:opacity-100 z-50 text-center shadow-xl">
+        {text}
+        <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-surface"></div>
+      </div>
+    </div>
+  )
+}
+
+const DEFAULT_COUNTRIES = [
+  "Argentina", "Bolivia", "Chile", "Colombia", "Costa Rica", "Cuba", 
+  "Ecuador", "El Salvador", "Guatemala", "Honduras", "México", "Nicaragua", 
+  "Panamá", "Paraguay", "Perú", "Puerto Rico", "República Dominicana", 
+  "Uruguay", "Venezuela"
+]
 
 export function AltaEquipoForm() {
   const [formStatus, setFormStatus] = useState<'idle' | 'loading' | 'success'>('idle')
   const { user } = useAuth()
   const supabase = createClient()
+  const [countries, setCountries] = useState<string[]>(DEFAULT_COUNTRIES)
+  const [games, setGames] = useState<string[]>(['Mobile Legends'])
+  const [loadingConfig, setLoadingConfig] = useState(true)
+
+  // Validation state
+  const [teamName, setTeamName] = useState('')
+  
+  // Files
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [jerseyFile, setJerseyFile] = useState<File | null>(null)
+
+  useEffect(() => {
+    async function loadConfig() {
+      const { data } = await supabase.from('app_settings').select('*')
+      if (data && data.length > 0) {
+        const countryConfig = data.find(c => c.id === 'enabled_countries')
+        const gameConfig = data.find(c => c.id === 'enabled_games')
+        
+        if (countryConfig && Array.isArray(countryConfig.value) && countryConfig.value.length > 0) {
+          setCountries(countryConfig.value as string[])
+        }
+        if (gameConfig && Array.isArray(gameConfig.value) && gameConfig.value.length > 0) {
+          setGames(gameConfig.value as string[])
+        }
+      }
+      setLoadingConfig(false)
+    }
+    loadConfig()
+  }, [])
+
+  const handleTeamNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Solo mayúsculas, sin caracteres especiales
+    const val = e.target.value.toUpperCase().replace(/[^A-Z0-9\s]/g, '')
+    setTeamName(val)
+  }
+
+  const handleTeamNamePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault()
+    const text = e.clipboardData.getData('text')
+    const val = text.toUpperCase().replace(/[^A-Z0-9\s]/g, '')
+    setTeamName(val)
+  }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -19,17 +82,58 @@ export function AltaEquipoForm() {
     const form = e.currentTarget
     const formData = new FormData(form)
 
+    let urlLogo = 'https://placehold.co/400x400/png?text=LOGO+EQUIPO'
+    let urlJersey = 'https://placehold.co/400x400/png?text=JERSEY'
+
+    try {
+      if (logoFile) {
+        const fileExt = logoFile.name.split('.').pop()
+        const fileName = `${Date.now()}_logo_${teamName.replace(/\s+/g, '_')}.${fileExt}`
+        const { error: uploadError, data } = await supabase.storage.from('teams').upload(fileName, logoFile)
+        if (!uploadError && data) {
+          const { data: publicUrlData } = supabase.storage.from('teams').getPublicUrl(data.path)
+          urlLogo = publicUrlData.publicUrl
+        }
+      }
+
+      if (jerseyFile) {
+        const fileExt = jerseyFile.name.split('.').pop()
+        const fileName = `${Date.now()}_jersey_${teamName.replace(/\s+/g, '_')}.${fileExt}`
+        const { error: uploadError, data } = await supabase.storage.from('teams').upload(fileName, jerseyFile)
+        if (!uploadError && data) {
+          const { data: publicUrlData } = supabase.storage.from('teams').getPublicUrl(data.path)
+          urlJersey = publicUrlData.publicUrl
+        }
+      }
+    } catch (err) {
+      console.error('Error uploading team files:', err)
+    }
+
     const payload = {
-      nombreEquipo: formData.get('item_meta[622]'),
+      nombreEquipo: teamName,
+      tag: formData.get('item_meta[tag]'),
+      hashtag: formData.get('item_meta[hashtag]'),
       pais: formData.get('item_meta[623]'),
       tipoEquipo: formData.get('item_meta[782]'),
-      logo: 'https://placehold.co/400x400/png?text=LOGO+EQUIPO',
+      logo: urlLogo,
+      jersey: urlJersey,
       juegos: formData.getAll('item_meta[633][]'),
+      redes: {
+        instagram: formData.get('social_instagram'),
+        tiktok: formData.get('social_tiktok'),
+        youtube: formData.get('social_youtube'),
+        facebook: formData.get('social_facebook'),
+        twitch: formData.get('social_twitch'),
+        kick: formData.get('social_kick'),
+        x: formData.get('social_x'),
+      },
       managerNombre: formData.get('item_meta[625][first]') + ' ' + formData.get('item_meta[625][last]'),
       managerSeudonimo: formData.get('item_meta[626]'),
       managerDiscord: formData.get('item_meta[627]'),
       managerWhatsApp: formData.get('item_meta[628]'),
       managerCorreo: formData.get('item_meta[629]'),
+      confirmacionEdad: formData.get('confirm_age') === 'on',
+      confirmacionVeracidad: formData.get('confirm_truth') === 'on'
     }
     
     const { error } = await supabase.from('validations').insert({
@@ -48,6 +152,10 @@ export function AltaEquipoForm() {
     }
   }
   
+  if (loadingConfig) {
+    return <div className="h-96 w-full animate-pulse rounded-xl border border-border bg-surface" />
+  }
+
   return (
     <form
       onSubmit={handleSubmit}
@@ -100,20 +208,55 @@ export function AltaEquipoForm() {
           <div className="space-y-2">
             <label htmlFor="field_5d5a2" className="text-sm font-500 text-white">
               Nombre del Equipo <span className="text-primary">*</span>
+              <FieldTooltip text="Ej: GMX GAMING. Solo mayúsculas, sin caracteres especiales." />
             </label>
             <input
               type="text"
               id="field_5d5a2"
               name="item_meta[622]"
               required
+              value={teamName}
+              onChange={handleTeamNameChange}
+              onPaste={handleTeamNamePaste}
+              className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary uppercase"
+              placeholder="Ej. GMX GAMING"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="item_meta_tag" className="text-sm font-500 text-white">
+              Tag del Equipo <span className="text-primary">*</span>
+              <FieldTooltip text="Las siglas que abrevian el nombre. Ej: GMX" />
+            </label>
+            <input
+              type="text"
+              id="item_meta_tag"
+              name="item_meta[tag]"
+              required
+              className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary uppercase"
+              placeholder="Ej. GMX"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="item_meta_hashtag" className="text-sm font-500 text-white">
+              Hashtag del Equipo <span className="text-primary">*</span>
+              <FieldTooltip text="Una frase que representa al equipo. Ej: #GMXWIN" />
+            </label>
+            <input
+              type="text"
+              id="item_meta_hashtag"
+              name="item_meta[hashtag]"
+              required
               className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              placeholder="Ej. Artaud Esports"
+              placeholder="Ej. #GMXWIN"
             />
           </div>
 
           <div className="space-y-2">
             <label htmlFor="field_s3a0m2" className="text-sm font-500 text-white">
               País del Equipo <span className="text-primary">*</span>
+              <FieldTooltip text="País principal al que representa el equipo." />
             </label>
             <div className="relative">
               <select
@@ -124,11 +267,7 @@ export function AltaEquipoForm() {
                 className="w-full appearance-none rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 <option value="" disabled>Selecciona un país</option>
-                <option value="Mexico">México</option>
-                <option value="Colombia">Colombia</option>
-                <option value="Estados Unidos">Estados Unidos</option>
-                <option value="Ecuador">Ecuador</option>
-                <option value="Venezuela">Venezuela</option>
+                {countries.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-muted-foreground">
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -141,6 +280,7 @@ export function AltaEquipoForm() {
           <div className="space-y-2">
             <label className="text-sm font-500 text-white">
               Tipo de Equipo <span className="text-primary">*</span>
+              <FieldTooltip text="Categoría competitiva del equipo." />
             </label>
             <div className="flex h-[50px] items-center gap-6 rounded-md border border-border bg-background px-4">
               <label className="flex cursor-pointer items-center gap-2 text-sm text-white transition-colors hover:text-primary">
@@ -167,65 +307,85 @@ export function AltaEquipoForm() {
           </div>
         </div>
 
-        <div className="space-y-2">
-          <label className="text-sm font-500 text-white">
-            Logo del Equipo <span className="text-primary">*</span>
-          </label>
-          <div className="group relative flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-background px-6 py-10 transition-colors hover:border-primary hover:bg-primary/5">
-            <Upload className="mb-4 h-10 w-10 text-muted-foreground transition-colors group-hover:text-primary" />
-            <p className="text-center text-sm text-white">
-              <span className="font-600 text-primary">Haz clic para cargar</span> o arrastra un archivo aquí
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">Tamaño máximo del archivo: 268MB (JPG, PNG, GIF)</p>
-            <input
-              type="file"
-              name="item_meta[624]"
-              required
-              accept="image/jpeg,image/png,image/gif,.jpg,.jpeg,.jpe,.png,.gif"
-              className="absolute inset-0 cursor-pointer opacity-0"
-            />
+        <div className="grid gap-6 sm:grid-cols-2">
+          <div className="space-y-2">
+            <label className="text-sm font-500 text-white">
+              Logo del Equipo <span className="text-primary">*</span>
+              <FieldTooltip text="Formatos permitidos: PNG, JPG. Máximo 1 archivo." />
+            </label>
+            <FileUpload name="item_meta[624]" required accept="image/jpeg,image/png,.jpg,.jpeg,.png" onFileSelect={setLogoFile} />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-500 text-white">
+              Jersey del Equipo (Opcional)
+              <FieldTooltip text="Imagen del uniforme del equipo. Format: PNG, JPG." />
+            </label>
+            <FileUpload name="item_meta_jersey" accept="image/jpeg,image/png,.jpg,.jpeg,.png" onFileSelect={setJerseyFile} />
           </div>
         </div>
 
         <div className="space-y-4 pt-4">
           <label className="text-sm font-500 text-white">
-            Juegos en los que participa su Equipo (seleccione uno o ambos)
+            Juegos en los que participa su Equipo <span className="text-primary">*</span>
+            <FieldTooltip text="Debe seleccionar al menos un juego de la lista." />
           </label>
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="group relative flex cursor-pointer items-center gap-4 rounded-lg border border-border bg-background p-4 transition-all hover:border-primary">
-              <input
-                type="checkbox"
-                name="item_meta[633][]"
-                value="HOK"
-                className="h-5 w-5 rounded border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
-              />
-              <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-md bg-surface p-1">
-                <img
-                  src="https://i0.wp.com/gmxgaming.com/wp-content/uploads/2024/07/Honor-of-Kings-Icono-1.png?w=640&ssl=1"
-                  alt="HOK"
-                  className="h-full w-full object-contain"
+            {games.includes('Mobile Legends') && (
+              <label className="group relative flex cursor-pointer items-center gap-4 rounded-lg border border-border bg-background p-4 transition-all hover:border-primary">
+                <input
+                  type="checkbox"
+                  name="item_meta[633][]"
+                  value="MLBB"
+                  defaultChecked
+                  className="h-5 w-5 rounded border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
                 />
-              </div>
-              <span className="font-display font-600 tracking-wider text-white">HOK</span>
-            </label>
+                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-md bg-surface p-1">
+                  <img
+                    src="https://i0.wp.com/gmxgaming.com/wp-content/uploads/2024/07/Mobile-Legends-Logo-Icono.png?w=640&ssl=1"
+                    alt="MLBB"
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+                <span className="font-display font-600 tracking-wider text-white">Mobile Legends</span>
+              </label>
+            )}
 
-            <label className="group relative flex cursor-pointer items-center gap-4 rounded-lg border border-border bg-background p-4 transition-all hover:border-primary">
-              <input
-                type="checkbox"
-                name="item_meta[633][]"
-                value="MLBB"
-                defaultChecked
-                className="h-5 w-5 rounded border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
-              />
-              <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-md bg-surface p-1">
-                <img
-                  src="https://i0.wp.com/gmxgaming.com/wp-content/uploads/2024/07/Mobile-Legends-Logo-Icono.png?w=640&ssl=1"
-                  alt="MLBB"
-                  className="h-full w-full object-contain"
+            {games.filter(g => g !== 'Mobile Legends').map(game => (
+              <label key={game} className="group relative flex cursor-pointer items-center gap-4 rounded-lg border border-border bg-background p-4 transition-all hover:border-primary">
+                <input
+                  type="checkbox"
+                  name="item_meta[633][]"
+                  value={game}
+                  className="h-5 w-5 rounded border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
+                />
+                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-md bg-surface border border-border">
+                  <span className="text-xs font-bold text-muted-foreground">{game.substring(0,3).toUpperCase()}</span>
+                </div>
+                <span className="font-display font-600 tracking-wider text-white">{game}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Redes Sociales */}
+        <div className="space-y-4 pt-4">
+          <label className="text-sm font-500 text-white">
+            Redes Sociales del Equipo
+            <FieldTooltip text="Pega los enlaces completos (Ej: https://instagram.com/tu-equipo). Déjalo vacío si no aplica." />
+          </label>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {['Instagram', 'TikTok', 'YouTube', 'Facebook', 'Twitch', 'Kick', 'X'].map(social => (
+              <div key={social} className="space-y-1.5">
+                <label className="text-xs font-500 text-muted-foreground">{social}</label>
+                <input
+                  type="url"
+                  name={`social_${social.toLowerCase()}`}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  placeholder={`https://${social.toLowerCase()}.com/...`}
                 />
               </div>
-              <span className="font-display font-600 tracking-wider text-white">MLBB</span>
-            </label>
+            ))}
           </div>
         </div>
       </div>
@@ -269,7 +429,8 @@ export function AltaEquipoForm() {
 
           <div className="space-y-2">
             <label htmlFor="field_xi2ck2" className="text-sm font-500 text-white">
-              Seudónimo <span className="text-primary">*</span>
+              Nickname <span className="text-primary">*</span>
+              <FieldTooltip text="Seudónimo o nombre en el juego del Manager." />
             </label>
             <input
               type="text"
@@ -282,7 +443,8 @@ export function AltaEquipoForm() {
 
           <div className="space-y-2">
             <label htmlFor="field_j8tvb2" className="text-sm font-500 text-white">
-              Usuario de Discord <span className="text-primary">*</span>
+              Handle de Discord <span className="text-primary">*</span>
+              <FieldTooltip text="Usuario de Discord actual (sin el #, ej: mordongmx)." />
             </label>
             <input
               type="text"
@@ -290,7 +452,7 @@ export function AltaEquipoForm() {
               name="item_meta[627]"
               required
               className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              placeholder="usuario#1234"
+              placeholder="Ej. mordongmx"
             />
           </div>
 
@@ -317,7 +479,7 @@ export function AltaEquipoForm() {
         </div>
       </div>
 
-      {/* Section 3: ACUERDO DE EXCLUSIVIDAD */}
+      {/* Section 3: ACUERDO DE EXCLUSIVIDAD Y CONFIRMACIONES */}
       <div className="space-y-6 pt-6">
         <div className="border-b border-border pb-3">
           <h3 className="font-display text-xl font-600 uppercase tracking-widest text-primary">
@@ -325,47 +487,78 @@ export function AltaEquipoForm() {
           </h3>
         </div>
 
-        <div className="rounded-lg border border-border bg-background p-6">
-          <p className="mb-4 text-sm text-white">
-            Antes de Registrar a tu Equipo, o a ti mismo como Jugador Competitivo, asegúrate de leer los siguientes documentos:
-          </p>
-          <ul className="mb-6 list-inside list-disc space-y-2 text-sm">
-            <li>
-              <a
-                href="https://csgog5wux9xz.sg.larksuite.com/wiki/DwS6wIadKiYB9ikNbjNlrOrXg2f?from=from_copylink"
-                target="_blank"
-                rel="noreferrer"
-                className="text-[#ffff00] hover:underline"
-              >
-                Acuerdo de Exclusividad con GMX Gaming
-              </a>
-            </li>
-            <li>
-              <a
-                href="https://csgog5wux9xz.sg.larksuite.com/wiki/ElYlwabD7iDF8lkI9bOlPccsgpc?from=from_copylink"
-                target="_blank"
-                rel="noreferrer"
-                className="text-[#ffff00] hover:underline"
-              >
-                Reglamento General Vigente del Competitivo Varonil, Mixto y Femenil de GMX Gaming
-              </a>
-            </li>
-          </ul>
+        <div className="rounded-lg border border-border bg-background p-6 space-y-6">
+          <div>
+            <p className="mb-4 text-sm text-white">
+              Antes de Registrar a tu Equipo, o a ti mismo como Jugador Competitivo, asegúrate de leer los siguientes documentos:
+            </p>
+            <ul className="mb-6 list-inside list-disc space-y-2 text-sm">
+              <li>
+                <a
+                  href="https://csgog5wux9xz.sg.larksuite.com/wiki/DwS6wIadKiYB9ikNbjNlrOrXg2f?from=from_copylink"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[#ffff00] hover:underline"
+                >
+                  Acuerdo de Exclusividad con GMX Gaming
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://csgog5wux9xz.sg.larksuite.com/wiki/ElYlwabD7iDF8lkI9bOlPccsgpc?from=from_copylink"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[#ffff00] hover:underline"
+                >
+                  Reglamento General Vigente del Competitivo Varonil, Mixto y Femenil de GMX Gaming
+                </a>
+              </li>
+            </ul>
+          </div>
 
-          <label className="flex cursor-pointer items-start gap-4 text-sm leading-relaxed text-muted-foreground transition-colors hover:text-white">
-            <div className="pt-1">
-              <input
-                type="checkbox"
-                name="item_meta[638][]"
-                required
-                value="Al marcar esta casilla, confirmo que he leído y estoy de acuerdo con los Términos y Condiciones del Acuerdo de Exclusividad de GMX Gaming, así como el Reglamento General Vigente del Competitivo Varonil, Mixto y Femenil de GMX Gaming, comprometiéndome a que mi organización, equipo(s), jugadores y yo mismo, lo acataremos sin reservas ni excepciones."
-                className="h-5 w-5 rounded border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
-              />
-            </div>
-            <span>
-              Al marcar esta casilla, confirmo que he leído y estoy de acuerdo con los Términos y Condiciones del Acuerdo de Exclusividad de GMX Gaming, así como el Reglamento General Vigente del Competitivo Varonil, Mixto y Femenil de GMX Gaming, comprometiéndome a que mi organización, equipo(s), jugadores y yo mismo, lo acataremos sin reservas ni excepciones. <span className="text-primary">*</span>
-            </span>
-          </label>
+          <div className="space-y-4 border-t border-border/50 pt-4">
+            <label className="flex cursor-pointer items-start gap-4 text-sm leading-relaxed text-muted-foreground transition-colors hover:text-white">
+              <div className="pt-1">
+                <input
+                  type="checkbox"
+                  name="item_meta[638][]"
+                  required
+                  className="h-5 w-5 rounded border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
+                />
+              </div>
+              <span>
+                Confirmo que he leído y estoy de acuerdo con los Términos y Condiciones del Acuerdo de Exclusividad de GMX Gaming, así como el Reglamento General Vigente. <span className="text-primary">*</span>
+              </span>
+            </label>
+
+            <label className="flex cursor-pointer items-start gap-4 text-sm leading-relaxed text-muted-foreground transition-colors hover:text-white">
+              <div className="pt-1">
+                <input
+                  type="checkbox"
+                  name="confirm_age"
+                  required
+                  className="h-5 w-5 rounded border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
+                />
+              </div>
+              <span>
+                Confirmo que soy mayor de edad según las leyes de mi país de residencia. <span className="text-primary">*</span>
+              </span>
+            </label>
+
+            <label className="flex cursor-pointer items-start gap-4 text-sm leading-relaxed text-muted-foreground transition-colors hover:text-white">
+              <div className="pt-1">
+                <input
+                  type="checkbox"
+                  name="confirm_truth"
+                  required
+                  className="h-5 w-5 rounded border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
+                />
+              </div>
+              <span>
+                Declaro bajo protesta de decir verdad que toda la información proporcionada en este formulario es verídica y correcta. <span className="text-primary">*</span>
+              </span>
+            </label>
+          </div>
         </div>
       </div>
 

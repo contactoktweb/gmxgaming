@@ -32,6 +32,8 @@ export const viewport: Viewport = {
   userScalable: true,
 }
 
+import { Toaster } from 'sonner'
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -44,6 +46,7 @@ export default function RootLayout({
           {children}
           {process.env.NODE_ENV === 'production' && <Analytics />}
         </AuthProvider>
+        <Toaster theme="dark" position="top-center" />
       </body>
     </html>
   )

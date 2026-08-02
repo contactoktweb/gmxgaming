@@ -3,16 +3,31 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Menu, X, LogOut, User } from 'lucide-react'
+import { toast } from 'sonner'
 import { NAV_LINKS, SOCIALS } from '@/lib/site-data'
 import { GmxLogo } from '@/components/gmx-logo'
 import { GmxButton } from '@/components/gmx-button'
 import { useAuth } from '@/lib/auth-context'
+import { GlobalSearch } from '@/components/global-search'
 import { cn } from '@/lib/utils'
 
 export function SiteHeader() {
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
   const { user, logout } = useAuth()
+
+  const handleRestrictedClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    if (!user && href.includes('/registro')) {
+      e.preventDefault()
+      toast.error('Acceso Restringido', {
+        description: 'Debes iniciar sesión para realizar altas o registros en la plataforma.',
+        action: {
+          label: 'Iniciar Sesión',
+          onClick: () => window.location.href = '/login'
+        }
+      })
+    }
+  }
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40)
@@ -42,18 +57,19 @@ export function SiteHeader() {
         )}
       >
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-6 px-5 lg:px-10">
-          <GmxLogo />
+          <GmxLogo className="shrink-0" />
 
           <nav className="hidden items-center gap-8 lg:flex">
             {NAV_LINKS.map((link) => (
               <div key={link.href} className="group relative">
                 <a
                   href={link.href}
-                  className="relative flex items-center gap-1 font-display text-[13px] font-500 uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:text-white"
+                  onClick={(e) => handleRestrictedClick(e, link.href)}
+                  className="relative flex items-center gap-1 font-display text-[13px] font-500 uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:text-white whitespace-nowrap"
                 >
                   {link.label}
                   {link.submenu && (
-                    <svg className="h-3 w-3 transition-transform duration-300 group-hover:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="h-3 w-3 transition-transform duration-300 group-hover:rotate-180 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
                   )}
@@ -67,6 +83,7 @@ export function SiteHeader() {
                         <a
                           key={sub.label}
                           href={sub.href}
+                          onClick={(e) => handleRestrictedClick(e, sub.href)}
                           className="px-5 py-4 font-display text-[13px] font-500 uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:bg-elevated hover:text-primary"
                         >
                           {sub.label}
@@ -80,29 +97,34 @@ export function SiteHeader() {
           </nav>
 
           <div className="flex items-center gap-3">
+            <GlobalSearch />
             <div className="hidden lg:flex items-center gap-3">
               {user ? (
                 <>
-                  <GmxButton href="/micuenta" variant="secondary" className="px-5 py-3 border-white/20 hover:border-white gap-2">
-                    <User className="w-4 h-4" />
+                  <GmxButton href="/micuenta" variant="secondary" className="px-5 py-3 border-white/20 hover:border-white gap-2 whitespace-nowrap">
+                    <User className="w-4 h-4 shrink-0" />
                     MI CUENTA
                   </GmxButton>
                   <button
                     onClick={logout}
-                    className="group relative inline-flex items-center justify-center gap-2 overflow-hidden bg-primary/10 border border-primary/20 px-5 py-3 font-display text-[13px] font-600 uppercase tracking-[0.14em] text-primary transition-colors duration-300 clip-corner hover:bg-primary hover:text-white"
+                    className="group relative inline-flex items-center justify-center gap-2 overflow-hidden bg-primary/10 border border-primary/20 px-5 py-3 font-display text-[13px] font-600 uppercase tracking-[0.14em] text-primary transition-colors duration-300 clip-corner hover:bg-primary hover:text-white whitespace-nowrap"
                   >
                     <span className="relative z-10 flex items-center gap-2">
-                      <LogOut className="w-4 h-4" />
+                      <LogOut className="w-4 h-4 shrink-0" />
                       SALIR
                     </span>
                   </button>
                 </>
               ) : (
                 <>
-                  <GmxButton href="/login" variant="secondary" className="px-5 py-3 border-white/20 hover:border-white">
+                  <GmxButton href="/login" variant="secondary" className="px-5 py-3 border-white/20 hover:border-white whitespace-nowrap">
                     INGRESAR
                   </GmxButton>
-                  <GmxButton href="/registro/alta-de-jugador" className="px-5 py-3">
+                  <GmxButton 
+                    href="/registro/alta-de-jugador" 
+                    className="px-5 py-3 whitespace-nowrap"
+                    onClick={(e) => handleRestrictedClick(e, '/registro/alta-de-jugador')}
+                  >
                     CREA TU USUARIO
                   </GmxButton>
                 </>
@@ -158,7 +180,10 @@ export function SiteHeader() {
                   <div key={link.href}>
                     <motion.a
                       href={link.href}
-                      onClick={() => !link.submenu && setOpen(false)}
+                      onClick={(e) => {
+                        handleRestrictedClick(e, link.href)
+                        if (!e.defaultPrevented && !link.submenu) setOpen(false)
+                      }}
                       initial={{ opacity: 0, x: 30 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 0.15 + i * 0.08, duration: 0.4 }}
@@ -175,7 +200,10 @@ export function SiteHeader() {
                           <motion.a
                             key={sub.label}
                             href={sub.href}
-                            onClick={() => setOpen(false)}
+                            onClick={(e) => {
+                              handleRestrictedClick(e, sub.href)
+                              if (!e.defaultPrevented) setOpen(false)
+                            }}
                             initial={{ opacity: 0, x: 30 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: 0.2 + i * 0.08 + j * 0.05, duration: 0.4 }}
@@ -213,7 +241,14 @@ export function SiteHeader() {
                     <GmxButton href="/login" variant="secondary" className="w-full border-white/20 hover:border-white" onClick={() => setOpen(false)}>
                       INGRESAR
                     </GmxButton>
-                    <GmxButton href="/registro/alta-de-jugador" className="w-full" onClick={() => setOpen(false)}>
+                    <GmxButton 
+                      href="/registro/alta-de-jugador" 
+                      className="w-full" 
+                      onClick={(e) => {
+                        handleRestrictedClick(e, '/registro/alta-de-jugador')
+                        if (!e.defaultPrevented) setOpen(false)
+                      }}
+                    >
                       CREA TU USUARIO
                     </GmxButton>
                   </>

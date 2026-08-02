@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Loader2 } from 'lucide-react'
 import { GmxButton } from '@/components/gmx-button'
 import { useAuth } from '@/lib/auth-context'
+import { createClient } from '@/utils/supabase/client'
 
 export function LoginForm() {
   const [email, setEmail] = useState('')
@@ -14,6 +15,7 @@ export function LoginForm() {
   const [error, setError] = useState('')
   const { login } = useAuth()
   const router = useRouter()
+  const supabase = createClient()
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -45,6 +47,7 @@ export function LoginForm() {
       </div>
 
       <div className="space-y-6">
+
         <div className="space-y-2">
           <label htmlFor="email" className="text-sm font-500 text-white">
             Correo Electrónico <span className="text-primary">*</span>
@@ -80,7 +83,7 @@ export function LoginForm() {
       </div>
 
       {error && (
-        <p className="text-sm text-red-500 font-500 text-center">
+        <p className="text-sm text-red-500 font-500 text-center pt-2">
           {error}
         </p>
       )}
@@ -105,3 +108,4 @@ export function LoginForm() {
     </form>
   )
 }
+

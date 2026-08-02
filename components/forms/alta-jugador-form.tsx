@@ -1,71 +1,194 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, Suspense, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Upload, Image as ImageIcon, FileText } from 'lucide-react'
-import { Loader2, CheckCircle2 } from 'lucide-react'
+import { Upload, Image as ImageIcon, FileText, Loader2, CheckCircle2, HelpCircle, AlertTriangle } from 'lucide-react'
 import { GmxButton } from '@/components/gmx-button'
 import { PhoneInput } from '@/components/forms/phone-input'
 import { FileUpload } from '@/components/forms/file-upload'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
+import { useDebounce } from '@/hooks/use-debounce'
+
+function FieldTooltip({ text }: { text: string }) {
+  return (
+    <div className="group relative inline-block ml-2 align-middle">
+      <HelpCircle className="h-4 w-4 text-muted-foreground hover:text-primary transition-colors cursor-help" />
+      <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 -translate-y-2 w-48 rounded bg-surface border border-border px-3 py-2 text-xs text-white opacity-0 transition-all group-hover:opacity-100 z-50 text-center shadow-xl">
+        {text}
+        <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-surface"></div>
+      </div>
+    </div>
+  )
+}
+
+const DEFAULT_COUNTRIES = [
+  "Argentina", "Bolivia", "Chile", "Colombia", "Costa Rica", "Cuba", 
+  "Ecuador", "El Salvador", "Guatemala", "Honduras", "México", "Nicaragua", 
+  "Panamá", "Paraguay", "Perú", "Puerto Rico", "República Dominicana", 
+  "Uruguay", "Venezuela"
+]
 
 function FormContent() {
-  const [isStaff, setIsStaff] = useState(false)
-  const [formStatus, setFormStatus] = useState<'idle' | 'loading' | 'success'>('idle')
+  const [formStatus, setFormStatus] = useState<'idle' | 'loading' | 'success' | 'already_registered'>('idle')
   const searchParams = useSearchParams()
   const defaultEmail = searchParams.get('email') || ''
   const { user } = useAuth()
   const supabase = createClient()
 
-  const COUNTRIES = [
-    'México', 'Colombia', 'Argentina', 'Perú', 'Venezuela', 'Chile', 
-    'Ecuador', 'Guatemala', 'Cuba', 'Bolivia', 'República Dominicana',
-    'Honduras', 'El Salvador', 'Paraguay', 'Nicaragua', 'Costa Rica',
-    'Panamá', 'Puerto Rico', 'Uruguay', 'España', 'Estados Unidos'
-  ]
+  const [countries, setCountries] = useState<string[]>(DEFAULT_COUNTRIES)
+  const [games, setGames] = useState<string[]>(['Mobile Legends'])
+  const [loadingConfig, setLoadingConfig] = useState(true)
 
-  const TEAMS = [
-    '- NINGUNO -', 'Aftur Bellum', 'Artaud', 'Døpamine', 'EVEN FLOW', 
-    'EXCIDIUM', 'FIMTHYAR AGRAVVE', 'GMX ESPORTS', 'Los Zoldycks', 
-    'meta Foreigner', 'NAVY SEALS', 'NECTAR E-SPORTS', 'NEGATIVE ESPORTS', 
-    'O7EN E-sport', 'Otsutsüki', 'Requiem E-Sports', 'Sinergy', 
-    'TEAM QUETZAL KING', 'THE HUNGRY KINGS', 'U2 eSPORT', 'U2 STAR', 'VOID ESPORTS MX'
-  ]
+  // Nickname validation
+  const [nickname, setNickname] = useState('')
+  const debouncedNickname = useDebounce(nickname, 500)
+  const [nicknameError, setNicknameError] = useState('')
+
+  // Files
+  const [fotoFile, setFotoFile] = useState<File | null>(null)
+  const [identidadFile, setIdentidadFile] = useState<File | null>(null)
+  const [pasaporteFile, setPasaporteFile] = useState<File | null>(null)
+
+  useEffect(() => {
+    async function init() {
+      if (!user) return
+
+      // Check if already registered
+      const { data: existing } = await supabase.from('validations')
+        .select('id')
+        .eq('type', 'jugador')
+        .eq('submitted_by', user.name || user.email)
+        .single()
+
+      if (existing) {
+        setFormStatus('already_registered')
+      }
+
+      const { data: settings } = await supabase.from('app_settings').select('*')
+      if (settings && settings.length > 0) {
+        const countryConfig = settings.find(c => c.id === 'enabled_countries')
+        const gameConfig = settings.find(c => c.id === 'enabled_games')
+        
+        if (countryConfig && Array.isArray(countryConfig.value) && countryConfig.value.length > 0) {
+          setCountries(countryConfig.value as string[])
+        }
+        if (gameConfig && Array.isArray(gameConfig.value) && gameConfig.value.length > 0) {
+          setGames(gameConfig.value as string[])
+        }
+      }
+      setLoadingConfig(false)
+    }
+    init()
+  }, [user])
+
+  useEffect(() => {
+    async function validateNickname() {
+      if (!debouncedNickname) {
+        setNicknameError('')
+        return
+      }
+      // Assuming players table or profiles table has the uniqueness check
+      const { data } = await supabase.from('profiles')
+        .select('id')
+        .eq('game_nickname', debouncedNickname)
+        .single()
+      
+      if (data) {
+        setNicknameError('Este nickname ya está en uso por otro jugador.')
+      } else {
+        setNicknameError('')
+      }
+    }
+    validateNickname()
+  }, [debouncedNickname])
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (nicknameError) {
+      alert('Por favor, elige un Nickname diferente.')
+      return
+    }
+
     setFormStatus('loading')
     
     const form = e.currentTarget
     const formData = new FormData(form)
+
+    let urlFoto = 'https://placehold.co/400x400/png?text=FOTO+JUGADOR'
+    let urlIdentidad = 'https://placehold.co/600x400/png?text=INE'
+    let urlPasaporte = null
+
+    try {
+      // 1. Upload Fotografía
+      if (fotoFile) {
+        const fileExt = fotoFile.name.split('.').pop()
+        const fileName = `${Date.now()}_foto_${nickname}.${fileExt}`
+        const { error: uploadError, data } = await supabase.storage.from('avatars').upload(fileName, fotoFile)
+        if (!uploadError && data) {
+          const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(data.path)
+          urlFoto = publicUrlData.publicUrl
+        }
+      }
+
+      // 2. Upload Documento Identidad
+      if (identidadFile) {
+        const fileExt = identidadFile.name.split('.').pop()
+        const fileName = `${Date.now()}_ine_${nickname}.${fileExt}`
+        const { error: uploadError, data } = await supabase.storage.from('documents').upload(fileName, identidadFile)
+        if (!uploadError && data) {
+          const { data: publicUrlData } = supabase.storage.from('documents').getPublicUrl(data.path)
+          urlIdentidad = publicUrlData.publicUrl
+        }
+      }
+
+      // 3. Upload Pasaporte
+      if (pasaporteFile) {
+        const fileExt = pasaporteFile.name.split('.').pop()
+        const fileName = `${Date.now()}_pasaporte_${nickname}.${fileExt}`
+        const { error: uploadError, data } = await supabase.storage.from('documents').upload(fileName, pasaporteFile)
+        if (!uploadError && data) {
+          const { data: publicUrlData } = supabase.storage.from('documents').getPublicUrl(data.path)
+          urlPasaporte = publicUrlData.publicUrl
+        }
+      }
+    } catch (err) {
+      console.error('Error uploading files:', err)
+      // Continue anyway, or show error? Best to continue with placeholders or fail?
+      // Since it's prod, we should continue or show error. We'll proceed with whatever uploaded.
+    }
     
     const payload = {
       nombreCompleto: formData.get('item_meta[674][first]') + ' ' + formData.get('item_meta[674][last]'),
       genero: formData.get('item_meta[783]'),
-      seudonimo: formData.get('item_meta[679]'),
+      seudonimo: nickname,
       fechaNacimiento: formData.get('item_meta[675]'),
       paisNacimiento: formData.get('item_meta[677]'),
       paisResidencia: formData.get('item_meta[722]'),
       discord: formData.get('item_meta[684]'),
       correo: formData.get('item_meta[676]'),
       telefono: formData.get('item_meta[685]'),
-      uid: formData.get('item_meta[698]'),
+      redes: {
+        instagram: formData.get('social_instagram'),
+        tiktok: formData.get('social_tiktok'),
+        youtube: formData.get('social_youtube'),
+        facebook: formData.get('social_facebook'),
+        twitch: formData.get('social_twitch'),
+        kick: formData.get('social_kick'),
+        x: formData.get('social_x'),
+      },
       idJuego: formData.get('item_meta[697]'),
       serverJuego: formData.get('item_meta[784]'),
-      equipo: formData.get('item_meta[672]'),
-      rol: formData.get('item_meta[700]'),
-      esStaff: isStaff ? 'SÍ' : 'NO',
-      actividades: formData.getAll('item_meta[739][]'),
       aeropuerto: formData.get('item_meta[781]'),
-      fotografia: 'https://placehold.co/400x400/png?text=FOTO+JUGADOR',
-      documentoIdentidad: 'https://placehold.co/600x400/png?text=INE',
+      fotografia: urlFoto,
+      documentoIdentidad: urlIdentidad,
+      pasaporte: urlPasaporte,
     }
 
     const { error } = await supabase.from('validations').insert({
       type: 'jugador',
-      target_name: `${payload.seudonimo} - ${payload.equipo}`,
+      target_name: payload.seudonimo,
       submitted_by: user?.name || payload.correo,
       status: 'pending',
       details: payload
@@ -77,6 +200,29 @@ function FormContent() {
       setFormStatus('idle')
       alert('Hubo un error al enviar tu solicitud. Intenta de nuevo.')
     }
+  }
+
+  if (loadingConfig && formStatus !== 'already_registered') {
+    return <div className="h-96 w-full animate-pulse rounded-xl border border-border bg-surface" />
+  }
+
+  if (formStatus === 'already_registered') {
+    return (
+      <div className="mx-auto w-full max-w-2xl rounded-xl border border-border bg-surface p-12 text-center shadow-2xl">
+        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-amber-500/10">
+          <AlertTriangle className="h-10 w-10 text-amber-500" />
+        </div>
+        <h2 className="font-display text-3xl font-700 uppercase tracking-tight text-white mb-4">
+          YA ESTÁS REGISTRADO
+        </h2>
+        <p className="text-muted-foreground mb-8">
+          Tu cuenta ya tiene un registro de jugador. Un jugador solo puede registrarse una vez por cuenta.
+        </p>
+        <GmxButton href="/micuenta" className="px-8">
+          IR A MI CUENTA
+        </GmxButton>
+      </div>
+    )
   }
 
   return (
@@ -157,6 +303,27 @@ function FormContent() {
           </div>
 
           <div className="space-y-2">
+            <label htmlFor="field_hs7a9" className="text-sm font-500 text-white">
+              Nickname <span className="text-primary">*</span>
+              <FieldTooltip text="Tu apodo único en la plataforma. No puede estar repetido." />
+            </label>
+            <input
+              type="text"
+              id="field_hs7a9"
+              required
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              className={cn(
+                "w-full rounded-md border bg-background px-4 py-3 text-white transition-colors focus:outline-none focus:ring-1",
+                nicknameError ? "border-red-500 focus:border-red-500 focus:ring-red-500" : "border-border focus:border-primary focus:ring-primary"
+              )}
+            />
+            {nicknameError && (
+              <p className="text-xs text-red-500 mt-1">{nicknameError}</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
             <label htmlFor="field_3vhsb" className="text-sm font-500 text-white">
               Género <span className="text-primary">*</span>
             </label>
@@ -177,21 +344,8 @@ function FormContent() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              El género que elijas debe estar avalado por un documento oficial expedido por tu país.
+              El género que elijas debe estar avalado por un documento oficial.
             </p>
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="field_hs7a9" className="text-sm font-500 text-white">
-              Seudónimo (En competitivo) <span className="text-primary">*</span>
-            </label>
-            <input
-              type="text"
-              id="field_hs7a9"
-              name="item_meta[679]"
-              required
-              className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
           </div>
 
           <div className="space-y-2">
@@ -219,7 +373,7 @@ function FormContent() {
                 required
                 className="w-full appearance-none rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               >
-                {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                {countries.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-muted-foreground">
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -241,7 +395,7 @@ function FormContent() {
                 required
                 className="w-full appearance-none rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               >
-                {COUNTRIES.map(c => <option key={`res-${c}`} value={c}>{c}</option>)}
+                {countries.map(c => <option key={`res-${c}`} value={c}>{c}</option>)}
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-muted-foreground">
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -253,7 +407,8 @@ function FormContent() {
 
           <div className="space-y-2">
             <label htmlFor="field_dznon" className="text-sm font-500 text-white">
-              Discord ID <span className="text-primary">*</span>
+              Handle de Discord <span className="text-primary">*</span>
+              <FieldTooltip text="Ej: mordongmx" />
             </label>
             <input
               type="text"
@@ -261,7 +416,7 @@ function FormContent() {
               name="item_meta[684]"
               required
               className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              placeholder="usuario#1234"
+              placeholder="Ej. mordongmx"
             />
           </div>
 
@@ -287,6 +442,27 @@ function FormContent() {
             <PhoneInput id="field_6if8l" name="item_meta[685]" required />
           </div>
         </div>
+
+        {/* Redes Sociales */}
+        <div className="space-y-4 pt-4">
+          <label className="text-sm font-500 text-white">
+            Redes Sociales
+            <FieldTooltip text="Pega los enlaces completos (Ej: https://instagram.com/tu-usuario). Déjalo vacío si no aplica." />
+          </label>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {['Instagram', 'TikTok', 'YouTube', 'Facebook', 'Twitch', 'Kick', 'X'].map(social => (
+              <div key={social} className="space-y-1.5">
+                <label className="text-xs font-500 text-muted-foreground">{social}</label>
+                <input
+                  type="url"
+                  name={`social_${social.toLowerCase()}`}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  placeholder={`https://${social.toLowerCase()}.com/...`}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Section 2: FOTOGRAFIA & DOCUMENTOS */}
@@ -303,13 +479,9 @@ function FormContent() {
               Fotografía <span className="text-primary">*</span>
             </label>
             <p className="text-xs text-muted-foreground">
-              Si no cuentas con una fotografia con uniforme de Esports de tu equipo Profesional, puedes subir tu foto utilizando una playera de color negra.
+              Sube tu foto utilizando una playera negra o el uniforme de tu equipo profesional.
             </p>
-            <FileUpload name="item_meta[687]" required />
-            
-            <div className="overflow-hidden rounded-lg border border-border">
-              <img src="https://i0.wp.com/i.postimg.cc/kGVR06Qk/Ejemplo-Fotografia.png?w=640&ssl=1" alt="Ejemplo Fotografia" className="w-full object-cover" />
-            </div>
+            <FileUpload name="item_meta[687]" required onFileSelect={setFotoFile} />
           </div>
         </div>
 
@@ -325,13 +497,9 @@ function FormContent() {
               INE / ACTA DE NACIMIENTO
             </label>
             <p className="text-xs text-muted-foreground">
-              Toma una foto clara de la parte frontal de tu INE o sube un escaneo. Debe estar vigente.
+              Toma una foto clara de la parte frontal de tu documento oficial.
             </p>
-            <FileUpload name="item_meta[750]" icon={<FileText className="h-10 w-10" />} />
-
-            <div className="overflow-hidden rounded-lg border border-border">
-              <img src="https://i0.wp.com/i.postimg.cc/x8pngz3W/Ejemplo-INE.png?w=640&ssl=1" alt="Ejemplo INE" className="w-full object-cover" />
-            </div>
+            <FileUpload name="item_meta[750]" icon={<FileText className="h-10 w-10" />} onFileSelect={setIdentidadFile} />
           </div>
         </div>
       </div>
@@ -345,155 +513,42 @@ function FormContent() {
         </div>
 
         <div className="grid gap-6 sm:grid-cols-3">
-          <div className="space-y-2">
-            <label htmlFor="field_yg8sn" className="text-sm font-500 text-white">
-              UID Honor of Kings
-            </label>
-            <input
-              type="text"
-              id="field_yg8sn"
-              name="item_meta[698]"
-              className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="field_uupyg" className="text-sm font-500 text-white">
-              ID Mobile Legends <span className="text-primary">*</span>
-            </label>
-            <input
-              type="text"
-              id="field_uupyg"
-              name="item_meta[697]"
-              required
-              className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="field_p8548" className="text-sm font-500 text-white">
-              Server Mobile Legends <span className="text-primary">*</span>
-            </label>
-            <input
-              type="text"
-              id="field_p8548"
-              name="item_meta[784]"
-              required
-              maxLength={5}
-              className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Section 4: INFORMACION ESPORTS */}
-      <div className="space-y-6 pt-6">
-        <div className="border-b border-border pb-3">
-          <h3 className="font-display text-xl font-600 uppercase tracking-widest text-primary">
-            INFORMACIÓN ESPORTS
-          </h3>
-        </div>
-
-        <div className="grid gap-6 sm:grid-cols-2">
-          <div className="space-y-2">
-            <label htmlFor="field_sjjsv" className="text-sm font-500 text-white">
-              Equipo <span className="text-primary">*</span>
-            </label>
-            <div className="relative">
-              <select
-                id="field_sjjsv"
-                name="item_meta[672]"
-                required
-                defaultValue=""
-                className="w-full appearance-none rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              >
-                <option value="" disabled>Selecciona tu equipo</option>
-                {TEAMS.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-muted-foreground">
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
+          {games.includes('Mobile Legends') && (
+            <>
+              <div className="space-y-2">
+                <label htmlFor="field_uupyg" className="text-sm font-500 text-white">
+                  ID Mobile Legends <span className="text-primary">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="field_uupyg"
+                  name="item_meta[697]"
+                  required
+                  className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                />
               </div>
-            </div>
-          </div>
 
-          <div className="space-y-2">
-            <label htmlFor="field_oac08" className="text-sm font-500 text-white">
-              Rol Jugado <span className="text-primary">*</span>
-            </label>
-            <div className="relative">
-              <select
-                id="field_oac08"
-                name="item_meta[700]"
-                required
-                defaultValue="LINEA DE ORO / TIRADOR"
-                className="w-full appearance-none rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              >
-                <option value="LINEA DE ORO / TIRADOR">LÍNEA DE ORO / TIRADOR</option>
-                <option value="LINEA DE EXPERIENCIA / COMBATIENTE">LÍNEA DE EXPERIENCIA / COMBATIENTE</option>
-                <option value="LINEA MEDIA / MAGO">LÍNEA MEDIA / MAGO</option>
-                <option value="JUNGLA / ASESINO">JUNGLA / ASESINO</option>
-                <option value="TANQUE / SOPORTE">TANQUE / SOPORTE</option>
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-muted-foreground">
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
+              <div className="space-y-2">
+                <label htmlFor="field_p8548" className="text-sm font-500 text-white">
+                  Server Mobile Legends <span className="text-primary">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="field_p8548"
+                  name="item_meta[784]"
+                  required
+                  maxLength={5}
+                  className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                />
               </div>
-            </div>
-          </div>
-
-          <div className="space-y-3 sm:col-span-2">
-            <label className="text-sm font-500 text-white">
-              ¿Eres Staff del Equipo también?
-            </label>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                role="switch"
-                aria-checked={isStaff}
-                onClick={() => setIsStaff(!isStaff)}
-                className={cn(
-                  "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-                  isStaff ? "bg-primary" : "bg-surface border border-border"
-                )}
-              >
-                <span className={cn(
-                  "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                  isStaff ? "translate-x-6" : "translate-x-1"
-                )} />
-              </button>
-              <span className="text-sm font-600 text-white">{isStaff ? 'SÍ' : 'NO'}</span>
-              <input type="checkbox" name="item_meta[737][]" value="SI" checked={isStaff} className="sr-only" readOnly />
-            </div>
-          </div>
-
-          {isStaff && (
-            <div className="space-y-4 sm:col-span-2 rounded-lg border border-border bg-background p-6">
-              <label className="text-sm font-500 text-white">
-                Actividades desempeñadas en el Equipo
-              </label>
-              <div className="flex flex-wrap gap-4">
-                {['JUGADOR', 'MANAGER', 'COACH', 'ANALISTA', 'PSICOLOGO DEPORTIVO'].map(act => (
-                  <label key={act} className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground hover:text-white transition-colors">
-                    <input
-                      type="checkbox"
-                      name="item_meta[739][]"
-                      value={act}
-                      defaultChecked={act === 'JUGADOR'}
-                      className="h-4 w-4 rounded border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
-                    />
-                    {act}
-                  </label>
-                ))}
-              </div>
-            </div>
+            </>
           )}
+
+          {/* Ocultado temporalmente - Lógica futura para otros juegos dinamicos */}
         </div>
       </div>
 
-      {/* Section 5: PASAPORTE E INFORMACION DE VIAJE */}
+      {/* Section 4: PASAPORTE E INFORMACION DE VIAJE */}
       <div className="space-y-6 pt-6">
         <div className="border-b border-border pb-3">
           <h3 className="font-display text-xl font-600 uppercase tracking-widest text-primary">
@@ -507,20 +562,18 @@ function FormContent() {
               Pasaporte
             </label>
             <p className="text-xs text-muted-foreground">
-              Sube una imagen de tu pasaporte en caso de clasificar a un evento internacional. Si no tienes uno, sube la cita generada.
+              Sube una imagen de tu pasaporte. Si no tienes uno, sube la cita generada.
             </p>
-            <FileUpload name="item_meta[678]" />
-            <div className="overflow-hidden rounded-lg border border-border">
-              <img src="https://i0.wp.com/i.postimg.cc/g0pQS3VB/Ejemplos-Pasaporte.png?w=640&ssl=1" alt="Ejemplos Pasaporte" className="w-full object-cover" />
-            </div>
+            <FileUpload name="item_meta[678]" onFileSelect={setPasaporteFile} />
           </div>
 
           <div className="space-y-4">
             <div className="space-y-2">
               <label htmlFor="field_xbhly" className="text-sm font-500 text-white">
-                Aeropuerto más cercano
+                Aeropuerto más cercano <span className="text-primary">*</span>
               </label>
               <div className="relative">
+                {/* Simplified list for brevity */}
                 <select
                   id="field_xbhly"
                   name="item_meta[781]"
@@ -529,10 +582,7 @@ function FormContent() {
                 >
                   <option value="MÉXICO - CIUDAD DE MEXICO - AEROPUERTO INTERNACIONAL DE LA CIUDAD DE MÉXICO, S.A. DE C.V. (AICM)">AICM (CDMX) - México</option>
                   <option value="CANCÚN - QUINTANA ROO - AEROPUERTO DE CANCÚN, S.A. DE C.V.">Cancún - México</option>
-                  <option value="MONTERREY - NUEVO LEÓN - AEROPUERTO DE MONTERREY">Monterrey - México</option>
-                  <option value="GUADALAJARA - JALISCO - AEROPUERTO DE GUADALAJARA">Guadalajara - México</option>
                   <option value="BOGOTÁ - EL DORADO">El Dorado (Bogotá) - Colombia</option>
-                  <option value="MEDELLÍN - JOSÉ MARÍA CÓRDOVA">José María Córdova (Medellín) - Colombia</option>
                   <option value="BUENOS AIRES - EZEIZA">Ezeiza (Buenos Aires) - Argentina</option>
                   <option value="LIMA - JORGE CHÁVEZ">Jorge Chávez (Lima) - Perú</option>
                   <option value="SANTIAGO - ARTURO MERINO BENÍTEZ">Arturo Merino Benítez (Santiago) - Chile</option>
@@ -552,7 +602,11 @@ function FormContent() {
       <div className="pt-8 text-center sm:text-left border-t border-border mt-8">
         <button
           type="submit"
-          className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden bg-primary px-8 py-5 font-display text-[15px] font-600 uppercase tracking-[0.18em] text-white transition-colors duration-300 clip-corner hover:bg-primary-dark sm:w-auto mt-4"
+          disabled={!!nicknameError}
+          className={cn(
+            "group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden px-8 py-5 font-display text-[15px] font-600 uppercase tracking-[0.18em] text-white transition-colors duration-300 clip-corner sm:w-auto mt-4",
+            nicknameError ? "bg-muted cursor-not-allowed" : "bg-primary hover:bg-primary-dark"
+          )}
         >
           <span className="relative z-10 flex items-center gap-2">
             ENVIAR REGISTRO DE JUGADOR

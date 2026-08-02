@@ -1,13 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Check, X, UserCheck, ShieldCheck, ScrollText, Eye, FileText, Image as ImageIcon, AlertCircle, Maximize2, ZoomIn } from 'lucide-react'
+import { Check, X, UserCheck, ShieldCheck, ScrollText, Eye, FileText, Image as ImageIcon, AlertCircle, Maximize2, ZoomIn, Search, Trash2 } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { GmxButton } from '@/components/gmx-button'
 import { createClient } from '@/utils/supabase/client'
 import { cn } from '@/lib/utils'
 
-type ValidationType = 'jugador' | 'equipo' | 'contrato' | string
+type ValidationType = 'jugador' | 'equipo' | 'contrato' | 'all'
 
 interface PendingRequest {
   id: string
@@ -25,10 +25,20 @@ export function AdminValidations() {
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
   
+  // Filters and search
+  const [activeTab, setActiveTab] = useState<ValidationType>('all')
+  const [searchQuery, setSearchQuery] = useState('')
+
   // Modals state
   const [selectedRequest, setSelectedRequest] = useState<PendingRequest | null>(null)
-  const [confirmAction, setConfirmAction] = useState<{ id: string, action: 'approved' | 'rejected', name: string } | null>(null)
+  const [confirmAction, setConfirmAction] = useState<{ id: string, action: 'approved' | 'rejected' | 'deleted', name: string } | null>(null)
   const [lightboxImage, setLightboxImage] = useState<{ src: string, label: string } | null>(null)
+  
+  // Deletion logic
+  const [deleteConfirmationWord, setDeleteConfirmationWord] = useState('')
+
+  // Edit details logic
+  const [editingDetails, setEditingDetails] = useState<any>(null)
 
   const fetchValidations = async () => {
     setLoading(true)
@@ -54,18 +64,96 @@ export function AdminValidations() {
 
   const handleExecuteAction = async () => {
     if (!confirmAction) return
-    
-    await supabase.from('validations').update({ status: confirmAction.action }).eq('id', confirmAction.id)
-    
-    setRequests(prev => prev.map(req => {
-      if (req.id === confirmAction.id) {
-        return { ...req, status: confirmAction.action }
+
+    if (confirmAction.action === 'deleted') {
+      if (deleteConfirmationWord !== 'SI') return
+      await supabase.from('validations').delete().eq('id', confirmAction.id)
+      setRequests(prev => prev.filter(req => req.id !== confirmAction.id))
+    } else {
+      // Si se aprueba, debemos insertar el registro en su respectiva tabla
+      const requestToUpdate = requests.find(req => req.id === confirmAction.id)
+      
+      if (confirmAction.action === 'approved' && requestToUpdate && requestToUpdate.details) {
+        const { details } = requestToUpdate
+        
+        if (requestToUpdate.type === 'jugador') {
+          const playerPayload = {
+            name: details.firstName && details.lastName ? `${details.firstName} ${details.lastName}` : (details.firstName || requestToUpdate.target_name),
+            email: details.email || '',
+            role: details.primaryRole || 'Jugador',
+            team: details.teamName || null,
+            status: 'active',
+            avatar: details.profilePhoto || null,
+            phone: details.phone || '',
+            game_id: details.gameId || '',
+            discord: details.discord || '',
+            country: details.country || ''
+          }
+          await supabase.from('players').insert(playerPayload)
+        } 
+        else if (requestToUpdate.type === 'equipo') {
+          const teamPayload = {
+            name: details.teamName || requestToUpdate.target_name,
+            tag: details.teamTag || '',
+            country: details.country || '',
+            logo_url: details.logo || null,
+            jersey_url: details.jersey || null,
+            color_primary: details.primaryColor || '#FFFFFF',
+            color_secondary: details.secondaryColor || '#000000',
+            manager_email: details.email || ''
+          }
+          await supabase.from('teams').insert(teamPayload)
+        }
+        else if (requestToUpdate.type === 'contrato') {
+          const contractPayload = {
+            player_name: details.playerName || '',
+            player_email: details.email || '',
+            team: details.teamName || '',
+            role: details.role || 'Jugador',
+            start_date: details.startDate || new Date().toISOString(),
+            end_date: details.endDate || new Date().toISOString(),
+            status: 'active',
+            document_url: details.contractFile || null
+          }
+          await supabase.from('contracts').insert(contractPayload)
+        }
       }
-      return req
-    }))
+
+      await supabase.from('validations').update({ status: confirmAction.action }).eq('id', confirmAction.id)
+      setRequests(prev => prev.map(req => {
+        if (req.id === confirmAction.id) {
+          return { ...req, status: confirmAction.action }
+        }
+        return req
+      }))
+    }
     
     setConfirmAction(null)
     setSelectedRequest(null)
+    setDeleteConfirmationWord('')
+  }
+
+  const handleSaveDetails = async () => {
+    if (!selectedRequest || !editingDetails) return
+    
+    // Save to DB
+    const { error } = await supabase.from('validations')
+      .update({ details: editingDetails })
+      .eq('id', selectedRequest.id)
+      
+    if (!error) {
+      // Update local state
+      setRequests(prev => prev.map(req => {
+        if (req.id === selectedRequest.id) {
+          return { ...req, details: editingDetails }
+        }
+        return req
+      }))
+      setSelectedRequest({ ...selectedRequest, details: editingDetails })
+      alert('Cambios guardados correctamente.')
+    } else {
+      alert('Error guardando cambios.')
+    }
   }
 
   const getTypeIcon = (type: ValidationType) => {
@@ -77,20 +165,61 @@ export function AdminValidations() {
     }
   }
 
+  const filteredRequests = requests.filter(req => {
+    if (activeTab !== 'all' && req.type !== activeTab) return false
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase()
+      return req.target_name.toLowerCase().includes(q) || req.submitted_by?.toLowerCase().includes(q)
+    }
+    return true
+  })
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      
+      {/* Header & Tabs */}
       <div className="rounded-xl border border-border bg-surface p-6 sm:p-8">
-        <h2 className="font-display text-2xl font-700 uppercase tracking-tight text-white mb-6">
-          Validaciones Pendientes
-        </h2>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
+          <h2 className="font-display text-2xl font-700 uppercase tracking-tight text-white">
+            Validaciones
+          </h2>
+          
+          <div className="relative w-full sm:max-w-xs">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Buscar validación..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full rounded-md border border-border bg-background py-2 pl-9 pr-4 text-sm text-white placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 mb-6 border-b border-border pb-4">
+          {['all', 'jugador', 'equipo', 'contrato'].map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab as ValidationType)}
+              className={cn(
+                "px-4 py-2 rounded-md font-display text-sm font-600 uppercase tracking-wider transition-colors",
+                activeTab === tab 
+                  ? "bg-primary text-white" 
+                  : "bg-background border border-border text-muted-foreground hover:text-white"
+              )}
+            >
+              {tab === 'all' ? 'Todas' : `${tab}s`}
+            </button>
+          ))}
+        </div>
         
         {loading ? (
           <div className="flex justify-center items-center py-12">
             <p className="text-muted-foreground animate-pulse">Cargando validaciones...</p>
           </div>
-        ) : requests.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            No hay solicitudes pendientes.
+        ) : filteredRequests.length === 0 ? (
+          <div className="text-center py-12 border border-dashed border-border rounded-lg bg-background/50">
+            <p className="text-muted-foreground">No hay solicitudes que coincidan con los filtros.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -98,15 +227,14 @@ export function AdminValidations() {
               <thead className="bg-background">
                 <tr>
                   <th className="px-4 py-3 font-600 text-muted-foreground">TIPO</th>
-                  <th className="px-4 py-3 font-600 text-muted-foreground">NOMBRE / REFERENCIA</th>
-                  <th className="px-4 py-3 font-600 text-muted-foreground">ENVIADO POR</th>
-                  <th className="px-4 py-3 font-600 text-muted-foreground">FECHA</th>
-                  <th className="px-4 py-3 font-600 text-muted-foreground">ESTADO</th>
+                  <th className="px-4 py-3 font-600 text-muted-foreground">NOMBRE / NICKNAME</th>
+                  <th className="px-4 py-3 font-600 text-muted-foreground">FECHA REGISTRO</th>
+                  <th className="px-4 py-3 font-600 text-muted-foreground">ESTATUS</th>
                   <th className="px-4 py-3 font-600 text-muted-foreground text-right">ACCIONES</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {requests.map(req => (
+                {filteredRequests.map(req => (
                   <tr key={req.id} className="transition-colors hover:bg-white/5">
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2 uppercase font-500 text-xs">
@@ -115,7 +243,6 @@ export function AdminValidations() {
                       </div>
                     </td>
                     <td className="px-4 py-4 font-500 text-white">{req.target_name}</td>
-                    <td className="px-4 py-4 text-muted-foreground">{req.submitted_by || 'N/A'}</td>
                     <td className="px-4 py-4 text-muted-foreground">{new Date(req.created_at).toLocaleDateString()}</td>
                     <td className="px-4 py-4">
                       {req.status === 'pending' ? (
@@ -123,20 +250,23 @@ export function AdminValidations() {
                           Pendiente
                         </span>
                       ) : req.status === 'approved' ? (
-                        <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-2 py-1 text-xs font-500 text-emerald-400 ring-1 ring-inset ring-emerald-400/20 w-fit">
-                          Aprobado
+                        <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-2 py-1 text-xs font-500 text-emerald-400 ring-1 ring-inset ring-emerald-400/20">
+                          ACTIVO
                         </span>
                       ) : (
-                        <span className="inline-flex items-center rounded-full bg-red-400/10 px-2 py-1 text-xs font-500 text-red-400 ring-1 ring-inset ring-red-400/20 w-fit">
-                          Rechazado
+                        <span className="inline-flex items-center rounded-full bg-red-400/10 px-2 py-1 text-xs font-500 text-red-400 ring-1 ring-inset ring-red-400/20">
+                          RECHAZADO
                         </span>
                       )}
                     </td>
                     <td className="px-4 py-4 text-right">
                       <div className="flex justify-end gap-2">
                         <button
-                          onClick={() => setSelectedRequest(req)}
-                          title="Ver Detalles"
+                          onClick={() => {
+                            setSelectedRequest(req)
+                            setEditingDetails(req.details)
+                          }}
+                          title="Ver y Editar Detalles"
                           className="flex h-8 w-8 items-center justify-center rounded border border-border bg-background text-muted-foreground transition-colors hover:border-primary hover:text-primary"
                         >
                           <Eye className="h-4 w-4" />
@@ -160,6 +290,14 @@ export function AdminValidations() {
                             </button>
                           </>
                         )}
+
+                        <button
+                          onClick={() => setConfirmAction({ id: req.id, action: 'deleted', name: req.target_name })}
+                          title="Eliminar"
+                          className="flex h-8 w-8 items-center justify-center rounded border border-red-900/50 bg-red-900/10 text-red-700 transition-colors hover:bg-red-900 hover:text-white ml-2"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -170,8 +308,8 @@ export function AdminValidations() {
         )}
       </div>
 
-      {/* Details Modal */}
-      {selectedRequest && (
+      {/* Details / Edit Modal */}
+      {selectedRequest && editingDetails && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 overflow-hidden">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedRequest(null)} />
           <div className="relative flex flex-col w-full max-w-2xl h-[90vh] overflow-hidden rounded-xl border border-border bg-surface shadow-2xl animate-in zoom-in-95 duration-200">
@@ -180,7 +318,7 @@ export function AdminValidations() {
               <div>
                 <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
                   {getTypeIcon(selectedRequest.type)}
-                  Detalles de Solicitud
+                  Detalles / Edición
                 </h3>
                 <p className="text-sm text-muted-foreground mt-1">{selectedRequest.target_name}</p>
               </div>
@@ -195,15 +333,44 @@ export function AdminValidations() {
             {/* Body con Scroll */}
             <div data-lenis-prevent data-modal-scrollbody className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6">
               <div className="grid sm:grid-cols-2 gap-6">
-                {Object.entries(selectedRequest.details || {}).map(([key, value]) => {
+                {Object.entries(editingDetails).map(([key, value]) => {
                   const isImage = typeof value === 'string' && (value.startsWith('http') || value.startsWith('data:image')) && !value.endsWith('.pdf');
                   const isPdf = typeof value === 'string' && value.endsWith('.pdf');
+                  const isBoolean = typeof value === 'boolean';
+                  const isObject = typeof value === 'object' && value !== null && !Array.isArray(value);
+                  const isArray = Array.isArray(value);
                   
+                  if (isObject) {
+                     return (
+                       <div key={key} className="col-span-full border border-border rounded-md p-4 bg-background/50">
+                         <label className="text-xs font-600 uppercase tracking-widest text-primary mb-4 block border-b border-border/50 pb-2">
+                           {key.replace(/([A-Z])/g, ' $1').trim()}
+                         </label>
+                         <div className="grid sm:grid-cols-2 gap-4">
+                           {Object.entries(value).map(([subKey, subValue]) => (
+                             <div key={subKey} className="space-y-2">
+                               <label className="text-xs font-500 uppercase tracking-widest text-muted-foreground">
+                                 {subKey.replace(/([A-Z])/g, ' $1').trim()}
+                               </label>
+                               <input
+                                 type="text"
+                                 readOnly
+                                 value={subValue as string || ''}
+                                 className="w-full rounded-md border border-border bg-surface px-4 py-2 text-white/70 opacity-70 cursor-not-allowed"
+                               />
+                             </div>
+                           ))}
+                         </div>
+                       </div>
+                     )
+                  }
+
                   return (
-                    <div key={key} className="space-y-2">
+                    <div key={key} className={cn("space-y-2", (isImage || isPdf) ? "col-span-full sm:col-span-1" : "")}>
                       <label className="text-xs font-600 uppercase tracking-widest text-primary">
                         {key.replace(/([A-Z])/g, ' $1').trim()}
                       </label>
+
                       {isImage ? (
                         <div className="rounded-lg border border-border bg-background p-2">
                           <button 
@@ -230,10 +397,29 @@ export function AdminValidations() {
                           </div>
                           <ScrollText className="w-4 h-4 shrink-0 opacity-50 group-hover:opacity-100" />
                         </a>
+                      ) : isBoolean ? (
+                        <select
+                          disabled
+                          className="w-full rounded-md border border-border bg-background px-4 py-2 text-white/70 opacity-70 cursor-not-allowed"
+                          value={value ? 'true' : 'false'}
+                        >
+                          <option value="true">Sí</option>
+                          <option value="false">No</option>
+                        </select>
+                      ) : isArray ? (
+                        <input
+                          type="text"
+                          readOnly
+                          value={(value as string[]).join(', ')}
+                          className="w-full rounded-md border border-border bg-background px-4 py-2 text-white/70 opacity-70 cursor-not-allowed"
+                        />
                       ) : (
-                        <div className="rounded-lg border border-border bg-background px-4 py-3 text-white text-sm break-words">
-                          {value as string}
-                        </div>
+                        <input
+                          type="text"
+                          readOnly
+                          value={value as string || ''}
+                          className="w-full rounded-md border border-border bg-background px-4 py-2 text-white/70 opacity-70 cursor-not-allowed"
+                        />
                       )}
                     </div>
                   )
@@ -242,28 +428,30 @@ export function AdminValidations() {
             </div>
 
             {/* Footer Fijo */}
-            {selectedRequest.status === 'pending' && (
-              <div className="flex shrink-0 justify-end gap-4 border-t border-border p-6 bg-surface z-10">
-                <GmxButton 
-                  variant="secondary"
-                  onClick={() => {
-                    setConfirmAction({ id: selectedRequest.id, action: 'rejected', name: selectedRequest.target_name })
-                    setSelectedRequest(null)
-                  }}
-                  className="border-red-500/20 text-red-500 hover:border-red-500 hover:text-white hover:bg-red-500/20"
-                >
-                  RECHAZAR
-                </GmxButton>
-                <GmxButton 
-                  onClick={() => {
-                    setConfirmAction({ id: selectedRequest.id, action: 'approved', name: selectedRequest.target_name })
-                    setSelectedRequest(null)
-                  }}
-                >
-                  APROBAR SOLICITUD
-                </GmxButton>
-              </div>
-            )}
+            <div className="flex shrink-0 justify-end gap-4 border-t border-border p-6 bg-surface z-10">
+              {selectedRequest.status === 'pending' && (
+                <>
+                  <GmxButton 
+                    variant="secondary"
+                    onClick={() => {
+                      setConfirmAction({ id: selectedRequest.id, action: 'rejected', name: selectedRequest.target_name })
+                      setSelectedRequest(null)
+                    }}
+                    className="border-red-500/20 text-red-500 hover:border-red-500 hover:text-white hover:bg-red-500/20"
+                  >
+                    RECHAZAR
+                  </GmxButton>
+                  <GmxButton 
+                    onClick={() => {
+                      setConfirmAction({ id: selectedRequest.id, action: 'approved', name: selectedRequest.target_name })
+                      setSelectedRequest(null)
+                    }}
+                  >
+                    APROBAR SOLICITUD
+                  </GmxButton>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -278,7 +466,7 @@ export function AdminValidations() {
               "mx-auto flex h-16 w-16 items-center justify-center rounded-full mb-6",
               confirmAction.action === 'approved' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
             )}>
-              {confirmAction.action === 'approved' ? <Check className="h-8 w-8" /> : <AlertCircle className="h-8 w-8" />}
+              {confirmAction.action === 'approved' ? <Check className="h-8 w-8" /> : confirmAction.action === 'deleted' ? <Trash2 className="h-8 w-8" /> : <AlertCircle className="h-8 w-8" />}
             </div>
 
             <h3 className="font-display text-2xl font-700 uppercase tracking-tight text-white mb-2">
@@ -286,24 +474,45 @@ export function AdminValidations() {
             </h3>
             
             <p className="text-muted-foreground mb-8">
-              Estás a punto de <strong className={confirmAction.action === 'approved' ? 'text-emerald-500' : 'text-red-500'}>
-                {confirmAction.action === 'approved' ? 'APROBAR' : 'RECHAZAR'}
+              Estás a punto de <strong className={cn(
+                confirmAction.action === 'approved' ? 'text-emerald-500' : 
+                confirmAction.action === 'deleted' ? 'text-red-500' : 'text-red-500'
+              )}>
+                {confirmAction.action === 'approved' ? 'APROBAR' : confirmAction.action === 'deleted' ? 'ELIMINAR' : 'RECHAZAR'}
               </strong> la solicitud de:<br/>
               <span className="text-white mt-2 block font-500">{confirmAction.name}</span>
             </p>
 
+            {confirmAction.action === 'deleted' && (
+              <div className="mb-6 space-y-2 text-left">
+                <label className="text-sm text-muted-foreground">Escribe la palabra <strong className="text-red-500 font-bold">SI</strong> para confirmar:</label>
+                <input 
+                  type="text" 
+                  value={deleteConfirmationWord}
+                  onChange={e => setDeleteConfirmationWord(e.target.value)}
+                  className="w-full rounded border border-red-500/50 bg-red-500/10 px-3 py-2 text-white focus:border-red-500 focus:outline-none"
+                  placeholder="SI"
+                />
+              </div>
+            )}
+
             <div className="flex flex-col sm:flex-row gap-3">
               <button 
-                onClick={() => setConfirmAction(null)}
+                onClick={() => {
+                  setConfirmAction(null)
+                  setDeleteConfirmationWord('')
+                }}
                 className="flex-1 rounded-md border border-border bg-transparent px-4 py-3 font-display text-[13px] font-600 uppercase tracking-widest text-muted-foreground transition-colors hover:text-white"
               >
                 CANCELAR
               </button>
               <button 
                 onClick={handleExecuteAction}
+                disabled={confirmAction.action === 'deleted' && deleteConfirmationWord !== 'SI'}
                 className={cn(
                   "flex-1 rounded-md px-4 py-3 font-display text-[13px] font-600 uppercase tracking-widest text-white transition-colors relative overflow-hidden clip-corner group",
-                  confirmAction.action === 'approved' ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-600 hover:bg-red-500'
+                  confirmAction.action === 'approved' ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-600 hover:bg-red-500',
+                  confirmAction.action === 'deleted' && deleteConfirmationWord !== 'SI' ? 'opacity-50 cursor-not-allowed grayscale' : ''
                 )}
               >
                 <span className="relative z-10 flex items-center justify-center gap-2">
