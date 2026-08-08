@@ -126,20 +126,23 @@ export function AdminContracts() {
 
         {/* Filters */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 rounded-lg border border-border bg-background/50 p-4">
-          <div className="relative w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <input 
-              type="text" 
-              placeholder="Buscar jugador..." 
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full rounded-md border border-border bg-background pl-9 pr-4 py-2 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
+          <div className="flex flex-col gap-2 w-full">
+            <label className="text-xs text-muted-foreground font-500 uppercase">Buscar Jugador</label>
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input 
+                type="text" 
+                placeholder="Nombre del jugador..." 
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full rounded-md border border-border bg-background pl-9 pr-4 py-2 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
           </div>
           
-          <div className="flex flex-col sm:flex-row gap-2 items-center bg-background border border-border rounded-md px-3 py-1 w-full focus-within:border-primary focus-within:ring-1 focus-within:ring-primary">
-            <span className="text-[10px] text-muted-foreground font-600 uppercase shrink-0">Conclusión:</span>
-            <div className="flex items-center gap-2 w-full">
+          <div className="flex flex-col gap-2 w-full">
+            <label className="text-xs text-muted-foreground font-500 uppercase">Conclusión</label>
+            <div className="flex items-center gap-2 bg-background border border-border rounded-md px-3 py-[7px] w-full focus-within:border-primary focus-within:ring-1 focus-within:ring-primary">
               <input 
                 type="date" 
                 value={dateFrom} 
@@ -156,26 +159,32 @@ export function AdminContracts() {
             </div>
           </div>
 
-          <select 
-            value={filterStatus} 
-            onChange={e => setFilterStatus(e.target.value)}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
-          >
-            <option value="all">Todos los Estados</option>
-            <option value="active">Vigente</option>
-            <option value="Cancelado">Cancelado</option>
-            <option value="Petición Cancelación - Jugador">Pet. Jugador</option>
-            <option value="Petición Cancelación - Manager">Pet. Manager</option>
-          </select>
+          <div className="flex flex-col gap-2 w-full">
+            <label className="text-xs text-muted-foreground font-500 uppercase">Estado</label>
+            <select 
+              value={filterStatus} 
+              onChange={e => setFilterStatus(e.target.value)}
+              className="w-full rounded-md border border-border bg-background px-3 py-[9px] text-sm text-white focus:border-primary focus:outline-none appearance-none"
+            >
+              <option value="all">Todos los Estados</option>
+              <option value="active">Vigente</option>
+              <option value="Cancelado">Cancelado</option>
+              <option value="Petición Cancelación - Jugador">Pet. Jugador</option>
+              <option value="Petición Cancelación - Manager">Pet. Manager</option>
+            </select>
+          </div>
 
-          <select 
-            value={filterTeam} 
-            onChange={e => setFilterTeam(e.target.value)}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
-          >
-            <option value="all">Todos los Equipos</option>
-            {uniqueTeams.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
+          <div className="flex flex-col gap-2 w-full">
+            <label className="text-xs text-muted-foreground font-500 uppercase">Equipo</label>
+            <select 
+              value={filterTeam} 
+              onChange={e => setFilterTeam(e.target.value)}
+              className="w-full rounded-md border border-border bg-background px-3 py-[9px] text-sm text-white focus:border-primary focus:outline-none appearance-none"
+            >
+              <option value="all">Todos los Equipos</option>
+              {uniqueTeams.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
         </div>
         
         {loading ? (
