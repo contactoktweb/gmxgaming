@@ -9,7 +9,7 @@ export const NAV_LINKS = [
       { label: 'ALTA DE CONTRATO', href: '/registro/alta-de-contrato' }
     ]
   },
-  { label: 'EQUIPOS AFILIADOS', href: '/#equipos' },
+  { label: 'EQUIPOS AFILIADOS', href: '/equipos' },
   { label: 'TORNEOS', href: '/torneos' },
 ]
 
