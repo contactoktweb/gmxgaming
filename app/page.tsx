@@ -19,6 +19,8 @@ import { CtaPrimary } from '@/components/sections/cta-primary'
 import { Partners } from '@/components/sections/partners'
 import { Newsletter } from '@/components/sections/newsletter'
 import { SiteFooter } from '@/components/sections/site-footer'
+import { Media } from '@/components/sections/media'
+import { Casters } from '@/components/sections/casters'
 
 export default function Page() {
   const [ready, setReady] = useState(false)
@@ -33,14 +35,19 @@ export default function Page() {
 
       <main>
         <Hero ready={ready} />
+        <Tournaments />
+        
         <About />
         <MarqueeBand />
-        <Cinematic />
+        <Teams />
         <Players />
+        
+        <Media />
+        <Casters />
+        
+        <Cinematic />
         <VideoExperience />
         <WhatYouGet />
-        <Teams />
-        <Tournaments />
         <CtaPrimary />
         <Partners />
         <Newsletter />

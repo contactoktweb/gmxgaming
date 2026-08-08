@@ -87,28 +87,31 @@ export function AltaContratoForm() {
     const form = e.currentTarget
     const formData = new FormData(form)
 
-    const payload = {
-      equipo: formData.get('item_meta[879]'),
-      fechaTermino: formData.get('item_meta[882]'),
-      jugador: formData.get('item_meta[888][]'),
-      roles: selectedRoles,
-      linea: selectedRoles.includes('JUGADOR(A)') ? formData.get('item_meta_linea') : null
+    const teamId = formData.get('item_meta[879]') as string
+    
+    // Add the specific lane role if they selected player
+    const rolesToSave = [...selectedRoles]
+    const linea = formData.get('item_meta_linea')
+    if (selectedRoles.includes('JUGADOR(A)') && linea) {
+      rolesToSave.push(`ROL_JUEGO: ${linea}`)
     }
 
-    // Insertar en validaciones (o directamente en contracts con status pending)
-    const { error } = await supabase.from('validations').insert({
-      type: 'contrato',
-      target_name: `${payload.jugador} - ${payload.equipo}`,
-      submitted_by: user?.name || 'Desconocido',
-      status: 'pending',
-      details: payload
-    })
+    const payload = {
+      player_id: user?.id,
+      team_id: teamId,
+      roles: rolesToSave,
+      end_date: formData.get('item_meta[882]'),
+      status: 'pending_manager'
+    }
+
+    const { error } = await supabase.from('contracts').insert(payload)
 
     if (!error) {
       setFormStatus('success')
     } else {
       setFormStatus('idle')
       alert('Error al enviar el contrato.')
+      console.error(error)
     }
   }
 
@@ -188,9 +191,9 @@ export function AltaContratoForm() {
               >
                 <option value="" disabled>Selecciona tu equipo</option>
                 {teams.length > 0 ? (
-                  teams.map(t => <option key={t.id} value={t.name}>{t.name} ({t.type})</option>)
+                  teams.map(t => <option key={t.id} value={t.id}>{t.name} ({t.type})</option>)
                 ) : (
-                  <option value="Demo Team">Demo Team</option>
+                  <option value="" disabled>No hay equipos disponibles</option>
                 )}
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-muted-foreground">

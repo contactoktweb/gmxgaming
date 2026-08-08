@@ -1,89 +1,88 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Preloader } from '@/components/preloader'
 import { SmoothScroll } from '@/components/smooth-scroll'
 import { CustomCursor } from '@/components/custom-cursor'
 import { SiteHeader } from '@/components/site-header'
 import { BackToTop } from '@/components/back-to-top'
 import { SiteFooter } from '@/components/sections/site-footer'
-import { SplitText } from '@/components/split-text'
 import { Reveal } from '@/components/anim'
-import { ArrowUpRight } from 'lucide-react'
-
-const TORNEOS_MEXICO = [
-  {
-    title: 'Torneos Profesionales - Varonil/Mixto',
-    description: 'El GMX Lightborn es la Liga Nacional Profesional Oficial en México, avalada por la Federación Nacional de Deportes Electrónicos de México.',
-    leagues: [
-      {
-        logo: 'https://i0.wp.com/gmxgaming.com/wp-content/uploads/2025/07/Lightborn-Tournament-2025-Logo-128x128.png?resize=128%2C128&ssl=1',
-        links: [
-          { label: 'GMX Lightborn Tournament 2025', url: 'https://liquipedia.net/mobilelegends/GMX_Lightborn_Tournament/2025' },
-          { label: 'GMX Lightborn Tournament 2024', url: 'https://liquipedia.net/mobilelegends/GMX_Lightborn_Tournament/2024' },
-          { label: 'GMX Lightborn Tournament 2023', url: 'https://liquipedia.net/mobilelegends/GMX_Lightborn_Tournament/2023' },
-          { label: 'GMX Lightborn Tournament 2022', url: 'https://liquipedia.net/mobilelegends/GMX_Lightborn_Tournament/2022' },
-        ]
-      }
-    ]
-  },
-  {
-    title: 'Torneos Amateur - Varonil/Mixto',
-    description: 'El GMX Showdown es un evento mensual en México organizado por GMX Gaming.',
-    leagues: [
-      {
-        logo: 'https://i0.wp.com/gmxgaming.com/wp-content/uploads/2025/01/GMX-Showdown-128x128.png?resize=128%2C128&ssl=1',
-        links: [
-          { label: 'GMX Showdown - Junio 2025', url: 'https://liquipedia.net/mobilelegends/GMX_Showdown/2025/June' },
-          { label: 'GMX Showdown - Mayo 2025', url: 'https://liquipedia.net/mobilelegends/GMX_Showdown/2025/May' },
-          { label: 'GMX Showdown - Abril 2025', url: 'https://liquipedia.net/mobilelegends/GMX_Showdown/2025/April' },
-          { label: 'GMX Showdown - Marzo 2025', url: 'https://liquipedia.net/mobilelegends/GMX_Showdown/2025/March' },
-          { label: 'GMX Showdown - Febrero 2025', url: 'https://liquipedia.net/mobilelegends/GMX_Showdown/2025/February' },
-          { label: 'GMX Showdown - Enero 2025', url: 'https://liquipedia.net/mobilelegends/GMX_Showdown/2025/January' },
-        ]
-      },
-      {
-        description: 'La Liga Monou-GMX es una liga nacional amateur-profesional en México, avalada por Monou.gg.',
-        logo: 'https://i0.wp.com/gmxgaming.com/wp-content/uploads/2025/01/Logo-Liga-Monou-GMX-128x128.png?resize=128%2C128&ssl=1',
-        links: [
-          { label: 'Liga Monou-GMX 2', url: 'https://liquipedia.net/mobilelegends/GMX_Liga_Monou/2' },
-          { label: 'Liga Monou-GMX 1', url: 'https://liquipedia.net/mobilelegends/GMX_Liga_Monou/1' },
-        ]
-      }
-    ]
-  },
-  {
-    title: 'Torneos Amateur - Femenil',
-    description: 'El GMX Immortal Queens es un evento mensual exclusivo para mujeres en México, organizado por GMX Gaming.',
-    leagues: [
-      {
-        logo: 'https://i0.wp.com/gmxgaming.com/wp-content/uploads/2025/07/Immortal-Queens-Logo-128x128.png?resize=128%2C128&ssl=1',
-        links: [
-          { label: 'GMX Immortal Queens - Junio 2025', url: 'https://liquipedia.net/mobilelegends/GMX_Immortal_Queens/2025/June' },
-        ]
-      }
-    ]
-  }
-]
-
-const TORNEOS_COLOMBIA = [
-  {
-    title: 'Torneos Amateur - Varonil/Mixto',
-    description: 'El GMX Showdown es un evento mensual en Colombia organizado por GMX Gaming.',
-    leagues: [
-      {
-        logo: 'https://i0.wp.com/gmxgaming.com/wp-content/uploads/2025/07/GMX-Legends-128x128.png?resize=128%2C128&ssl=1',
-        links: [
-          { label: 'GMX Legends - Marzo 2025', url: 'https://liquipedia.net/mobilelegends/GMX_Legends/2025/March' },
-          { label: 'GMX Legends - Febrero 2025', url: 'https://liquipedia.net/mobilelegends/GMX_Legends/2025/February' },
-        ]
-      }
-    ]
-  }
-]
+import { Calendar, Users, Trophy, ArrowUpRight, Gamepad2 } from 'lucide-react'
+import { createClient } from '@/utils/supabase/client'
+import Link from 'next/link'
 
 export default function TorneosPage() {
   const [ready, setReady] = useState(false)
+  const [tournaments, setTournaments] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function fetchTournaments() {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('tournaments')
+        .select('*, templates:tournament_templates(name, type, logo_url)')
+        .order('start_date', { ascending: false })
+      
+      if (data) setTournaments(data)
+      setLoading(false)
+    }
+    fetchTournaments()
+  }, [])
+
+  const upcoming = tournaments.filter(t => t.status === 'upcoming')
+  const ongoing = tournaments.filter(t => t.status === 'ongoing')
+  const finished = tournaments.filter(t => t.status === 'finished')
+
+  const renderTournamentCard = (t: any) => (
+    <Link href={`/torneos/${t.id}`} key={t.id} className="group relative rounded-xl border border-border bg-surface p-6 sm:p-8 transition-colors hover:border-primary/50 block">
+      <div className="flex flex-col sm:flex-row gap-6">
+        <div className="shrink-0 flex justify-center sm:justify-start">
+          <img 
+            src={t.templates?.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
+            alt={t.name} 
+            className="w-24 h-24 sm:w-32 sm:h-32 object-cover rounded-xl bg-background border border-border transition-transform duration-500 group-hover:scale-105" 
+          />
+        </div>
+        <div className="flex-1 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <span className={`px-2.5 py-1 text-[10px] font-600 uppercase tracking-widest rounded-full ${
+                t.status === 'upcoming' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                t.status === 'ongoing' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                'bg-white/5 text-muted-foreground border border-white/10'
+              }`}>
+                {t.status === 'upcoming' ? 'Próximo' : t.status === 'ongoing' ? 'En Curso' : 'Finalizado'}
+              </span>
+              <span className="text-xs font-600 text-primary uppercase tracking-widest flex items-center gap-1">
+                <Gamepad2 className="w-3 h-3" /> {t.game}
+              </span>
+            </div>
+            <h3 className="font-display text-2xl font-700 text-white group-hover:text-primary transition-colors">{t.name}</h3>
+            <p className="text-sm text-muted-foreground mt-1">{t.templates?.type}</p>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4 mt-6">
+            <div className="flex items-center gap-2 text-sm text-white font-500">
+              <Calendar className="w-4 h-4 text-muted-foreground" />
+              {t.start_date ? new Date(t.start_date).toLocaleDateString() : 'TBD'}
+            </div>
+            <div className="flex items-center gap-2 text-sm text-white font-500">
+              <Trophy className="w-4 h-4 text-emerald-400" />
+              {t.prizepool_total || 'N/A'}
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div className="absolute right-6 top-6 sm:bottom-6 sm:top-auto">
+        <div className="w-10 h-10 rounded-full border border-border bg-background flex items-center justify-center text-white transition-colors group-hover:border-primary group-hover:bg-primary">
+          <ArrowUpRight className="w-5 h-5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+        </div>
+      </div>
+    </Link>
+  )
 
   return (
     <>
@@ -94,116 +93,85 @@ export default function TorneosPage() {
       <BackToTop />
 
       <main className="relative min-h-screen pt-32 pb-24">
-        {/* Background glow effects */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 h-[600px] w-[800px] rounded-full bg-primary/10 blur-[120px]" />
         </div>
 
-        <div className="relative z-10 px-5 lg:px-10 max-w-[1200px] mx-auto">
+        <div className="relative z-10 px-5 lg:px-10 max-w-[1000px] mx-auto">
           <div className="text-center mb-20">
             <Reveal direction="up">
               <h1 className="font-display text-4xl font-700 uppercase tracking-tight text-white sm:text-5xl lg:text-6xl mb-4">
-                Torneos, Ligas y Eventos
+                Torneos y Ligas
               </h1>
               <p className="text-lg text-muted-foreground">
-                Descubre las competencias oficiales de GMX Gaming.
+                El ecosistema competitivo oficial de GMX Gaming.
               </p>
             </Reveal>
           </div>
 
-          {/* MEXICO */}
-          <div className="mb-24">
-            <Reveal direction="fade" className="flex items-center justify-center gap-4 mb-12">
-              <img src="https://i0.wp.com/gmxgaming.com/wp-content/uploads/2024/07/Bandera-Mexico.png?fit=50%2C32&ssl=1" alt="México" className="h-8 w-auto rounded shadow-sm" />
-              <h2 className="font-display text-3xl font-700 uppercase text-white tracking-widest">México</h2>
-              <img src="https://i0.wp.com/gmxgaming.com/wp-content/uploads/2024/07/Bandera-Mexico.png?fit=50%2C32&ssl=1" alt="México" className="h-8 w-auto rounded shadow-sm" />
-            </Reveal>
-
-            <div className="space-y-16">
-              {TORNEOS_MEXICO.map((seccion, index) => (
-                <div key={index} className="rounded-xl border border-border bg-surface p-8 shadow-2xl">
-                  <h3 className="font-display text-2xl font-600 uppercase text-primary mb-4">{seccion.title}</h3>
-                  <p className="text-muted-foreground mb-8 text-sm leading-relaxed max-w-2xl">{seccion.description}</p>
-                  
-                  <div className="grid gap-10 md:grid-cols-2">
-                    {seccion.leagues.map((league, lIndex) => (
-                      <div key={lIndex} className="flex flex-col sm:flex-row gap-6">
-                        <div className="shrink-0 flex justify-center sm:justify-start">
-                          <img src={league.logo} alt="Logo" className="w-32 h-32 object-contain" />
-                        </div>
-                        <div className="flex-1">
-                          {league.description && (
-                            <p className="text-muted-foreground text-sm mb-4">{league.description}</p>
-                          )}
-                          <ul className="space-y-3">
-                            {league.links.map((link, linkIndex) => (
-                              <li key={linkIndex}>
-                                <a 
-                                  href={link.url} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="group inline-flex items-center gap-2 font-display text-sm font-500 uppercase tracking-wider text-white transition-colors hover:text-primary"
-                                >
-                                  {link.label}
-                                  <ArrowUpRight className="size-4 opacity-50 transition-all duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:opacity-100" />
-                                </a>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-                    ))}
+          {loading ? (
+            <div className="flex justify-center py-24">
+              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          ) : (
+            <div className="space-y-20">
+              
+              {ongoing.length > 0 && (
+                <div>
+                  <Reveal direction="fade" className="flex items-center gap-4 mb-8">
+                    <h2 className="font-display text-3xl font-700 uppercase text-white tracking-widest flex items-center gap-3">
+                      <span className="relative flex h-4 w-4">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-500"></span>
+                      </span>
+                      En Curso
+                    </h2>
+                    <div className="h-px bg-border flex-1 ml-4" />
+                  </Reveal>
+                  <div className="grid gap-6">
+                    {ongoing.map(renderTournamentCard)}
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
+              )}
 
-          {/* COLOMBIA */}
-          <div>
-            <Reveal direction="fade" className="flex items-center justify-center gap-4 mb-12">
-              <img src="https://i0.wp.com/gmxgaming.com/wp-content/uploads/2024/07/Bandera-Colombia.png?fit=50%2C32&ssl=1" alt="Colombia" className="h-8 w-auto rounded shadow-sm" />
-              <h2 className="font-display text-3xl font-700 uppercase text-white tracking-widest">Colombia</h2>
-              <img src="https://i0.wp.com/gmxgaming.com/wp-content/uploads/2024/07/Bandera-Colombia.png?fit=50%2C32&ssl=1" alt="Colombia" className="h-8 w-auto rounded shadow-sm" />
-            </Reveal>
-
-            <div className="space-y-16">
-              {TORNEOS_COLOMBIA.map((seccion, index) => (
-                <div key={index} className="rounded-xl border border-border bg-surface p-8 shadow-2xl">
-                  <h3 className="font-display text-2xl font-600 uppercase text-primary mb-4">{seccion.title}</h3>
-                  <p className="text-muted-foreground mb-8 text-sm leading-relaxed max-w-2xl">{seccion.description}</p>
-                  
-                  <div className="grid gap-10 md:grid-cols-2">
-                    {seccion.leagues.map((league, lIndex) => (
-                      <div key={lIndex} className="flex flex-col sm:flex-row gap-6">
-                        <div className="shrink-0 flex justify-center sm:justify-start">
-                          <img src={league.logo} alt="Logo" className="w-32 h-32 object-contain" />
-                        </div>
-                        <div className="flex-1">
-                          <ul className="space-y-3">
-                            {league.links.map((link, linkIndex) => (
-                              <li key={linkIndex}>
-                                <a 
-                                  href={link.url} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="group inline-flex items-center gap-2 font-display text-sm font-500 uppercase tracking-wider text-white transition-colors hover:text-primary"
-                                >
-                                  {link.label}
-                                  <ArrowUpRight className="size-4 opacity-50 transition-all duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:opacity-100" />
-                                </a>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-                    ))}
+              {upcoming.length > 0 && (
+                <div>
+                  <Reveal direction="fade" className="flex items-center gap-4 mb-8">
+                    <h2 className="font-display text-3xl font-700 uppercase text-white tracking-widest text-blue-400">
+                      Próximos Torneos
+                    </h2>
+                    <div className="h-px bg-border flex-1 ml-4" />
+                  </Reveal>
+                  <div className="grid gap-6">
+                    {upcoming.map(renderTournamentCard)}
                   </div>
                 </div>
-              ))}
+              )}
+
+              {finished.length > 0 && (
+                <div>
+                  <Reveal direction="fade" className="flex items-center gap-4 mb-8">
+                    <h2 className="font-display text-3xl font-700 uppercase text-white tracking-widest text-muted-foreground">
+                      Torneos Pasados
+                    </h2>
+                    <div className="h-px bg-border flex-1 ml-4" />
+                  </Reveal>
+                  <div className="grid gap-6 opacity-75 hover:opacity-100 transition-opacity">
+                    {finished.map(renderTournamentCard)}
+                  </div>
+                </div>
+              )}
+
+              {tournaments.length === 0 && (
+                <div className="text-center py-24 border border-dashed border-border rounded-xl bg-surface">
+                  <Trophy className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="font-display text-xl text-white font-700 mb-2">No hay torneos registrados</h3>
+                  <p className="text-muted-foreground text-sm">Los próximos torneos aparecerán aquí automáticamente.</p>
+                </div>
+              )}
+
             </div>
-          </div>
-          
+          )}
         </div>
       </main>
 

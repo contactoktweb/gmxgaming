@@ -33,7 +33,9 @@ export function AltaEquipoForm() {
   const { user } = useAuth()
   const supabase = createClient()
   const [countries, setCountries] = useState<string[]>(DEFAULT_COUNTRIES)
-  const [games, setGames] = useState<string[]>(['Mobile Legends'])
+  const [games, setGames] = useState<{name: string, image: string}[]>([
+    { name: 'Mobile Legends', image: '/images/mlbb-logo.png' }
+  ])
   const [loadingConfig, setLoadingConfig] = useState(true)
 
   // Validation state
@@ -54,7 +56,15 @@ export function AltaEquipoForm() {
           setCountries(countryConfig.value as string[])
         }
         if (gameConfig && Array.isArray(gameConfig.value) && gameConfig.value.length > 0) {
-          setGames(gameConfig.value as string[])
+          setGames(gameConfig.value.map((g: any) => {
+            if (typeof g === 'string') {
+              return { name: g, image: g === 'Mobile Legends' ? '/images/mlbb-logo.png' : '' }
+            }
+            if (g.name === 'Mobile Legends' && !g.image) {
+              return { ...g, image: '/images/mlbb-logo.png' }
+            }
+            return g
+          }))
         }
       }
       setLoadingConfig(false)
@@ -110,41 +120,36 @@ export function AltaEquipoForm() {
     }
 
     const payload = {
-      nombreEquipo: teamName,
+      manager_id: user?.id,
+      name: teamName,
       tag: formData.get('item_meta[tag]'),
       hashtag: formData.get('item_meta[hashtag]'),
-      pais: formData.get('item_meta[623]'),
-      tipoEquipo: formData.get('item_meta[782]'),
-      logo: urlLogo,
-      jersey: urlJersey,
-      juegos: formData.getAll('item_meta[633][]'),
-      redes: {
-        instagram: formData.get('social_instagram'),
-        tiktok: formData.get('social_tiktok'),
-        youtube: formData.get('social_youtube'),
-        facebook: formData.get('social_facebook'),
-        twitch: formData.get('social_twitch'),
-        kick: formData.get('social_kick'),
-        x: formData.get('social_x'),
-      },
-      managerNombre: formData.get('item_meta[625][first]') + ' ' + formData.get('item_meta[625][last]'),
-      managerSeudonimo: formData.get('item_meta[626]'),
-      managerDiscord: formData.get('item_meta[627]'),
-      managerWhatsApp: formData.get('item_meta[628]'),
-      managerCorreo: formData.get('item_meta[629]'),
-      confirmacionEdad: formData.get('confirm_age') === 'on',
-      confirmacionVeracidad: formData.get('confirm_truth') === 'on'
+      country: formData.get('item_meta[623]'),
+      logo_url: urlLogo,
+      jersey_url: urlJersey,
+      games: formData.getAll('item_meta[633][]'),
+      social_ig: formData.get('social_instagram'),
+      social_tiktok: formData.get('social_tiktok'),
+      social_yt: formData.get('social_youtube'),
+      social_fb: formData.get('social_facebook'),
+      social_twitch: formData.get('social_twitch'),
+      social_kick: formData.get('social_kick'),
+      social_x: formData.get('social_x'),
+      status: 'pending' // Admin must approve
     }
     
-    const { error } = await supabase.from('validations').insert({
-      type: 'equipo',
-      target_name: payload.nombreEquipo as string,
-      submitted_by: user?.name || payload.managerCorreo,
-      status: 'pending',
-      details: payload
-    })
+    const { error: teamError } = await supabase.from('teams').insert(payload)
 
-    if (!error) {
+    // Also update the manager's profile with their Discord and WhatsApp if they provided it
+    if (user?.id) {
+      await supabase.from('profiles').update({
+        discord_handle: formData.get('item_meta[627]'),
+        name: formData.get('item_meta[625][first]') + ' ' + formData.get('item_meta[625][last]'),
+        nickname: formData.get('item_meta[626]')
+      }).eq('id', user.id)
+    }
+
+    if (!teamError) {
       setFormStatus('success')
     } else {
       setFormStatus('idle')
@@ -331,38 +336,23 @@ export function AltaEquipoForm() {
             <FieldTooltip text="Debe seleccionar al menos un juego de la lista." />
           </label>
           <div className="grid gap-4 sm:grid-cols-2">
-            {games.includes('Mobile Legends') && (
-              <label className="group relative flex cursor-pointer items-center gap-4 rounded-lg border border-border bg-background p-4 transition-all hover:border-primary">
+            {games.map(game => (
+              <label key={game.name} className="group relative flex cursor-pointer items-center gap-4 rounded-lg border border-border bg-background p-4 transition-all hover:border-primary">
                 <input
                   type="checkbox"
                   name="item_meta[633][]"
-                  value="MLBB"
-                  defaultChecked
+                  value={game.name}
+                  defaultChecked={game.name === 'Mobile Legends'}
                   className="h-5 w-5 rounded border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
                 />
-                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-md bg-surface p-1">
-                  <img
-                    src="https://i0.wp.com/gmxgaming.com/wp-content/uploads/2024/07/Mobile-Legends-Logo-Icono.png?w=640&ssl=1"
-                    alt="MLBB"
-                    className="h-full w-full object-contain"
-                  />
+                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-md bg-surface p-1 border border-border">
+                  {game.image ? (
+                    <img src={game.image} alt={game.name} className="h-full w-full object-contain" />
+                  ) : (
+                    <span className="text-xs font-bold text-muted-foreground">{game.name.substring(0,3).toUpperCase()}</span>
+                  )}
                 </div>
-                <span className="font-display font-600 tracking-wider text-white">Mobile Legends</span>
-              </label>
-            )}
-
-            {games.filter(g => g !== 'Mobile Legends').map(game => (
-              <label key={game} className="group relative flex cursor-pointer items-center gap-4 rounded-lg border border-border bg-background p-4 transition-all hover:border-primary">
-                <input
-                  type="checkbox"
-                  name="item_meta[633][]"
-                  value={game}
-                  className="h-5 w-5 rounded border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
-                />
-                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-md bg-surface border border-border">
-                  <span className="text-xs font-bold text-muted-foreground">{game.substring(0,3).toUpperCase()}</span>
-                </div>
-                <span className="font-display font-600 tracking-wider text-white">{game}</span>
+                <span className="font-display font-600 tracking-wider text-white">{game.name}</span>
               </label>
             ))}
           </div>
@@ -473,8 +463,13 @@ export function AltaEquipoForm() {
               name="item_meta[629]"
               autoComplete="email"
               required
-              className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              defaultValue={user?.email || ''}
+              readOnly={!!user?.email}
+              className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
             />
+            {user?.email && (
+              <p className="text-xs text-muted-foreground mt-1">Este es el correo asociado a tu cuenta.</p>
+            )}
           </div>
         </div>
       </div>

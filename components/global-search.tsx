@@ -162,7 +162,7 @@ export function GlobalSearch() {
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: idx * 0.05 }}
                         key={`${result.type}-${result.id}-${idx}`}
-                        href={`/buscar/${result.type}/${result.id}`} // Enlace dummy temporal, se puede ajustar luego
+                        href={`/${result.type === 'player' ? 'jugadores' : result.type === 'team' ? 'equipos' : 'torneos'}/${result.id}`}
                         className="group flex items-center justify-between rounded-lg px-4 py-3 transition-colors hover:bg-white/5"
                       >
                         <div className="flex items-center gap-4">

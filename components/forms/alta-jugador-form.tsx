@@ -56,13 +56,12 @@ function FormContent() {
       if (!user) return
 
       // Check if already registered
-      const { data: existing } = await supabase.from('validations')
-        .select('id')
-        .eq('type', 'jugador')
-        .eq('submitted_by', user.name || user.email)
+      const { data: profile } = await supabase.from('profiles')
+        .select('is_player')
+        .eq('id', user.id)
         .single()
 
-      if (existing) {
+      if (profile && profile.is_player) {
         setFormStatus('already_registered')
       }
 
@@ -159,46 +158,52 @@ function FormContent() {
       // Since it's prod, we should continue or show error. We'll proceed with whatever uploaded.
     }
     
-    const payload = {
-      nombreCompleto: formData.get('item_meta[674][first]') + ' ' + formData.get('item_meta[674][last]'),
-      genero: formData.get('item_meta[783]'),
-      seudonimo: nickname,
-      fechaNacimiento: formData.get('item_meta[675]'),
-      paisNacimiento: formData.get('item_meta[677]'),
-      paisResidencia: formData.get('item_meta[722]'),
-      discord: formData.get('item_meta[684]'),
-      correo: formData.get('item_meta[676]'),
-      telefono: formData.get('item_meta[685]'),
-      redes: {
-        instagram: formData.get('social_instagram'),
-        tiktok: formData.get('social_tiktok'),
-        youtube: formData.get('social_youtube'),
-        facebook: formData.get('social_facebook'),
-        twitch: formData.get('social_twitch'),
-        kick: formData.get('social_kick'),
-        x: formData.get('social_x'),
-      },
-      idJuego: formData.get('item_meta[697]'),
-      serverJuego: formData.get('item_meta[784]'),
-      aeropuerto: formData.get('item_meta[781]'),
-      fotografia: urlFoto,
-      documentoIdentidad: urlIdentidad,
-      pasaporte: urlPasaporte,
+    const profilePayload = {
+      name: formData.get('item_meta[674][first]') + ' ' + formData.get('item_meta[674][last]'),
+      nickname: nickname,
+      discord_handle: formData.get('item_meta[684]'),
+      is_player: true,
+      player_status: 'pending',
+      passport_photo_url: urlPasaporte,
+      id_photo_url: urlIdentidad,
+      avatar_url: urlFoto,
+      closest_airport: formData.get('item_meta[781]'),
+      social_ig: formData.get('social_instagram'),
+      social_tiktok: formData.get('social_tiktok'),
+      social_yt: formData.get('social_youtube'),
+      social_fb: formData.get('social_facebook'),
+      social_twitch: formData.get('social_twitch'),
+      social_kick: formData.get('social_kick'),
+      social_x: formData.get('social_x'),
     }
 
-    const { error } = await supabase.from('validations').insert({
-      type: 'jugador',
-      target_name: payload.seudonimo,
-      submitted_by: user?.name || payload.correo,
-      status: 'pending',
-      details: payload
-    })
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update(profilePayload)
+      .eq('id', user?.id)
+
+    let gameInfoError = null
+
+    // Insert Game Info if applicable (e.g. Mobile Legends)
+    if (formData.get('item_meta[697]')) {
+      const gamePayload = {
+        profile_id: user?.id,
+        game: 'Mobile Legends',
+        game_id: formData.get('item_meta[697]'),
+        server: formData.get('item_meta[784]'),
+        game_nickname: nickname, // Usually matches or can be separate
+        country_account: formData.get('item_meta[722]')
+      }
+      const { error: gErr } = await supabase.from('player_game_info').insert(gamePayload)
+      gameInfoError = gErr
+    }
     
-    if (!error) {
+    if (!profileError && !gameInfoError) {
       setFormStatus('success')
     } else {
       setFormStatus('idle')
       alert('Hubo un error al enviar tu solicitud. Intenta de nuevo.')
+      console.error(profileError, gameInfoError)
     }
   }
 

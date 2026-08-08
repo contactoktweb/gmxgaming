@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { Menu, X, LogOut, User } from 'lucide-react'
+import { Menu, X, LogOut, User, Globe, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { NAV_LINKS, SOCIALS } from '@/lib/site-data'
 import { GmxLogo } from '@/components/gmx-logo'
@@ -14,7 +14,15 @@ import { cn } from '@/lib/utils'
 export function SiteHeader() {
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
+  const [showLogoutModal, setShowLogoutModal] = useState(false)
+  const [lang, setLang] = useState('ES')
   const { user, logout } = useAuth()
+
+  const handleLogout = () => {
+    logout()
+    setShowLogoutModal(false)
+    setOpen(false)
+  }
 
   const handleRestrictedClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
     if (!user && href.includes('/registro')) {
@@ -37,11 +45,11 @@ export function SiteHeader() {
   }, [])
 
   useEffect(() => {
-    document.body.style.overflow = open ? 'hidden' : ''
+    document.body.style.overflow = open || showLogoutModal ? 'hidden' : ''
     return () => {
       document.body.style.overflow = ''
     }
-  }, [open])
+  }, [open, showLogoutModal])
 
   return (
     <>
@@ -98,15 +106,32 @@ export function SiteHeader() {
 
           <div className="flex items-center gap-3">
             <GlobalSearch />
+            
+            {/* Language Selector */}
+            <div className="hidden lg:flex items-center gap-2 px-2 border-l border-border/50 ml-2 h-8">
+              <Globe className="w-4 h-4 text-muted-foreground" />
+              <button 
+                onClick={() => setLang(lang === 'ES' ? 'EN' : 'ES')}
+                className="font-display text-[11px] font-600 uppercase tracking-[0.14em] text-white hover:text-primary transition-colors"
+              >
+                {lang}
+              </button>
+            </div>
+
             <div className="hidden lg:flex items-center gap-3">
               {user ? (
                 <>
+                  {user.role === 'admin' && (
+                    <GmxButton href="/administracion" variant="secondary" className="px-5 py-3 border-white/20 hover:border-white gap-2 whitespace-nowrap bg-primary/20 text-white">
+                      ADMINISTRACIÓN
+                    </GmxButton>
+                  )}
                   <GmxButton href="/micuenta" variant="secondary" className="px-5 py-3 border-white/20 hover:border-white gap-2 whitespace-nowrap">
                     <User className="w-4 h-4 shrink-0" />
                     MI CUENTA
                   </GmxButton>
                   <button
-                    onClick={logout}
+                    onClick={() => setShowLogoutModal(true)}
                     className="group relative inline-flex items-center justify-center gap-2 overflow-hidden bg-primary/10 border border-primary/20 px-5 py-3 font-display text-[13px] font-600 uppercase tracking-[0.14em] text-primary transition-colors duration-300 clip-corner hover:bg-primary hover:text-white whitespace-nowrap"
                   >
                     <span className="relative z-10 flex items-center gap-2">
@@ -170,12 +195,17 @@ export function SiteHeader() {
                 </button>
               </div>
 
-              <p className="mt-8 max-w-xs text-sm leading-relaxed text-muted-foreground">
-                La organización número 1 en ligas, torneos y eventos de eSports en MOBAs de habla
-                hispana.
-              </p>
+              <div className="mt-8 flex items-center justify-between border-y border-border py-4">
+                <span className="text-sm font-500 text-muted-foreground uppercase tracking-widest">Idioma</span>
+                <button 
+                  onClick={() => setLang(lang === 'ES' ? 'EN' : 'ES')}
+                  className="flex items-center gap-2 text-sm font-600 uppercase tracking-widest text-white hover:text-primary transition-colors"
+                >
+                  <Globe className="w-4 h-4" /> {lang}
+                </button>
+              </div>
 
-              <nav className="mt-10 flex flex-col">
+              <nav className="mt-8 flex flex-col">
                 {NAV_LINKS.map((link, i) => (
                   <div key={link.href}>
                     <motion.a
@@ -221,14 +251,16 @@ export function SiteHeader() {
               <div className="mt-10 flex flex-col gap-3">
                 {user ? (
                   <>
+                    {user.role === 'admin' && (
+                      <GmxButton href="/administracion" variant="secondary" className="w-full border-white/20 hover:border-white bg-primary/20 text-white" onClick={() => setOpen(false)}>
+                        ADMINISTRACIÓN
+                      </GmxButton>
+                    )}
                     <GmxButton href="/micuenta" variant="secondary" className="w-full border-white/20 hover:border-white" onClick={() => setOpen(false)}>
                       MI CUENTA
                     </GmxButton>
                     <button
-                      onClick={() => {
-                        logout()
-                        setOpen(false)
-                      }}
+                      onClick={() => setShowLogoutModal(true)}
                       className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden bg-primary/10 border border-primary/20 px-8 py-4 font-display text-[15px] font-600 uppercase tracking-[0.18em] text-primary transition-colors duration-300 clip-corner hover:bg-primary hover:text-white"
                     >
                       <span className="relative z-10 flex items-center gap-2">
@@ -272,6 +304,51 @@ export function SiteHeader() {
                 </div>
               </div>
             </motion.aside>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Custom Logout Modal */}
+      <AnimatePresence>
+        {showLogoutModal && (
+          <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              onClick={() => setShowLogoutModal(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-border bg-surface p-6 shadow-2xl text-center"
+            >
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary mb-6">
+                <AlertTriangle className="h-8 w-8" />
+              </div>
+              <h3 className="font-display text-2xl font-700 uppercase tracking-tight text-white mb-2">
+                ¿Cerrar Sesión?
+              </h3>
+              <p className="text-sm text-muted-foreground mb-8">
+                Estás a punto de salir de tu cuenta en GMX Gaming. ¿Deseas continuar?
+              </p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowLogoutModal(false)}
+                  className="flex-1 rounded-md border border-border bg-transparent px-4 py-3 text-sm font-600 text-muted-foreground hover:text-white transition-colors uppercase tracking-widest"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="flex-1 rounded-md bg-primary px-4 py-3 text-sm font-600 text-white hover:bg-primary-dark transition-colors uppercase tracking-widest"
+                >
+                  Sí, Salir
+                </button>
+              </div>
+            </motion.div>
           </div>
         )}
       </AnimatePresence>

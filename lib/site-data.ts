@@ -11,15 +11,15 @@ export const NAV_LINKS = [
   },
   { label: 'EQUIPOS AFILIADOS', href: '/#equipos' },
   { label: 'TORNEOS', href: '/torneos' },
-  { label: 'MI CUENTA', href: '/micuenta' },
 ]
 
+
 export const SOCIALS = [
-  { label: 'Twitch', href: '#', short: 'TW' },
-  { label: 'YouTube', href: '#', short: 'YT' },
-  { label: 'Instagram', href: '#', short: 'IG' },
-  { label: 'X', href: '#', short: 'X' },
-  { label: 'Discord', href: '#', short: 'DC' },
+  { label: 'Twitch', href: 'https://twitch.tv/', short: 'TW' },
+  { label: 'YouTube', href: 'https://youtube.com/', short: 'YT' },
+  { label: 'Instagram', href: 'https://instagram.com/', short: 'IG' },
+  { label: 'Discord', href: 'https://discord.com/', short: 'DC' },
+  { label: 'TikTok', href: 'https://tiktok.com/', short: 'TK' },
 ]
 
 export const BENEFITS = [

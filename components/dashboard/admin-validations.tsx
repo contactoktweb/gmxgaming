@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Check, X, UserCheck, ShieldCheck, ScrollText, Eye, FileText, Image as ImageIcon, AlertCircle, Maximize2, ZoomIn, Search, Trash2 } from 'lucide-react'
+import { Check, X, UserCheck, ShieldCheck, ScrollText, Eye, FileText, Image as ImageIcon, AlertCircle, Maximize2, ZoomIn, Search, Trash2, Save } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { GmxButton } from '@/components/gmx-button'
 import { createClient } from '@/utils/supabase/client'
@@ -42,8 +42,71 @@ export function AdminValidations() {
 
   const fetchValidations = async () => {
     setLoading(true)
-    const { data } = await supabase.from('validations').select('*').order('created_at', { ascending: false })
-    if (data) setRequests(data as PendingRequest[])
+    
+    // 1. Fetch pending players
+    const { data: pendingPlayers } = await supabase
+      .from('profiles')
+      .select('*, player_game_info(*)')
+      .eq('is_player', true)
+
+    // 2. Fetch pending teams
+    const { data: pendingTeams } = await supabase
+      .from('teams')
+      .select('*')
+
+    // 3. Fetch pending contracts
+    const { data: pendingContracts } = await supabase
+      .from('contracts')
+      .select('*, profiles(name, nickname), teams(name)')
+
+    const formattedRequests: PendingRequest[] = []
+
+    if (pendingPlayers) {
+      pendingPlayers.forEach(p => {
+        formattedRequests.push({
+          id: p.id,
+          type: 'jugador',
+          target_name: p.nickname || p.name,
+          created_at: p.created_at,
+          status: p.player_status,
+          submitted_by: p.name,
+          details: p
+        })
+      })
+    }
+
+    if (pendingTeams) {
+      pendingTeams.forEach(t => {
+        formattedRequests.push({
+          id: t.id,
+          type: 'equipo',
+          target_name: t.name,
+          created_at: t.created_at,
+          status: t.status,
+          submitted_by: t.manager_id, // We could fetch manager name, but ID is fine for now
+          details: t
+        })
+      })
+    }
+
+    if (pendingContracts) {
+      pendingContracts.forEach(c => {
+        formattedRequests.push({
+          id: c.id,
+          type: 'contrato',
+          target_name: `${c.profiles?.nickname || c.profiles?.name} -> ${c.teams?.name}`,
+          created_at: c.created_at,
+          status: c.status,
+          submitted_by: c.profiles?.name,
+          details: c
+        })
+      })
+    }
+
+    // Sort by date descending
+    formattedRequests.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+    setRequests(formattedRequests)
     setLoading(false)
   }
 
@@ -67,62 +130,34 @@ export function AdminValidations() {
 
     if (confirmAction.action === 'deleted') {
       if (deleteConfirmationWord !== 'SI') return
-      await supabase.from('validations').delete().eq('id', confirmAction.id)
+      
+      const requestToUpdate = requests.find(req => req.id === confirmAction.id)
+      if (requestToUpdate?.type === 'jugador') {
+        await supabase.from('profiles').update({ is_player: false, player_status: 'none' }).eq('id', confirmAction.id)
+      } else if (requestToUpdate?.type === 'equipo') {
+        await supabase.from('teams').delete().eq('id', confirmAction.id)
+      } else if (requestToUpdate?.type === 'contrato') {
+        await supabase.from('contracts').delete().eq('id', confirmAction.id)
+      }
+      
       setRequests(prev => prev.filter(req => req.id !== confirmAction.id))
     } else {
-      // Si se aprueba, debemos insertar el registro en su respectiva tabla
       const requestToUpdate = requests.find(req => req.id === confirmAction.id)
+      const newStatus = confirmAction.action === 'approved' ? 'active' : 'rejected'
       
-      if (confirmAction.action === 'approved' && requestToUpdate && requestToUpdate.details) {
-        const { details } = requestToUpdate
-        
+      if (requestToUpdate) {
         if (requestToUpdate.type === 'jugador') {
-          const playerPayload = {
-            name: details.firstName && details.lastName ? `${details.firstName} ${details.lastName}` : (details.firstName || requestToUpdate.target_name),
-            email: details.email || '',
-            role: details.primaryRole || 'Jugador',
-            team: details.teamName || null,
-            status: 'active',
-            avatar: details.profilePhoto || null,
-            phone: details.phone || '',
-            game_id: details.gameId || '',
-            discord: details.discord || '',
-            country: details.country || ''
-          }
-          await supabase.from('players').insert(playerPayload)
-        } 
-        else if (requestToUpdate.type === 'equipo') {
-          const teamPayload = {
-            name: details.teamName || requestToUpdate.target_name,
-            tag: details.teamTag || '',
-            country: details.country || '',
-            logo_url: details.logo || null,
-            jersey_url: details.jersey || null,
-            color_primary: details.primaryColor || '#FFFFFF',
-            color_secondary: details.secondaryColor || '#000000',
-            manager_email: details.email || ''
-          }
-          await supabase.from('teams').insert(teamPayload)
-        }
-        else if (requestToUpdate.type === 'contrato') {
-          const contractPayload = {
-            player_name: details.playerName || '',
-            player_email: details.email || '',
-            team: details.teamName || '',
-            role: details.role || 'Jugador',
-            start_date: details.startDate || new Date().toISOString(),
-            end_date: details.endDate || new Date().toISOString(),
-            status: 'active',
-            document_url: details.contractFile || null
-          }
-          await supabase.from('contracts').insert(contractPayload)
+          await supabase.from('profiles').update({ player_status: newStatus }).eq('id', confirmAction.id)
+        } else if (requestToUpdate.type === 'equipo') {
+          await supabase.from('teams').update({ status: newStatus }).eq('id', confirmAction.id)
+        } else if (requestToUpdate.type === 'contrato') {
+          await supabase.from('contracts').update({ status: newStatus }).eq('id', confirmAction.id)
         }
       }
 
-      await supabase.from('validations').update({ status: confirmAction.action }).eq('id', confirmAction.id)
       setRequests(prev => prev.map(req => {
         if (req.id === confirmAction.id) {
-          return { ...req, status: confirmAction.action }
+          return { ...req, status: newStatus }
         }
         return req
       }))
@@ -136,23 +171,45 @@ export function AdminValidations() {
   const handleSaveDetails = async () => {
     if (!selectedRequest || !editingDetails) return
     
-    // Save to DB
-    const { error } = await supabase.from('validations')
-      .update({ details: editingDetails })
-      .eq('id', selectedRequest.id)
-      
-    if (!error) {
-      // Update local state
-      setRequests(prev => prev.map(req => {
-        if (req.id === selectedRequest.id) {
-          return { ...req, details: editingDetails }
-        }
-        return req
-      }))
-      setSelectedRequest({ ...selectedRequest, details: editingDetails })
-      alert('Cambios guardados correctamente.')
-    } else {
-      alert('Error guardando cambios.')
+    // Remove nested relational data before saving to main table
+    const { player_game_info, profiles, teams, ...cleanDetails } = editingDetails;
+
+    let error = null;
+    
+    try {
+      if (selectedRequest.type === 'jugador') {
+        const { error: err } = await supabase.from('profiles').update(cleanDetails).eq('id', selectedRequest.id)
+        error = err;
+      } else if (selectedRequest.type === 'equipo') {
+        const { error: err } = await supabase.from('teams').update(cleanDetails).eq('id', selectedRequest.id)
+        error = err;
+      } else if (selectedRequest.type === 'contrato') {
+        const { error: err } = await supabase.from('contracts').update(cleanDetails).eq('id', selectedRequest.id)
+        error = err;
+      }
+        
+      if (!error) {
+        // Update local state
+        setRequests(prev => prev.map(req => {
+          if (req.id === selectedRequest.id) {
+            // Also update the target_name if name or nickname changed
+            let targetName = req.target_name;
+            if (req.type === 'jugador') targetName = editingDetails.nickname || editingDetails.name;
+            else if (req.type === 'equipo') targetName = editingDetails.name;
+            
+            return { ...req, target_name: targetName, details: editingDetails }
+          }
+          return req
+        }))
+        setSelectedRequest({ ...selectedRequest, target_name: editingDetails.nickname || editingDetails.name || selectedRequest.target_name, details: editingDetails })
+        alert('Cambios guardados correctamente.')
+      } else {
+        console.error(error)
+        alert('Error guardando cambios.')
+      }
+    } catch (err) {
+      console.error(err)
+      alert('Error inesperado al guardar cambios.')
     }
   }
 
@@ -354,9 +411,17 @@ export function AdminValidations() {
                                </label>
                                <input
                                  type="text"
-                                 readOnly
                                  value={subValue as string || ''}
-                                 className="w-full rounded-md border border-border bg-surface px-4 py-2 text-white/70 opacity-70 cursor-not-allowed"
+                                 onChange={(e) => {
+                                    setEditingDetails({
+                                      ...editingDetails,
+                                      [key]: {
+                                        ...editingDetails[key],
+                                        [subKey]: e.target.value
+                                      }
+                                    })
+                                 }}
+                                 className="w-full rounded-md border border-border bg-background px-4 py-2 text-white focus:border-primary focus:outline-none"
                                />
                              </div>
                            ))}
@@ -411,14 +476,18 @@ export function AdminValidations() {
                           type="text"
                           readOnly
                           value={(value as string[]).join(', ')}
-                          className="w-full rounded-md border border-border bg-background px-4 py-2 text-white/70 opacity-70 cursor-not-allowed"
+                          className="w-full rounded-md border border-border bg-surface px-4 py-2 text-white/70 opacity-70 cursor-not-allowed"
                         />
                       ) : (
                         <input
                           type="text"
-                          readOnly
+                          disabled={key === 'id' || key === 'created_at' || key === 'manager_id' || key === 'profile_id' || key === 'team_id'}
                           value={value as string || ''}
-                          className="w-full rounded-md border border-border bg-background px-4 py-2 text-white/70 opacity-70 cursor-not-allowed"
+                          onChange={(e) => setEditingDetails({ ...editingDetails, [key]: e.target.value })}
+                          className={cn(
+                            "w-full rounded-md border border-border bg-background px-4 py-2 text-white focus:border-primary focus:outline-none",
+                            (key === 'id' || key === 'created_at' || key === 'manager_id' || key === 'profile_id' || key === 'team_id') && "bg-surface text-white/70 opacity-70 cursor-not-allowed"
+                          )}
                         />
                       )}
                     </div>
@@ -428,29 +497,40 @@ export function AdminValidations() {
             </div>
 
             {/* Footer Fijo */}
-            <div className="flex shrink-0 justify-end gap-4 border-t border-border p-6 bg-surface z-10">
-              {selectedRequest.status === 'pending' && (
-                <>
-                  <GmxButton 
-                    variant="secondary"
-                    onClick={() => {
-                      setConfirmAction({ id: selectedRequest.id, action: 'rejected', name: selectedRequest.target_name })
-                      setSelectedRequest(null)
-                    }}
-                    className="border-red-500/20 text-red-500 hover:border-red-500 hover:text-white hover:bg-red-500/20"
-                  >
-                    RECHAZAR
-                  </GmxButton>
-                  <GmxButton 
-                    onClick={() => {
-                      setConfirmAction({ id: selectedRequest.id, action: 'approved', name: selectedRequest.target_name })
-                      setSelectedRequest(null)
-                    }}
-                  >
-                    APROBAR SOLICITUD
-                  </GmxButton>
-                </>
-              )}
+            <div className="flex shrink-0 items-center justify-between border-t border-border p-6 bg-surface z-10">
+              <GmxButton
+                variant="secondary"
+                onClick={handleSaveDetails}
+                className="gap-2 px-6"
+              >
+                <Save className="w-4 h-4" />
+                GUARDAR CAMBIOS
+              </GmxButton>
+
+              <div className="flex gap-4">
+                {selectedRequest.status === 'pending' && (
+                  <>
+                    <GmxButton 
+                      variant="secondary"
+                      onClick={() => {
+                        setConfirmAction({ id: selectedRequest.id, action: 'rejected', name: selectedRequest.target_name })
+                        setSelectedRequest(null)
+                      }}
+                      className="border-red-500/20 text-red-500 hover:border-red-500 hover:text-white hover:bg-red-500/20"
+                    >
+                      RECHAZAR
+                    </GmxButton>
+                    <GmxButton 
+                      onClick={() => {
+                        setConfirmAction({ id: selectedRequest.id, action: 'approved', name: selectedRequest.target_name })
+                        setSelectedRequest(null)
+                      }}
+                    >
+                      APROBAR SOLICITUD
+                    </GmxButton>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -8,26 +8,27 @@ const COLUMNS = [
   {
     title: 'NAVEGACIÓN',
     links: [
-      { label: 'Inicio', href: '#hero' },
-      { label: 'Registro Esports', href: '#registro' },
-      { label: 'Equipos Afiliados', href: '#equipos' },
-      { label: 'Torneos', href: '#torneos' },
-    ],
-  },
-  {
-    title: 'CATEGORÍAS',
-    links: [
-      { label: 'GMX Kings Clash', href: '#torneos' },
-      { label: 'Honor of Kings', href: '#torneos' },
-      { label: 'Torneos', href: '#torneos' },
+      { label: 'Inicio', href: '/' },
+      { label: 'Torneos', href: '/torneos' },
+      { label: 'Media / GMX TV', href: '#media' },
+      { label: 'Equipos', href: '#equipos' },
     ],
   },
   {
     title: 'COMUNIDAD',
     links: [
-      { label: 'Crear tu usuario', href: '#registro' },
-      { label: 'Participar', href: '#registro' },
-      { label: 'Contacto', href: '#' },
+      { label: 'Jugadores Destacados', href: '#jugadores' },
+      { label: 'Nuestros Casters', href: '#casters' },
+      { label: 'Sé un Caster', href: 'https://wa.me/1234567890?text=Hola,%20me%20gustar%C3%ADa%20postularme%20como%20caster' },
+      { label: 'Discord', href: 'https://discord.gg/gmx' },
+    ],
+  },
+  {
+    title: 'CUENTA',
+    links: [
+      { label: 'Ingresar', href: '/login' },
+      { label: 'Registrarse', href: '/registro/alta-de-jugador' },
+      { label: 'Mi Perfil', href: '/micuenta' },
     ],
   },
 ]
@@ -96,10 +97,19 @@ export function SiteFooter() {
             </svg>
           </a>
 
-          <div className="flex gap-6">
-            <a href="#" className="transition-colors hover:text-white">Privacidad</a>
-            <a href="#" className="transition-colors hover:text-white">Términos</a>
-            <a href="#" className="transition-colors hover:text-white">Cookies</a>
+          <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
+            <div className="flex gap-4">
+              <a href="/privacidad" className="transition-colors hover:text-white">Privacidad</a>
+              <a href="/terminos" className="transition-colors hover:text-white">Términos</a>
+              <a href="/cookies" className="transition-colors hover:text-white">Cookies</a>
+            </div>
+            
+            {/* Language Selector (Static UI for now) */}
+            <div className="flex items-center gap-2 border-l border-border pl-4">
+              <button className="text-white font-600 transition-colors hover:text-primary">ES</button>
+              <span className="text-border">/</span>
+              <button className="text-muted-foreground transition-colors hover:text-white">EN</button>
+            </div>
           </div>
         </div>
       </div>

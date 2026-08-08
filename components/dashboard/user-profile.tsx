@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { GmxButton } from '@/components/gmx-button'
 import { useAuth } from '@/lib/auth-context'
 import { createClient } from '@/utils/supabase/client'
+import { toast } from 'sonner'
 
 export function UserProfile() {
   const { user } = useAuth()
@@ -28,10 +29,19 @@ export function UserProfile() {
     imagesChanged: false
   })
 
+  const [profileData, setProfileData] = useState<any>(null)
+  
   useEffect(() => {
     if (user) {
       setName(user.name)
       setProfilePhoto(user.avatar || null)
+      
+      // Fetch DB Profile
+      const fetchProfile = async () => {
+        const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+        if (data) setProfileData(data)
+      }
+      fetchProfile()
     }
   }, [user])
 
@@ -85,6 +95,16 @@ export function UserProfile() {
     setIsEditing(false)
   }
 
+  const requestEdit = async () => {
+    if (user) {
+      await supabase.from('profiles').update({ edit_requested: true }).eq('id', user.id)
+      setProfileData({ ...profileData, edit_requested: true })
+      toast.success('Solicitud Enviada', {
+        description: 'Un administrador revisará tu solicitud de modificación pronto.'
+      })
+    }
+  }
+
   const triggerUpload = (type: 'cover' | 'profile', isEditForm = false) => {
     // Simulate file selection
     const newImage = type === 'cover' 
@@ -106,6 +126,9 @@ export function UserProfile() {
     }
   }
 
+  const canEdit = profileData?.can_edit_profile || user?.role === 'admin'
+  const isRequested = profileData?.edit_requested
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
@@ -121,13 +144,15 @@ export function UserProfile() {
             <div className="absolute inset-0 bg-gradient-to-r from-background to-surface" />
           )}
           
-          <button 
-            onClick={() => triggerUpload('cover')}
-            className="absolute top-4 right-4 flex items-center gap-2 rounded-full bg-black/60 px-4 py-2 text-sm font-500 text-white opacity-0 backdrop-blur-sm transition-all hover:bg-black group-hover:opacity-100"
-          >
-            <ImageIcon className="h-4 w-4" />
-            <span className="hidden sm:inline">Cambiar portada</span>
-          </button>
+          {canEdit && (
+            <button 
+              onClick={() => triggerUpload('cover')}
+              className="absolute top-4 right-4 flex items-center gap-2 rounded-full bg-black/60 px-4 py-2 text-sm font-500 text-white opacity-0 backdrop-blur-sm transition-all hover:bg-black group-hover:opacity-100"
+            >
+              <ImageIcon className="h-4 w-4" />
+              <span className="hidden sm:inline">Cambiar portada</span>
+            </button>
+          )}
         </div>
 
         {/* Profile Info Area */}
@@ -143,12 +168,14 @@ export function UserProfile() {
                 </div>
               )}
               
-              <button 
-                onClick={() => triggerUpload('profile')}
-                className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100"
-              >
-                <Camera className="h-8 w-8 text-white" />
-              </button>
+              {canEdit && (
+                <button 
+                  onClick={() => triggerUpload('profile')}
+                  className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100"
+                >
+                  <Camera className="h-8 w-8 text-white" />
+                </button>
+              )}
             </div>
 
             {/* Basic Info */}
@@ -167,12 +194,25 @@ export function UserProfile() {
 
             {/* Action */}
             <div className="pb-2">
-              <button 
-                onClick={openEdit}
-                className="flex items-center gap-2 rounded-md bg-white/5 hover:bg-white/10 px-4 py-2 text-sm font-500 text-white transition-colors"
-              >
-                Editar Perfil
-              </button>
+              {canEdit ? (
+                <button 
+                  onClick={openEdit}
+                  className="flex items-center gap-2 rounded-md bg-white/5 hover:bg-white/10 px-4 py-2 text-sm font-500 text-white transition-colors"
+                >
+                  Editar Perfil
+                </button>
+              ) : isRequested ? (
+                <div className="flex items-center gap-2 rounded-md bg-amber-500/10 border border-amber-500/20 px-4 py-2 text-sm font-500 text-amber-500 cursor-not-allowed">
+                  Solicitud Pendiente
+                </div>
+              ) : (
+                <button 
+                  onClick={requestEdit}
+                  className="flex items-center gap-2 rounded-md bg-primary/10 hover:bg-primary px-4 py-2 text-sm font-500 text-primary hover:text-white transition-colors"
+                >
+                  Solicitar Modificación
+                </button>
+              )}
             </div>
           </div>
         </div>
