@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Settings, CheckSquare, Users, Trophy, ScrollText, ShieldCheck, Loader2, Youtube, Mic } from 'lucide-react'
+import { Settings, CheckSquare, Users, Trophy, ScrollText, ShieldCheck, Loader2, PlaySquare, Mic } from 'lucide-react'
 import { AdminValidations } from '@/components/dashboard/admin-validations'
 import { AdminPlayers } from '@/components/dashboard/admin-players'
 import { AdminTournaments } from '@/components/dashboard/admin-tournaments'

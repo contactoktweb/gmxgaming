@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, Youtube, ExternalLink, Video } from 'lucide-react'
+import { Plus, Trash2, PlaySquare, ExternalLink, Video } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { GmxButton } from '@/components/gmx-button'
 import { toast } from 'sonner'
@@ -73,7 +73,7 @@ export function AdminMedia() {
         
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-8">
           <h2 className="font-display text-2xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
-            <Youtube className="w-6 h-6 text-red-500" />
+            <PlaySquare className="w-6 h-6 text-red-500" />
             Media (Videos)
           </h2>
           <GmxButton onClick={() => setIsModalOpen(true)} className="gap-2">

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, Mic, Image as ImageIcon, ExternalLink, Instagram, Twitter, Twitch } from 'lucide-react'
+import { Plus, Trash2, Mic, Image as ImageIcon, ExternalLink, Camera, MessageCircle, Tv } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { GmxButton } from '@/components/gmx-button'
 import { toast } from 'sonner'
