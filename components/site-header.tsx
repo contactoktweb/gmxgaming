@@ -121,15 +121,16 @@ export function SiteHeader() {
             <div className="hidden lg:flex items-center gap-3">
               {user ? (
                 <>
-                  {user.role === 'admin' && (
+                  {user.role === 'admin' ? (
                     <GmxButton href="/administracion" variant="secondary" className="px-5 py-3 border-white/20 hover:border-white gap-2 whitespace-nowrap bg-primary/20 text-white">
                       ADMINISTRACIÓN
                     </GmxButton>
+                  ) : (
+                    <GmxButton href="/micuenta" variant="secondary" className="px-5 py-3 border-white/20 hover:border-white gap-2 whitespace-nowrap">
+                      <User className="w-4 h-4 shrink-0" />
+                      MI CUENTA
+                    </GmxButton>
                   )}
-                  <GmxButton href="/micuenta" variant="secondary" className="px-5 py-3 border-white/20 hover:border-white gap-2 whitespace-nowrap">
-                    <User className="w-4 h-4 shrink-0" />
-                    MI CUENTA
-                  </GmxButton>
                   <button
                     onClick={() => setShowLogoutModal(true)}
                     className="group relative inline-flex items-center justify-center gap-2 overflow-hidden bg-primary/10 border border-primary/20 px-5 py-3 font-display text-[13px] font-600 uppercase tracking-[0.14em] text-primary transition-colors duration-300 clip-corner hover:bg-primary hover:text-white whitespace-nowrap"
@@ -251,14 +252,15 @@ export function SiteHeader() {
               <div className="mt-10 flex flex-col gap-3">
                 {user ? (
                   <>
-                    {user.role === 'admin' && (
+                    {user.role === 'admin' ? (
                       <GmxButton href="/administracion" variant="secondary" className="w-full border-white/20 hover:border-white bg-primary/20 text-white" onClick={() => setOpen(false)}>
                         ADMINISTRACIÓN
                       </GmxButton>
+                    ) : (
+                      <GmxButton href="/micuenta" variant="secondary" className="w-full border-white/20 hover:border-white" onClick={() => setOpen(false)}>
+                        MI CUENTA
+                      </GmxButton>
                     )}
-                    <GmxButton href="/micuenta" variant="secondary" className="w-full border-white/20 hover:border-white" onClick={() => setOpen(false)}>
-                      MI CUENTA
-                    </GmxButton>
                     <button
                       onClick={() => setShowLogoutModal(true)}
                       className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden bg-primary/10 border border-primary/20 px-8 py-4 font-display text-[15px] font-600 uppercase tracking-[0.18em] text-primary transition-colors duration-300 clip-corner hover:bg-primary hover:text-white"

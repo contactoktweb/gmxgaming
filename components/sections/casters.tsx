@@ -47,7 +47,7 @@ export function Casters() {
     loadCasters()
   }, [])
 
-  if (!loading && casters.length === 0) return null
+  if (!loading && casters.length === 0) return <section ref={ref} className="hidden" />
 
   return (
     <section ref={ref} className="relative overflow-hidden bg-deep py-24 lg:py-32">

@@ -44,7 +44,7 @@ export function Media() {
     loadMedia()
   }, [])
 
-  if (videos.length === 0) return null
+  if (videos.length === 0) return <section ref={ref} className="hidden" />
 
   return (
     <section ref={ref} className="relative overflow-hidden bg-background py-24 lg:py-32">
