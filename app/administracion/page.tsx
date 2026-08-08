@@ -145,7 +145,7 @@ export default function AdministracionPage() {
                     : "text-muted-foreground hover:bg-white/5 hover:text-white"
                 )}
               >
-                <Youtube className="h-5 w-5" />
+                <PlaySquare className="h-5 w-5" />
                 Media
               </button>
 
