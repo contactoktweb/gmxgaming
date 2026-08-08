@@ -265,7 +265,7 @@ export function AdminValidations() {
                   : "bg-background border border-border text-muted-foreground hover:text-white"
               )}
             >
-              {tab === 'all' ? 'Todas' : `${tab}s`}
+              {tab === 'all' ? 'Todas' : tab === 'jugador' ? 'Jugadores' : `${tab}s`}
             </button>
           ))}
         </div>
