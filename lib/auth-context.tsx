@@ -17,6 +17,7 @@ export interface User {
 interface AuthContextType {
   user: User | null
   login: (email: string, password?: string) => Promise<boolean>
+  register: (email: string, password?: string) => Promise<{success: boolean, error?: string}>
   logout: () => Promise<void>
   isLoading: boolean
 }
@@ -103,6 +104,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return true
   }
 
+  const register = async (email: string, password?: string) => {
+    if (!password) return { success: false, error: 'Contraseña requerida' }
+
+    setIsLoading(true)
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+    })
+
+    if (error) {
+      setIsLoading(false)
+      return { success: false, error: error.message }
+    }
+
+    // Attempt to automatically log in the user after registration
+    // This depends on Supabase settings (whether email confirmation is required)
+    if (data.session) {
+      return { success: true }
+    } else {
+      // If email confirmation is required, they won't have a session right away
+      setIsLoading(false)
+      return { success: true }
+    }
+  }
+
   const logout = async () => {
     setIsLoading(true)
     await supabase.auth.signOut()
@@ -117,7 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, register, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   )

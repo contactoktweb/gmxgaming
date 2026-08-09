@@ -27,7 +27,7 @@ const COLUMNS = [
     title: 'CUENTA',
     links: [
       { label: 'Ingresar', href: '/login' },
-      { label: 'Registrarse', href: '/registro/alta-de-jugador' },
+      { label: 'Registrarse', href: '/crear-cuenta' },
       { label: 'Mi Perfil', href: '/micuenta' },
     ],
   },

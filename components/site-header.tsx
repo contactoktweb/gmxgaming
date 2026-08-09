@@ -147,9 +147,8 @@ export function SiteHeader() {
                     INGRESAR
                   </GmxButton>
                   <GmxButton 
-                    href="/registro/alta-de-jugador" 
+                    href="/crear-cuenta" 
                     className="px-5 py-3 whitespace-nowrap"
-                    onClick={(e) => handleRestrictedClick(e, '/registro/alta-de-jugador')}
                   >
                     CREA TU USUARIO
                   </GmxButton>
@@ -276,12 +275,9 @@ export function SiteHeader() {
                       INGRESAR
                     </GmxButton>
                     <GmxButton 
-                      href="/registro/alta-de-jugador" 
+                      href="/crear-cuenta" 
                       className="w-full" 
-                      onClick={(e) => {
-                        handleRestrictedClick(e, '/registro/alta-de-jugador')
-                        if (!e.defaultPrevented) setOpen(false)
-                      }}
+                      onClick={() => setOpen(false)}
                     >
                       CREA TU USUARIO
                     </GmxButton>

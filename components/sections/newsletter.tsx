@@ -14,7 +14,7 @@ function NewsletterForm() {
       onSubmit={(e) => {
         e.preventDefault()
         if (email) {
-          router.push(`/registro/alta-de-jugador?email=${encodeURIComponent(email)}`)
+          router.push(`/crear-cuenta?email=${encodeURIComponent(email)}`)
         }
       }}
       className="flex flex-col gap-4"

@@ -4,16 +4,17 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Loader2 } from 'lucide-react'
-import { GmxButton } from '@/components/gmx-button'
 import { useAuth } from '@/lib/auth-context'
 import { createClient } from '@/utils/supabase/client'
 
-export function LoginForm() {
+export function RegisterForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
-  const { login } = useAuth()
+  const [successMsg, setSuccessMsg] = useState('')
+  const { register } = useAuth()
   const router = useRouter()
   const supabase = createClient()
 
@@ -35,13 +36,23 @@ export function LoginForm() {
     e.preventDefault()
     setIsLoading(true)
     setError('')
+    setSuccessMsg('')
 
-    const success = await login(email, password)
+    if (password !== confirmPassword) {
+      setError('Las contraseñas no coinciden')
+      setIsLoading(false)
+      return
+    }
+
+    const { success, error: registerError } = await register(email, password)
     
     if (success) {
-      router.push('/micuenta')
+      setSuccessMsg('Cuenta creada exitosamente. Redirigiendo...')
+      setTimeout(() => {
+        router.push('/micuenta')
+      }, 1500)
     } else {
-      setError('Credenciales inválidas. Por favor intenta de nuevo.')
+      setError(registerError || 'Error al crear la cuenta. Por favor intenta de nuevo.')
       setIsLoading(false)
     }
   }
@@ -53,10 +64,10 @@ export function LoginForm() {
     >
       <div className="text-center">
         <h2 className="font-display text-3xl font-700 uppercase tracking-tight text-white">
-          INICIAR SESIÓN
+          CREA TU USUARIO
         </h2>
         <p className="mt-3 text-sm text-muted-foreground">
-          Ingresa a tu cuenta de GMX Gaming.
+          Regístrate para acceder a todas las funciones de GMX Gaming.
         </p>
       </div>
 
@@ -86,19 +97,36 @@ export function LoginForm() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
+            minLength={6}
             className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
-          <div className="flex justify-end pt-1">
-            <Link href="/login/olvide-password" className="text-xs text-primary hover:text-primary-dark transition-colors">
-              ¿Olvidaste tu contraseña?
-            </Link>
-          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="confirmPassword" className="text-sm font-500 text-white">
+            Confirmar Contraseña <span className="text-primary">*</span>
+          </label>
+          <input
+            type="password"
+            id="confirmPassword"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required
+            minLength={6}
+            className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          />
         </div>
       </div>
 
       {error && (
         <p className="text-sm text-red-500 font-500 text-center pt-2">
           {error}
+        </p>
+      )}
+
+      {successMsg && (
+        <p className="text-sm text-green-500 font-500 text-center pt-2">
+          {successMsg}
         </p>
       )}
 
@@ -109,7 +137,7 @@ export function LoginForm() {
           className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden bg-primary px-8 py-4 font-display text-[15px] font-600 uppercase tracking-[0.18em] text-white transition-colors duration-300 clip-corner hover:bg-primary-dark disabled:opacity-70 disabled:cursor-not-allowed"
         >
           <span className="relative z-10 flex items-center gap-2">
-            {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'INGRESAR'}
+            {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'CREAR CUENTA'}
           </span>
         </button>
 
@@ -149,11 +177,10 @@ export function LoginForm() {
       </div>
       
       <div className="text-center mt-4">
-        <a href="/crear-cuenta" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-          ¿No tienes una cuenta? Regístrate aquí.
+        <a href="/login" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+          ¿Ya tienes una cuenta? Inicia sesión aquí.
         </a>
       </div>
     </form>
   )
 }
-
