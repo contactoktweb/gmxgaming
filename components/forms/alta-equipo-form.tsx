@@ -36,6 +36,7 @@ export function AltaEquipoForm() {
   const [games, setGames] = useState<{name: string, image: string}[]>([
     { name: 'Mobile Legends', image: '/images/mlbb-logo.png' }
   ])
+  const [selectedGames, setSelectedGames] = useState<string[]>(['Mobile Legends'])
   const [loadingConfig, setLoadingConfig] = useState(true)
 
   // Validation state
@@ -56,7 +57,7 @@ export function AltaEquipoForm() {
           setCountries(countryConfig.value as string[])
         }
         if (gameConfig && Array.isArray(gameConfig.value) && gameConfig.value.length > 0) {
-          setGames(gameConfig.value.map((g: any) => {
+          const loadedGames = gameConfig.value.map((g: any) => {
             if (typeof g === 'string') {
               return { name: g, image: g === 'Mobile Legends' ? '/images/mlbb-logo.png' : '' }
             }
@@ -64,7 +65,11 @@ export function AltaEquipoForm() {
               return { ...g, image: '/images/mlbb-logo.png' }
             }
             return g
-          }))
+          });
+          setGames(loadedGames)
+          if (loadedGames.length > 0) {
+            setSelectedGames([loadedGames[0].name])
+          }
         }
       }
       setLoadingConfig(false)
@@ -287,24 +292,24 @@ export function AltaEquipoForm() {
               Tipo de Equipo <span className="text-primary">*</span>
               <FieldTooltip text="Categoría competitiva del equipo." />
             </label>
-            <div className="flex h-[50px] items-center gap-6 rounded-md border border-border bg-background px-4">
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-white transition-colors hover:text-primary">
+            <div className="flex h-[50px] items-center gap-6 rounded-md border border-border bg-background px-4 overflow-x-auto scrollbar-hide">
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-white transition-colors hover:text-primary whitespace-nowrap">
                 <input
                   type="radio"
                   name="item_meta[782]"
                   value="Varonil / Mixto"
                   required
-                  className="h-4 w-4 border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
+                  className="h-4 w-4 shrink-0 border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
                 />
                 Varonil / Mixto
               </label>
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-white transition-colors hover:text-primary">
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-white transition-colors hover:text-primary whitespace-nowrap">
                 <input
                   type="radio"
                   name="item_meta[782]"
                   value="Femenil"
                   required
-                  className="h-4 w-4 border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
+                  className="h-4 w-4 shrink-0 border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
                 />
                 Femenil
               </label>
@@ -330,33 +335,46 @@ export function AltaEquipoForm() {
           </div>
         </div>
 
-        <div className="space-y-4 pt-4">
-          <label className="text-sm font-500 text-white">
-            Juegos en los que participa su Equipo <span className="text-primary">*</span>
-            <FieldTooltip text="Debe seleccionar al menos un juego de la lista." />
-          </label>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {games.map(game => (
-              <label key={game.name} className="group relative flex cursor-pointer items-center gap-4 rounded-lg border border-border bg-background p-4 transition-all hover:border-primary">
-                <input
-                  type="checkbox"
-                  name="item_meta[633][]"
-                  value={game.name}
-                  defaultChecked={game.name === 'Mobile Legends'}
-                  className="h-5 w-5 rounded border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
-                />
-                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-md bg-surface p-1 border border-border">
-                  {game.image ? (
-                    <img src={game.image} alt={game.name} className="h-full w-full object-contain" />
-                  ) : (
-                    <span className="text-xs font-bold text-muted-foreground">{game.name.substring(0,3).toUpperCase()}</span>
-                  )}
-                </div>
-                <span className="font-display font-600 tracking-wider text-white">{game.name}</span>
-              </label>
-            ))}
+        {games.length > 1 ? (
+          <div className="space-y-4 pt-4">
+            <label className="text-sm font-500 text-white">
+              Juegos en los que participa su Equipo <span className="text-primary">*</span>
+              <FieldTooltip text="Debe seleccionar al menos un juego de la lista." />
+            </label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {games.map(game => (
+                <label key={game.name} className="group relative flex cursor-pointer items-center gap-4 rounded-lg border border-border bg-background p-4 transition-all hover:border-primary">
+                  <input
+                    type="checkbox"
+                    name="item_meta[633][]"
+                    value={game.name}
+                    checked={selectedGames.includes(game.name)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedGames([...selectedGames, game.name])
+                      } else {
+                        if (selectedGames.length > 1) {
+                          setSelectedGames(selectedGames.filter(g => g !== game.name))
+                        }
+                      }
+                    }}
+                    className="h-5 w-5 rounded border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
+                  />
+                  <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-md bg-surface p-1 border border-border">
+                    {game.image ? (
+                      <img src={game.image} alt={game.name} className="h-full w-full object-contain" />
+                    ) : (
+                      <span className="text-xs font-bold text-muted-foreground">{game.name.substring(0,3).toUpperCase()}</span>
+                    )}
+                  </div>
+                  <span className="font-display font-600 tracking-wider text-white">{game.name}</span>
+                </label>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : games.length === 1 ? (
+          <input type="hidden" name="item_meta[633][]" value={games[0].name} />
+        ) : null}
 
         {/* Redes Sociales */}
         <div className="space-y-4 pt-4">

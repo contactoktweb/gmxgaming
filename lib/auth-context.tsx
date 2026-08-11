@@ -12,11 +12,13 @@ export interface User {
   email: string
   role: Role
   avatar?: string
+  is_player?: boolean
+  player_status?: string
 }
 
 interface AuthContextType {
   user: User | null
-  login: (email: string, password?: string) => Promise<boolean>
+  login: (email: string, password?: string) => Promise<{success: boolean, error?: string}>
   register: (email: string, password?: string) => Promise<{success: boolean, error?: string}>
   logout: () => Promise<void>
   isLoading: boolean
@@ -61,7 +63,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           name: profile?.name || authUser.email?.split('@')[0] || 'Usuario',
           email: authUser.email || '',
           role: profile?.role === 'admin' ? 'admin' : 'jugador',
-          avatar: profile?.avatar || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
+          avatar: profile?.avatar || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg',
+          is_player: profile?.is_player || false,
+          player_status: profile?.player_status || 'none'
         })
         setIsLoading(false)
       }
@@ -88,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password?: string) => {
     // If no password provided (shouldn't happen with real form, but for typing), fail
-    if (!password) return false;
+    if (!password) return { success: false, error: 'Contraseña requerida' };
 
     setIsLoading(true)
     const { error } = await supabase.auth.signInWithPassword({
@@ -98,10 +102,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       setIsLoading(false)
-      return false
+      return { success: false, error: error.message }
     }
 
-    return true
+    return { success: true }
   }
 
   const register = async (email: string, password?: string) => {

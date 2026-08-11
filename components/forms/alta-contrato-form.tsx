@@ -34,7 +34,7 @@ export function AltaContratoForm() {
       if (!user) return
 
       // Obtener equipos
-      const { data: teamsData } = await supabase.from('teams').select('id, name, type')
+      const { data: teamsData } = await supabase.from('teams').select('id, name').in('status', ['active', 'approved'])
       if (teamsData) {
         setTeams(teamsData)
       }
@@ -46,7 +46,7 @@ export function AltaContratoForm() {
       }
 
       // Obtener contratos activos o pendientes
-      const { data: contracts } = await supabase.from('contracts').select('*, teams(type)').eq('player_id', user.id).in('status', ['active', 'pending_manager'])
+      const { data: contracts } = await supabase.from('contracts').select('*, teams(name)').eq('player_id', user.id).in('status', ['active', 'pending_manager'])
       
       if (contracts && contracts.length > 0) {
         if (profile?.gender === 'Masculino' || !profile?.gender) {
@@ -191,7 +191,7 @@ export function AltaContratoForm() {
               >
                 <option value="" disabled>Selecciona tu equipo</option>
                 {teams.length > 0 ? (
-                  teams.map(t => <option key={t.id} value={t.id}>{t.name} ({t.type})</option>)
+                  teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)
                 ) : (
                   <option value="" disabled>No hay equipos disponibles</option>
                 )}
@@ -219,32 +219,6 @@ export function AltaContratoForm() {
             />
           </div>
 
-          {/* Jugador */}
-          <div className="space-y-2 sm:col-span-2">
-            <label htmlFor="field_vk1mg" className="text-sm font-500 text-white">
-              Jugador <span className="text-primary">*</span>
-            </label>
-            <div className="relative">
-              <select
-                id="field_vk1mg"
-                name="item_meta[888][]"
-                required
-                defaultValue={user?.name || ''}
-                className="w-full appearance-none rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              >
-                <option value="" disabled>Selecciona tu Nombre de Jugador</option>
-                <option value={user?.name || 'Mi Jugador (Demo)'}>{user?.name || 'Mi Jugador (Demo)'}</option>
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-muted-foreground">
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Selecciona tu Nombre de Jugador para validar tu acuerdo. Si tu nombre de Jugador no aparece aquí, significa que no te has dado de alta aún como Jugador, y no podrás registrar tu contrato hasta que realices ese paso.
-            </p>
-          </div>
 
           {/* Roles en el Equipo */}
           <div className="space-y-4 sm:col-span-2 pt-4 border-t border-border/50">

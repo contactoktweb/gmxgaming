@@ -37,6 +37,16 @@ export function SiteHeader() {
     }
   }
 
+  const getFilteredSubmenu = (submenu: typeof NAV_LINKS[0]['submenu']) => {
+    if (!submenu) return undefined;
+    return submenu.filter(sub => {
+      if (sub.href === '/registro/alta-de-contrato') {
+        return user?.is_player && (user?.player_status === 'active' || user?.player_status === 'approved');
+      }
+      return true;
+    });
+  }
+
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40)
     onScroll()
@@ -68,7 +78,10 @@ export function SiteHeader() {
           <GmxLogo className="shrink-0" />
 
           <nav className="hidden items-center gap-8 lg:flex">
-            {NAV_LINKS.map((link) => (
+            {NAV_LINKS.map((link) => {
+              const filteredSubmenu = getFilteredSubmenu(link.submenu);
+              
+              return (
               <div key={link.href} className="group relative">
                 <a
                   href={link.href}
@@ -76,7 +89,7 @@ export function SiteHeader() {
                   className="relative flex items-center gap-1 font-display text-[13px] font-500 uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:text-white whitespace-nowrap"
                 >
                   {link.label}
-                  {link.submenu && (
+                  {filteredSubmenu && filteredSubmenu.length > 0 && (
                     <svg className="h-3 w-3 transition-transform duration-300 group-hover:rotate-180 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
@@ -84,10 +97,10 @@ export function SiteHeader() {
                   <span className="absolute -bottom-1 left-0 h-px w-0 bg-primary transition-all duration-300 group-hover:w-full" />
                 </a>
                 
-                {link.submenu && (
+                {filteredSubmenu && filteredSubmenu.length > 0 && (
                   <div className="absolute left-0 top-full pt-4 opacity-0 invisible translate-y-2 transition-all duration-300 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0">
                     <div className="flex min-w-[240px] flex-col overflow-hidden border border-border bg-surface shadow-xl">
-                      {link.submenu.map((sub) => (
+                      {filteredSubmenu.map((sub) => (
                         <a
                           key={sub.label}
                           href={sub.href}
@@ -101,7 +114,7 @@ export function SiteHeader() {
                   </div>
                 )}
               </div>
-            ))}
+            )})}
           </nav>
 
           <div className="flex items-center gap-3">
@@ -206,13 +219,15 @@ export function SiteHeader() {
               </div>
 
               <nav className="mt-8 flex flex-col">
-                {NAV_LINKS.map((link, i) => (
+                {NAV_LINKS.map((link, i) => {
+                  const filteredSubmenu = getFilteredSubmenu(link.submenu);
+                  return (
                   <div key={link.href}>
                     <motion.a
                       href={link.href}
                       onClick={(e) => {
                         handleRestrictedClick(e, link.href)
-                        if (!e.defaultPrevented && !link.submenu) setOpen(false)
+                        if (!e.defaultPrevented && (!filteredSubmenu || filteredSubmenu.length === 0)) setOpen(false)
                       }}
                       initial={{ opacity: 0, x: 30 }}
                       animate={{ opacity: 1, x: 0 }}
@@ -221,12 +236,12 @@ export function SiteHeader() {
                     >
                       {link.label}
                       <span className="text-faint transition-transform duration-300 group-hover:translate-x-1 group-hover:text-primary">
-                        {link.submenu ? '+' : '→'}
+                        {filteredSubmenu && filteredSubmenu.length > 0 ? '+' : '→'}
                       </span>
                     </motion.a>
-                    {link.submenu && (
+                    {filteredSubmenu && filteredSubmenu.length > 0 && (
                       <div className="flex flex-col pl-4">
-                        {link.submenu.map((sub, j) => (
+                        {filteredSubmenu.map((sub, j) => (
                           <motion.a
                             key={sub.label}
                             href={sub.href}
@@ -245,7 +260,7 @@ export function SiteHeader() {
                       </div>
                     )}
                   </div>
-                ))}
+                )})}
               </nav>
 
               <div className="mt-10 flex flex-col gap-3">

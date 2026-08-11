@@ -13,6 +13,12 @@ type MediaLink = {
   url: string
 }
 
+function getYouTubeEmbedUrl(url: string) {
+  if (!url) return ''
+  const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&?]{11})/)
+  return match && match[1] ? `https://www.youtube.com/embed/${match[1]}` : url
+}
+
 export function Media() {
   const ref = useRef<HTMLDivElement>(null)
   const { scrollYProgress } = useScroll({
@@ -82,7 +88,7 @@ export function Media() {
                 <iframe
                   width="100%"
                   height="100%"
-                  src={activeVideo.url.replace('watch?v=', 'embed/')}
+                  src={getYouTubeEmbedUrl(activeVideo.url)}
                   title={activeVideo.title}
                   frameBorder="0"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"

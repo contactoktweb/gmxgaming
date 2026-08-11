@@ -21,6 +21,8 @@ export function AdminCasters() {
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [newCaster, setNewCaster] = useState({ name: '', avatar_url: '', instagram_url: '', twitter_url: '', twitch_url: '' })
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const supabase = createClient()
 
   useEffect(() => {
@@ -40,7 +42,25 @@ export function AdminCasters() {
       return
     }
 
-    const { error } = await supabase.from('casters').insert([newCaster])
+    let avatarUrl = newCaster.avatar_url;
+
+    if (avatarFile) {
+      toast.loading('Subiendo foto...')
+      const fileExt = avatarFile.name.split('.').pop()
+      const fileName = `caster-${Date.now()}.${fileExt}`
+      const { error: uploadError, data } = await supabase.storage.from('teams').upload(`casters/${fileName}`, avatarFile)
+      toast.dismiss()
+      
+      if (uploadError) {
+        toast.error('Error al subir la foto')
+        return
+      }
+      
+      const { data: publicUrlData } = supabase.storage.from('teams').getPublicUrl(data.path)
+      avatarUrl = publicUrlData.publicUrl
+    }
+
+    const { error } = await supabase.from('casters').insert([{ ...newCaster, avatar_url: avatarUrl }])
     
     if (error) {
       toast.error('Error al guardar el caster')
@@ -48,6 +68,8 @@ export function AdminCasters() {
       toast.success('Caster agregado correctamente')
       setIsModalOpen(false)
       setNewCaster({ name: '', avatar_url: '', instagram_url: '', twitter_url: '', twitch_url: '' })
+      setAvatarFile(null)
+      setAvatarPreview(null)
       fetchCasters()
     }
   }
@@ -156,14 +178,44 @@ export function AdminCasters() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-600 uppercase tracking-widest text-primary">Foto (URL)</label>
-                <input 
-                  type="text" 
-                  value={newCaster.avatar_url}
-                  onChange={e => setNewCaster({...newCaster, avatar_url: e.target.value})}
-                  className="w-full rounded-md border border-border bg-background px-4 py-2 text-white focus:border-primary focus:outline-none"
-                  placeholder="https://..."
-                />
+                <label className="text-xs font-600 uppercase tracking-widest text-primary">Foto del Caster</label>
+                <div 
+                  className="relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-background p-6 transition-colors hover:border-primary/50"
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                      const file = e.dataTransfer.files[0]
+                      setAvatarFile(file)
+                      setAvatarPreview(URL.createObjectURL(file))
+                    }
+                  }}
+                >
+                  <input 
+                    type="file" 
+                    accept="image/*"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        const file = e.target.files[0]
+                        setAvatarFile(file)
+                        setAvatarPreview(URL.createObjectURL(file))
+                      }
+                    }}
+                    className="absolute inset-0 z-50 h-full w-full cursor-pointer opacity-0"
+                  />
+                  {avatarPreview ? (
+                    <div className="relative h-24 w-24 overflow-hidden rounded-full border-2 border-primary/20">
+                      <img src={avatarPreview} alt="Preview" className="h-full w-full object-cover" />
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center text-center">
+                      <ImageIcon className="mb-2 h-8 w-8 text-muted-foreground opacity-50" />
+                      <p className="text-sm text-white">Haz clic o arrastra una imagen</p>
+                      <p className="text-xs text-muted-foreground">PNG, JPG hasta 5MB</p>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-600 uppercase tracking-widest text-primary">Twitch (URL) - Opcional</label>

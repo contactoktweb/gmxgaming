@@ -5,6 +5,7 @@ import { ShieldCheck, Users, MapPin, ExternalLink, Eye, Trash2, X, AlertCircle, 
 import { createClient } from '@/utils/supabase/client'
 import { cn } from '@/lib/utils'
 import { GmxButton } from '@/components/gmx-button'
+import { toast } from 'sonner'
 
 interface PlayerRoster {
   nickname: string
@@ -294,20 +295,38 @@ export function AdminTeams() {
                     className="h-32 w-32 rounded-full border-4 border-surface object-cover bg-surface mb-4"
                   />
                   
-                  <div className="w-full">
-                    <label className="text-xs text-muted-foreground font-600 uppercase mb-1 block">Actualizar Logo (URL)</label>
-                    <div className="flex gap-2">
-                      <input 
-                        type="text" 
-                        value={editingLogo}
-                        onChange={(e) => setEditingLogo(e.target.value)}
-                        className="w-full rounded border border-border bg-background px-3 py-1 text-xs text-white focus:border-primary focus:outline-none"
-                        placeholder="https://..."
-                      />
-                      <GmxButton onClick={handleUpdateLogo} variant="secondary" className="px-3 h-auto py-1">
-                        <Save className="w-3.5 h-3.5" />
-                      </GmxButton>
-                    </div>
+                  <div className="w-full mt-4">
+                    <label className="text-xs text-muted-foreground font-600 uppercase mb-1 block">Actualizar Logo</label>
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      onChange={async (e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          const file = e.target.files[0];
+                          toast.loading('Subiendo logo...', { id: 'upload-logo' });
+                          const fileExt = file.name.split('.').pop();
+                          const fileName = `team-logo-${Date.now()}.${fileExt}`;
+                          const { error: uploadError, data } = await supabase.storage.from('teams').upload(fileName, file);
+                          if (uploadError) {
+                            toast.error('Error al subir la imagen', { id: 'upload-logo' });
+                            return;
+                          }
+                          const { data: publicUrlData } = supabase.storage.from('teams').getPublicUrl(data.path);
+                          const newUrl = publicUrlData.publicUrl;
+                          
+                          const { error: updateError } = await supabase.from('teams').update({ logo_url: newUrl }).eq('id', selectedTeam.id);
+                          
+                          if (updateError) {
+                            toast.error('Error al guardar en base de datos', { id: 'upload-logo' });
+                          } else {
+                            setTeams(prev => prev.map(t => t.id === selectedTeam.id ? { ...t, logo: newUrl } : t));
+                            setSelectedTeam({ ...selectedTeam, logo: newUrl });
+                            toast.success('Logo actualizado', { id: 'upload-logo' });
+                          }
+                        }
+                      }}
+                      className="w-full text-xs text-muted-foreground file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
+                    />
                   </div>
                 </div>
 
@@ -326,14 +345,30 @@ export function AdminTeams() {
                       <p className="text-xs text-muted-foreground uppercase tracking-widest font-600 mb-1">Región</p>
                       <p className="text-sm font-500 text-white truncate">{selectedTeam.region}</p>
                     </div>
-                    <div className="rounded-lg border border-border bg-background p-4">
+                    <div className="rounded-lg border border-border bg-background p-4 flex flex-col justify-center">
                       <p className="text-xs text-muted-foreground uppercase tracking-widest font-600 mb-1">Estatus</p>
-                      <p className={cn(
-                        "text-sm font-500 truncate uppercase",
-                        selectedTeam.status === 'active' ? 'text-emerald-500' : selectedTeam.status === 'banned' ? 'text-red-500' : 'text-yellow-500'
-                      )}>
-                        {selectedTeam.status === 'active' ? 'Activo' : selectedTeam.status === 'banned' ? 'Baneado' : 'Inactivo'}
-                      </p>
+                      <select 
+                        className={cn(
+                          "w-full rounded border border-border bg-surface px-2 py-1 text-sm font-500 uppercase focus:border-primary focus:outline-none cursor-pointer mt-1",
+                          selectedTeam.status === 'active' ? 'text-emerald-500' : selectedTeam.status === 'banned' ? 'text-red-500' : 'text-yellow-500'
+                        )}
+                        value={selectedTeam.status}
+                        onChange={async (e) => {
+                          const newStatus = e.target.value;
+                          const { error } = await supabase.from('teams').update({ status: newStatus }).eq('id', selectedTeam.id);
+                          if (!error) {
+                            setTeams(prev => prev.map(t => t.id === selectedTeam.id ? { ...t, status: newStatus } : t));
+                            setSelectedTeam({ ...selectedTeam, status: newStatus });
+                            toast.success('Estado actualizado correctamente');
+                          } else {
+                            toast.error('Error al actualizar el estado');
+                          }
+                        }}
+                      >
+                        <option value="active" className="text-emerald-500">Activo</option>
+                        <option value="inactive" className="text-yellow-500">Inactivo</option>
+                        <option value="banned" className="text-red-500">Baneado</option>
+                      </select>
                     </div>
                     <div className="rounded-lg border border-border bg-background p-4">
                       <p className="text-xs text-muted-foreground uppercase tracking-widest font-600 mb-1">Fundación</p>

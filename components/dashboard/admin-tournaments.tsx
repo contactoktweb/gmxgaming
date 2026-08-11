@@ -107,6 +107,21 @@ export function AdminTournaments() {
     const form = e.currentTarget
     const formData = new FormData(form)
     
+    const prizepoolTotalStr = formData.get('prizepool_total') as string
+    
+    const parseNumber = (val: string) => {
+      const num = Number(val.replace(/[^0-9.-]+/g, ""))
+      return isNaN(num) ? 0 : num
+    }
+
+    const total = parseNumber(prizepoolTotalStr)
+    const sumPlaces = distPlaces.reduce((acc, curr) => acc + parseNumber(curr), 0)
+
+    if (total > 0 && sumPlaces !== total) {
+      alert(`La suma de la distribución de premios (${sumPlaces}) no coincide con la Bolsa Total (${total}). Por favor verifica los montos.`)
+      return
+    }
+
     const templateId = formData.get('template_id') as string
     const tmpl = templates.find(t => t.id === templateId)
 

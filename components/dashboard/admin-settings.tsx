@@ -22,13 +22,16 @@ interface TournamentTemplate {
 export function AdminSettings() {
   const [countries, setCountries] = useState<string[]>([])
   const [games, setGames] = useState<{name: string, image: string}[]>([])
+  const [tournamentTypes, setTournamentTypes] = useState<string[]>([
+    'Relámpago (1 día)', 'Clasificatorio', 'Liga Mensual', 'Presencial / LAN'
+  ])
   
   const [newCountry, setNewCountry] = useState('')
   const [newGame, setNewGame] = useState('')
   const [newGameImage, setNewGameImage] = useState<File | null>(null)
   
   const [templates, setTemplates] = useState<TournamentTemplate[]>([])
-  const [newTemplate, setNewTemplate] = useState({name: '', game: 'Mobile Legends', type: 'Relámpago', logo_url: ''})
+  const [newTemplate, setNewTemplate] = useState({name: '', game: 'Mobile Legends', type: 'Relámpago (1 día)', logo_url: ''})
   const [templateImage, setTemplateImage] = useState<File | null>(null)
 
   const [loading, setLoading] = useState(true)
@@ -42,6 +45,7 @@ export function AdminSettings() {
       if (data) {
         const countryConfig = data.find(s => s.id === 'enabled_countries')
         const gameConfig = data.find(s => s.id === 'enabled_games')
+        const typesConfig = data.find(s => s.id === 'tournament_types')
         
         if (countryConfig && Array.isArray(countryConfig.value)) {
           setCountries(countryConfig.value)
@@ -50,6 +54,9 @@ export function AdminSettings() {
           setGames(gameConfig.value.map((g: any) => 
             typeof g === 'string' ? { name: g, image: '' } : g
           ))
+        }
+        if (typesConfig && Array.isArray(typesConfig.value)) {
+          setTournamentTypes(typesConfig.value)
         }
       }
 
@@ -76,6 +83,12 @@ export function AdminSettings() {
     await supabase.from('app_settings').upsert({ 
       id: 'enabled_games', 
       value: games 
+    })
+
+    // Save tournament types
+    await supabase.from('app_settings').upsert({
+      id: 'tournament_types',
+      value: tournamentTypes
     })
     
     setSaving(false)
@@ -114,6 +127,18 @@ export function AdminSettings() {
   const addTemplate = async () => {
     if (!newTemplate.name.trim()) return
     setSaving(true)
+
+    // Si el tipo de torneo es nuevo, lo añadimos a la lista de tipos y guardamos
+    const currentType = newTemplate.type.trim()
+    if (currentType && !tournamentTypes.includes(currentType)) {
+      const updatedTypes = [...tournamentTypes, currentType]
+      setTournamentTypes(updatedTypes)
+      await supabase.from('app_settings').upsert({
+        id: 'tournament_types',
+        value: updatedTypes
+      })
+    }
+
     let logoUrl = newTemplate.logo_url
     if (templateImage) {
       const fileExt = templateImage.name.split('.').pop()
@@ -127,14 +152,14 @@ export function AdminSettings() {
     const { data, error } = await supabase.from('tournament_templates').insert({
       name: newTemplate.name.trim(),
       game: newTemplate.game,
-      type: newTemplate.type,
+      type: currentType,
       logo_url: logoUrl
     }).select().single()
     
     if (data) {
       setTemplates([data, ...templates])
     }
-    setNewTemplate({name: '', game: 'Mobile Legends', type: 'Relámpago', logo_url: ''})
+    setNewTemplate({name: '', game: 'Mobile Legends', type: currentType || 'Relámpago (1 día)', logo_url: ''})
     setTemplateImage(null)
     setSaving(false)
   }
@@ -334,6 +359,7 @@ export function AdminSettings() {
                     type="text" 
                     value={newTemplate.name}
                     onChange={e => setNewTemplate({...newTemplate, name: e.target.value})}
+                    onKeyDown={e => e.key === 'Enter' && addTemplate()}
                     className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
                     placeholder="Ej. Torneo Mensual MLBB"
                   />
@@ -343,6 +369,7 @@ export function AdminSettings() {
                   <select 
                     value={newTemplate.game}
                     onChange={e => setNewTemplate({...newTemplate, game: e.target.value})}
+                    onKeyDown={e => e.key === 'Enter' && addTemplate()}
                     className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
                   >
                     {games.map(g => <option key={g.name} value={g.name}>{g.name}</option>)}
@@ -351,16 +378,18 @@ export function AdminSettings() {
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground mb-1 block">Tipo de Torneo</label>
-                  <select 
+                  <input
+                    type="text"
+                    list="tournament-types"
                     value={newTemplate.type}
                     onChange={e => setNewTemplate({...newTemplate, type: e.target.value})}
+                    onKeyDown={e => e.key === 'Enter' && addTemplate()}
                     className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
-                  >
-                    <option value="Relámpago">Relámpago (1 día)</option>
-                    <option value="Clasificatorio">Clasificatorio</option>
-                    <option value="Liga">Liga Mensual</option>
-                    <option value="Presencial">Presencial / LAN</option>
-                  </select>
+                    placeholder="Escribe o selecciona..."
+                  />
+                  <datalist id="tournament-types">
+                    {tournamentTypes.map(t => <option key={t} value={t} />)}
+                  </datalist>
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground mb-1 block">Logo (Opcional)</label>

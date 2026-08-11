@@ -194,14 +194,23 @@ export function AdminValidations() {
           if (req.id === selectedRequest.id) {
             // Also update the target_name if name or nickname changed
             let targetName = req.target_name;
-            if (req.type === 'jugador') targetName = editingDetails.nickname || editingDetails.name;
-            else if (req.type === 'equipo') targetName = editingDetails.name;
+            let newStatus = req.status;
             
-            return { ...req, target_name: targetName, details: editingDetails }
+            if (req.type === 'jugador') {
+              targetName = editingDetails.nickname || editingDetails.name;
+              if (editingDetails.player_status) newStatus = editingDetails.player_status;
+            } else if (req.type === 'equipo') {
+              targetName = editingDetails.name;
+              if (editingDetails.status) newStatus = editingDetails.status;
+            } else if (req.type === 'contrato') {
+              if (editingDetails.status) newStatus = editingDetails.status;
+            }
+            
+            return { ...req, target_name: targetName, details: editingDetails, status: newStatus }
           }
           return req
         }))
-        setSelectedRequest({ ...selectedRequest, target_name: editingDetails.nickname || editingDetails.name || selectedRequest.target_name, details: editingDetails })
+        setSelectedRequest({ ...selectedRequest, target_name: editingDetails.nickname || editingDetails.name || selectedRequest.target_name, details: editingDetails, status: editingDetails.status || editingDetails.player_status || selectedRequest.status })
         alert('Cambios guardados correctamente.')
       } else {
         console.error(error)
@@ -306,7 +315,7 @@ export function AdminValidations() {
                         <span className="inline-flex items-center rounded-full bg-yellow-400/10 px-2 py-1 text-xs font-500 text-yellow-400 ring-1 ring-inset ring-yellow-400/20">
                           Pendiente
                         </span>
-                      ) : req.status === 'approved' ? (
+                      ) : (req.status === 'active' || req.status === 'approved') ? (
                         <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-2 py-1 text-xs font-500 text-emerald-400 ring-1 ring-inset ring-emerald-400/20">
                           ACTIVO
                         </span>
@@ -396,6 +405,7 @@ export function AdminValidations() {
                   const isBoolean = typeof value === 'boolean';
                   const isObject = typeof value === 'object' && value !== null && !Array.isArray(value);
                   const isArray = Array.isArray(value);
+                  const isStatusField = key === 'status' || key === 'player_status';
                   
                   if (isObject) {
                      return (
@@ -478,6 +488,16 @@ export function AdminValidations() {
                           value={(value as string[]).join(', ')}
                           className="w-full rounded-md border border-border bg-surface px-4 py-2 text-white/70 opacity-70 cursor-not-allowed"
                         />
+                      ) : isStatusField ? (
+                        <select
+                          value={value as string || 'pending'}
+                          onChange={(e) => setEditingDetails({ ...editingDetails, [key]: e.target.value })}
+                          className="w-full rounded-md border border-border bg-background px-4 py-2 text-white focus:border-primary focus:outline-none"
+                        >
+                          <option value="pending">Pendiente</option>
+                          <option value="active">Activo / Aprobado</option>
+                          <option value="rejected">Rechazado</option>
+                        </select>
                       ) : (
                         <input
                           type="text"

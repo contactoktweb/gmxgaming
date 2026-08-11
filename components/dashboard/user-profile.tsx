@@ -19,6 +19,7 @@ export function UserProfile() {
   // Edit Modal State
   const [isEditing, setIsEditing] = useState(false)
   const [showNotification, setShowNotification] = useState(false)
+  const [showPlayerModal, setShowPlayerModal] = useState(false)
   const supabase = createClient()
   
   const [editForm, setEditForm] = useState({
@@ -61,7 +62,7 @@ export function UserProfile() {
     } else {
       window.__lenis?.start()
     }
-  }, [isEditing])
+  }, [isEditing, showPlayerModal])
 
   const openEdit = () => {
     setEditForm({
@@ -235,16 +236,27 @@ export function UserProfile() {
               <div>
                 <h4 className="font-display font-600 text-white">Jugador Profesional</h4>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  No te has registrado como jugador profesional en la plataforma.
+                  {user?.is_player 
+                    ? "Ya estás registrado como jugador en la plataforma." 
+                    : "No te has registrado como jugador profesional en la plataforma."}
                 </p>
               </div>
             </div>
-            <Link 
-              href="/registro/alta-de-jugador" 
-              className="mt-6 flex items-center gap-2 text-sm font-600 text-primary hover:text-primary-dark transition-colors"
-            >
-              Iniciar Registro <ArrowRight className="h-4 w-4" />
-            </Link>
+            {user?.is_player ? (
+              <button 
+                onClick={() => setShowPlayerModal(true)}
+                className="mt-6 flex items-center gap-2 text-sm font-600 text-primary hover:text-primary-dark transition-colors text-left"
+              >
+                Ver Mis Datos <ArrowRight className="h-4 w-4" />
+              </button>
+            ) : (
+              <Link 
+                href="/registro/alta-de-jugador" 
+                className="mt-6 flex items-center gap-2 text-sm font-600 text-primary hover:text-primary-dark transition-colors"
+              >
+                Iniciar Registro <ArrowRight className="h-4 w-4" />
+              </Link>
+            )}
           </div>
 
           {/* Equipo */}
@@ -426,6 +438,72 @@ export function UserProfile() {
             >
               <X className="h-4 w-4" />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Player Data Modal */}
+      {showPlayerModal && profileData && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowPlayerModal(false)} />
+          <div className="relative flex flex-col w-full max-w-lg max-h-[90vh] overflow-hidden rounded-xl border border-border bg-surface shadow-2xl animate-in zoom-in-95 duration-200">
+            {/* Header Fijo */}
+            <div className="flex shrink-0 items-center justify-between border-b border-border p-6 bg-surface z-10">
+              <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-primary" />
+                Datos de Jugador
+              </h3>
+              <button 
+                onClick={() => setShowPlayerModal(false)}
+                className="text-muted-foreground hover:text-white transition-colors p-2 rounded-full hover:bg-white/5"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body con Scroll */}
+            <div data-lenis-prevent data-modal-scrollbody className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6 space-y-6">
+              
+              <div className="space-y-4">
+                <div>
+                  <p className="text-xs font-500 text-muted-foreground uppercase tracking-widest mb-1">Nombre Real</p>
+                  <p className="text-sm text-white font-600">{profileData.name || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-500 text-muted-foreground uppercase tracking-widest mb-1">Nickname</p>
+                  <p className="text-sm text-white font-600">{profileData.nickname || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-500 text-muted-foreground uppercase tracking-widest mb-1">Discord</p>
+                  <p className="text-sm text-white font-600">{profileData.discord_handle || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-500 text-muted-foreground uppercase tracking-widest mb-1">Aeropuerto más cercano</p>
+                  <p className="text-sm text-white font-600">{profileData.closest_airport || 'N/A'}</p>
+                </div>
+              </div>
+
+              <div className="border-t border-border pt-4 space-y-4">
+                <p className="text-xs font-600 uppercase tracking-widest text-primary">Estado</p>
+                <div className="flex items-center gap-2">
+                  <div className={cn("px-3 py-1 rounded-full text-xs font-600 uppercase", 
+                    profileData.player_status === 'active' ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" :
+                    profileData.player_status === 'rejected' ? "bg-red-500/10 text-red-500 border border-red-500/20" :
+                    "bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                  )}>
+                    {profileData.player_status === 'active' ? 'Aprobado' :
+                     profileData.player_status === 'rejected' ? 'Rechazado' : 'Pendiente'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Fijo */}
+            <div className="flex shrink-0 justify-end gap-3 border-t border-border p-6 bg-surface z-10">
+              <GmxButton onClick={() => setShowPlayerModal(false)}>
+                Cerrar
+              </GmxButton>
+            </div>
           </div>
         </div>
       )}

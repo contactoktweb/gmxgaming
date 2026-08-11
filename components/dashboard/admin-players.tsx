@@ -48,12 +48,11 @@ export function AdminPlayers() {
   useEffect(() => {
     async function init() {
       setLoading(true)
-      const { data: playersData } = await supabase
+      const { data: playersData, error } = await supabase
         .from('profiles')
         .select(`
           id,
           name,
-          email,
           avatar_url,
           country:closest_airport,
           created_at,
@@ -65,6 +64,11 @@ export function AdminPlayers() {
         .eq('is_player', true)
         .order('created_at', { ascending: false })
       
+      if (error) {
+        console.error("Error fetching players:", error)
+        toast.error("Error al cargar jugadores: " + error.message)
+      }
+
       if (playersData) {
         const formattedPlayers = playersData.map((p: any) => {
           const activeContract = p.contracts?.find((c: any) => c.status === 'active')
@@ -89,7 +93,7 @@ export function AdminPlayers() {
           return {
             id: p.id,
             name: p.name,
-            email: p.email,
+            email: p.email || 'Sin correo',
             contractTimeLeft,
             team,
             status: p.player_status || 'inactive',
@@ -463,6 +467,18 @@ export function AdminPlayers() {
                         >
                           <option value="true">Sí</option>
                           <option value="false">No</option>
+                        </select>
+                      ) : key === 'player_status' ? (
+                        <select
+                          className="w-full rounded-md border border-border bg-background px-4 py-2 text-white focus:border-primary focus:outline-none"
+                          value={value as string || 'pending'}
+                          onChange={(e) => setEditingDetails({ ...editingDetails, [key]: e.target.value })}
+                        >
+                          <option value="active">Activo</option>
+                          <option value="inactive">Inactivo</option>
+                          <option value="banned">Baneado</option>
+                          <option value="pending">Pendiente</option>
+                          <option value="rejected">Rechazado</option>
                         </select>
                       ) : (
                         <input

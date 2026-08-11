@@ -36,12 +36,17 @@ export function LoginForm() {
     setIsLoading(true)
     setError('')
 
-    const success = await login(email, password)
+    const { success, error: loginError } = await login(email, password)
     
     if (success) {
       router.push('/micuenta')
     } else {
-      setError('Credenciales inválidas. Por favor intenta de nuevo.')
+      // Si el error es de email no confirmado, mostramos un mensaje más claro
+      if (loginError?.includes('Email not confirmed')) {
+        setError('Debes confirmar tu correo electrónico antes de iniciar sesión. Revisa tu bandeja de entrada.')
+      } else {
+        setError(loginError || 'Credenciales inválidas. Por favor intenta de nuevo.')
+      }
       setIsLoading(false)
     }
   }
