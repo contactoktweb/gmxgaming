@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Trophy, Calendar, Users, Edit, Plus, Trash2, CheckCircle2, Eye, X, AlertCircle, Gamepad2, Link, Save, Swords } from 'lucide-react'
+import { Trophy, Calendar, Users, Edit, Plus, Trash2, CheckCircle2, Eye, X, AlertCircle, Gamepad2, Link, Save, Swords, ChevronDown } from 'lucide-react'
 import { GmxButton } from '@/components/gmx-button'
 import { createClient } from '@/utils/supabase/client'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 interface Tournament {
   id: string
@@ -57,6 +58,11 @@ export function AdminTournaments() {
   const [newTeamId, setNewTeamId] = useState('')
   const [newMatch, setNewMatch] = useState({ phase: 'Fase de Grupos', date: '', t1: '', t2: '', s1: 0, s2: 0 })
   const [editMatch, setEditMatch] = useState<{ id: string, s1: number, s2: number, t1_name?: string, t2_name?: string } | null>(null)
+
+  // Tournament form dates
+  const todayStr = new Date().toISOString().split('T')[0]
+  const [formStartDate, setFormStartDate] = useState('')
+  const [formEndDate, setFormEndDate] = useState('')
 
   const supabase = createClient()
 
@@ -146,6 +152,8 @@ export function AdminTournaments() {
         setShowSuccess(false)
         setIsCreating(false)
         setDistPlaces([''])
+        setFormStartDate('')
+        setFormEndDate('')
       }, 2000)
     } else {
       alert('Error al crear el torneo: ' + error.message)
@@ -162,20 +170,34 @@ export function AdminTournaments() {
 
   const handleAddTeam = async () => {
     if (!selectedTournament || !newTeamId) return
-    const { error } = await supabase.from('tournament_teams').insert({
-      tournament_id: selectedTournament.id,
-      team_id: newTeamId
-    })
-    if (!error) {
-      setActiveTab('info') // toggle to refresh
-      setTimeout(() => setActiveTab('teams'), 50)
-      setNewTeamId('')
+
+    const { error } = await supabase
+      .from('tournament_teams')
+      .insert({ tournament_id: selectedTournament.id, team_id: newTeamId })
+
+    if (error) {
+      toast.error('Error al agregar equipo: ' + error.message)
+      return
     }
+
+    // Buscar el equipo en availableTeams para actualizar el estado local
+    const addedTeam = availableTeams.find(t => t.id === newTeamId)
+    if (addedTeam) {
+      setTourneyTeams(prev => [...prev, {
+        tournament_id: selectedTournament.id,
+        teams: addedTeam
+      }])
+    }
+    setNewTeamId('')
   }
 
-  const handleRemoveTeam = async (ttId: string) => {
-    await supabase.from('tournament_teams').delete().eq('id', ttId)
-    setTourneyTeams(prev => prev.filter(t => t.id !== ttId))
+  const handleRemoveTeam = async (teamId: string) => {
+    await supabase
+      .from('tournament_teams')
+      .delete()
+      .eq('tournament_id', selectedTournament!.id)
+      .eq('team_id', teamId)
+    setTourneyTeams(prev => prev.filter(t => t.teams.id !== teamId))
   }
 
   const handleAddMatch = async () => {
@@ -245,31 +267,62 @@ export function AdminTournaments() {
                 <label className="text-sm font-500 text-white">Juego
                   <span className="text-primary"> *</span>
                 </label>
-                <select name="game" required className="w-full rounded-md border border-border bg-background px-4 py-3 text-white focus:border-primary focus:outline-none">
-                  <option value="Mobile Legends">Mobile Legends</option>
-                  <option value="Free Fire">Free Fire</option>
-                  <option value="Valorant">Valorant</option>
-                  <option value="League of Legends">League of Legends</option>
-                  <option value="Otro">Otro</option>
-                </select>
+                <div className="relative">
+                  <select name="game" required className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-3 pr-10 text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer">
+                    <option value="Mobile Legends">Mobile Legends</option>
+                    <option value="Free Fire">Free Fire</option>
+                    <option value="Valorant">Valorant</option>
+                    <option value="League of Legends">League of Legends</option>
+                    <option value="Otro">Otro</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                </div>
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-500 text-white">Plantilla Base <span className="text-xs text-muted-foreground">(Opcional)</span></label>
-                <select name="template_id" className="w-full rounded-md border border-border bg-background px-4 py-3 text-white focus:border-primary focus:outline-none">
-                  <option value="">Sin plantilla</option>
-                  {templates.map(t => (
-                    <option key={t.id} value={t.id}>{t.name} ({t.game})</option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select name="template_id" className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-3 pr-10 text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer">
+                    <option value="">Sin plantilla</option>
+                    {templates.map(t => (
+                      <option key={t.id} value={t.id}>{t.name} ({t.game})</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                </div>
                 {templates.length === 0 && <p className="text-xs text-muted-foreground">No tienes plantillas creadas en Configuración. Puedes crear el torneo sin plantilla.</p>}
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-500 text-white">Fecha de Inicio</label>
-                <input name="start_date" type="date" required className="w-full rounded-md border border-border bg-background px-4 py-3 text-white focus:border-primary focus:outline-none" />
+                <input
+                  name="start_date"
+                  type="date"
+                  required
+                  min={todayStr}
+                  value={formStartDate}
+                  onChange={e => {
+                    setFormStartDate(e.target.value)
+                    // Resetear fecha fin si queda antes que la nueva inicio
+                    if (formEndDate && formEndDate < e.target.value) setFormEndDate('')
+                  }}
+                  className="w-full rounded-md border border-border bg-background px-4 py-3 text-white focus:border-primary focus:outline-none"
+                />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-500 text-white">Fecha de Fin</label>
-                <input name="end_date" type="date" required className="w-full rounded-md border border-border bg-background px-4 py-3 text-white focus:border-primary focus:outline-none" />
+                <input
+                  name="end_date"
+                  type="date"
+                  required
+                  min={formStartDate || todayStr}
+                  value={formEndDate}
+                  onChange={e => setFormEndDate(e.target.value)}
+                  disabled={!formStartDate}
+                  title={!formStartDate ? 'Selecciona primero la Fecha de Inicio' : undefined}
+                  className="w-full rounded-md border border-border bg-background px-4 py-3 text-white focus:border-primary focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed"
+                />
+                {!formStartDate && (
+                  <p className="text-[11px] text-muted-foreground">Selecciona primero la Fecha de Inicio.</p>
+                )}
               </div>
               
               <div className="space-y-2 sm:col-span-2 border-t border-border pt-6 mt-2">
@@ -458,15 +511,18 @@ export function AdminTournaments() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="p-4 rounded-lg border border-border bg-surface">
                       <p className="text-xs font-600 text-muted-foreground uppercase tracking-widest mb-1">Estatus</p>
-                      <select 
-                        value={selectedTournament.status}
-                        onChange={(e) => handleUpdateStatus(e.target.value)}
-                        className="w-full bg-transparent text-white font-500 focus:outline-none cursor-pointer"
-                      >
-                        <option value="upcoming">Próximo</option>
-                        <option value="ongoing">En Curso</option>
-                        <option value="finished">Finalizado</option>
-                      </select>
+                      <div className="relative">
+                        <select 
+                          value={selectedTournament.status}
+                          onChange={(e) => handleUpdateStatus(e.target.value)}
+                          className="w-full appearance-none rounded-lg border border-border bg-background px-3 py-1.5 pr-8 text-xs font-600 uppercase text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer hover:border-primary/50 transition-colors"
+                        >
+                          <option value="upcoming">Próximo</option>
+                          <option value="ongoing">En Curso</option>
+                          <option value="finished">Finalizado</option>
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                      </div>
                     </div>
                     <div className="p-4 rounded-lg border border-border bg-surface">
                       <p className="text-xs font-600 text-muted-foreground uppercase tracking-widest mb-1">Fechas</p>
@@ -499,16 +555,19 @@ export function AdminTournaments() {
               {activeTab === 'teams' && (
                 <div className="space-y-6 animate-in fade-in">
                   <div className="flex flex-col sm:flex-row gap-3">
-                    <select 
-                      value={newTeamId}
-                      onChange={e => setNewTeamId(e.target.value)}
-                      className="flex-1 rounded-md border border-border bg-surface px-4 py-2.5 text-sm text-white focus:border-primary focus:outline-none"
-                    >
-                      <option value="">Seleccionar equipo para agregar...</option>
-                      {availableTeams.filter(at => !tourneyTeams.find(tt => tt.teams.id === at.id)).map(at => (
-                        <option key={at.id} value={at.id}>{at.name}</option>
-                      ))}
-                    </select>
+                    <div className="relative flex-1">
+                      <select 
+                        value={newTeamId}
+                        onChange={e => setNewTeamId(e.target.value)}
+                        className="w-full appearance-none rounded-lg border border-border bg-surface px-4 py-2.5 pr-10 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer"
+                      >
+                        <option value="">Seleccionar equipo para agregar...</option>
+                        {availableTeams.filter(at => !tourneyTeams.find(tt => tt.teams.id === at.id)).map(at => (
+                          <option key={at.id} value={at.id}>{at.name}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    </div>
                     <GmxButton onClick={handleAddTeam} disabled={!newTeamId} className="px-6 h-auto">Agregar Equipo</GmxButton>
                   </div>
 
@@ -519,12 +578,12 @@ export function AdminTournaments() {
                   ) : (
                     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       {tourneyTeams.map(tt => (
-                        <div key={tt.id} className="flex items-center gap-3 p-4 rounded-xl border border-border bg-surface">
+                        <div key={tt.teams.id} className="flex items-center gap-3 p-4 rounded-xl border border-border bg-surface">
                           <img src={tt.teams.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} alt="" className="w-10 h-10 rounded-full object-cover" />
                           <div className="flex-1 min-w-0">
                             <h4 className="text-sm font-600 text-white truncate">{tt.teams.name}</h4>
                           </div>
-                          <button onClick={() => handleRemoveTeam(tt.id)} className="text-muted-foreground hover:text-red-500 transition-colors p-2"><Trash2 className="w-4 h-4"/></button>
+                          <button onClick={() => handleRemoveTeam(tt.teams.id)} className="text-muted-foreground hover:text-red-500 transition-colors p-2"><Trash2 className="w-4 h-4"/></button>
                         </div>
                       ))}
                     </div>
@@ -539,25 +598,31 @@ export function AdminTournaments() {
                     <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
                       <div className="lg:col-span-1">
                         <label className="text-xs text-muted-foreground mb-1 block">Fase/Jornada</label>
-                        <input type="text" value={newMatch.phase} onChange={e => setNewMatch({...newMatch, phase: e.target.value})} className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-white focus:outline-none focus:border-primary" />
+                        <input type="text" value={newMatch.phase} onChange={e => setNewMatch({...newMatch, phase: e.target.value})} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-white focus:outline-none focus:border-primary" />
                       </div>
                       <div className="lg:col-span-1">
                         <label className="text-xs text-muted-foreground mb-1 block">Fecha</label>
-                        <input type="date" value={newMatch.date} onChange={e => setNewMatch({...newMatch, date: e.target.value})} className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-white focus:outline-none focus:border-primary" />
+                        <input type="date" value={newMatch.date} onChange={e => setNewMatch({...newMatch, date: e.target.value})} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-white focus:outline-none focus:border-primary" />
                       </div>
                       <div className="lg:col-span-1">
                         <label className="text-xs text-muted-foreground mb-1 block">Equipo A</label>
-                        <select value={newMatch.t1} onChange={e => setNewMatch({...newMatch, t1: e.target.value})} className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-white focus:outline-none focus:border-primary">
-                          <option value="">Equipo...</option>
-                          {tourneyTeams.map(tt => <option key={tt.teams.id} value={tt.teams.id}>{tt.teams.name}</option>)}
-                        </select>
+                        <div className="relative">
+                          <select value={newMatch.t1} onChange={e => setNewMatch({...newMatch, t1: e.target.value})} className="w-full appearance-none rounded-lg border border-border bg-background px-3 py-2 pr-8 text-sm text-white focus:outline-none focus:border-primary cursor-pointer">
+                            <option value="">Equipo...</option>
+                            {tourneyTeams.map(tt => <option key={tt.teams.id} value={tt.teams.id}>{tt.teams.name}</option>)}
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                        </div>
                       </div>
                       <div className="lg:col-span-1">
                         <label className="text-xs text-muted-foreground mb-1 block">Equipo B</label>
-                        <select value={newMatch.t2} onChange={e => setNewMatch({...newMatch, t2: e.target.value})} className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-white focus:outline-none focus:border-primary">
-                          <option value="">Equipo...</option>
-                          {tourneyTeams.map(tt => <option key={tt.teams.id} value={tt.teams.id}>{tt.teams.name}</option>)}
-                        </select>
+                        <div className="relative">
+                          <select value={newMatch.t2} onChange={e => setNewMatch({...newMatch, t2: e.target.value})} className="w-full appearance-none rounded-lg border border-border bg-background px-3 py-2 pr-8 text-sm text-white focus:outline-none focus:border-primary cursor-pointer">
+                            <option value="">Equipo...</option>
+                            {tourneyTeams.map(tt => <option key={tt.teams.id} value={tt.teams.id}>{tt.teams.name}</option>)}
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                        </div>
                       </div>
                       <div className="lg:col-span-1">
                         <GmxButton onClick={handleAddMatch} disabled={!newMatch.t1 || !newMatch.t2} className="w-full h-[38px]">Crear</GmxButton>

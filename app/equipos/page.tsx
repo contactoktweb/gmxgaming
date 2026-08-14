@@ -5,6 +5,7 @@ import { Preloader } from '@/components/preloader'
 import { SmoothScroll } from '@/components/smooth-scroll'
 import { CustomCursor } from '@/components/custom-cursor'
 import { SiteHeader } from '@/components/site-header'
+import { getTeamSlug } from '@/lib/utils'
 import { BackToTop } from '@/components/back-to-top'
 import { SiteFooter } from '@/components/sections/site-footer'
 import { Reveal } from '@/components/anim'
@@ -98,7 +99,7 @@ export default function EquiposPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {filteredTeams.map((team, i) => (
                 <Reveal key={team.id} direction="up" delay={i * 0.05}>
-                  <Link href={`/equipos/${team.id}`} className="group relative flex flex-col items-center p-8 rounded-2xl bg-surface border border-border hover:border-primary/50 transition-all overflow-hidden text-center block">
+                  <Link href={`/equipos/${getTeamSlug(team)}`} className="group relative flex flex-col items-center p-8 rounded-2xl bg-surface border border-border hover:border-primary/50 transition-all overflow-hidden text-center block">
                     
                     {/* Background glow on hover */}
                     <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />

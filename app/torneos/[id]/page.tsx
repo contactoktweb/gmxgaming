@@ -12,7 +12,7 @@ import { SiteFooter } from '@/components/sections/site-footer'
 import { Reveal } from '@/components/anim'
 import { Calendar, Users, Trophy, Gamepad2, Swords, DollarSign } from 'lucide-react'
 import Link from 'next/link'
-import { cn } from '@/lib/utils'
+import { cn, getTeamSlug, slugify } from '@/lib/utils'
 
 export default function TournamentDetailsPage() {
   const params = useParams()
@@ -28,15 +28,41 @@ export default function TournamentDetailsPage() {
       if (!params.id) return
       const supabase = createClient()
       
-      const [tRes, teamsRes, matchesRes] = await Promise.all([
-        supabase.from('tournaments').select('*, templates:tournament_templates(name, type, logo_url)').eq('id', params.id).single(),
-        supabase.from('tournament_teams').select('teams(id, name, logo_url)').eq('tournament_id', params.id),
-        supabase.from('matches').select('*, team1:teams!matches_team1_id_fkey(id, name, logo_url), team2:teams!matches_team2_id_fkey(id, name, logo_url)').eq('tournament_id', params.id).order('match_date', { ascending: true })
-      ])
+      const paramSlug = Array.isArray(params.id) ? params.id[0] : params.id
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(paramSlug)
 
-      if (tRes.data) setTournament(tRes.data)
-      if (teamsRes.data) setTeams(teamsRes.data.map(t => t.teams))
-      if (matchesRes.data) setMatches(matchesRes.data)
+      let tournamentData = null
+      let targetId = paramSlug
+
+      if (isUuid) {
+        const { data } = await supabase
+          .from('tournaments')
+          .select('*, templates:tournament_templates(name, type, logo_url)')
+          .eq('id', paramSlug)
+          .single()
+        tournamentData = data
+        if (data) targetId = data.id
+      } else {
+        const { data: allTournaments } = await supabase
+          .from('tournaments')
+          .select('*, templates:tournament_templates(name, type, logo_url)')
+
+        if (allTournaments) {
+          tournamentData = allTournaments.find(t => slugify(t.name) === paramSlug || t.id === paramSlug)
+          if (tournamentData) targetId = tournamentData.id
+        }
+      }
+
+      if (tournamentData) {
+        setTournament(tournamentData)
+        const [teamsRes, matchesRes] = await Promise.all([
+          supabase.from('tournament_teams').select('teams(id, name, logo_url, tag)').eq('tournament_id', targetId),
+          supabase.from('matches').select('*, team1:teams!matches_team1_id_fkey(id, name, logo_url, tag), team2:teams!matches_team2_id_fkey(id, name, logo_url, tag)').eq('tournament_id', targetId).order('match_date', { ascending: true })
+        ])
+
+        if (teamsRes.data) setTeams(teamsRes.data.map(t => t.teams))
+        if (matchesRes.data) setMatches(matchesRes.data)
+      }
       
       setLoading(false)
     }
@@ -155,10 +181,14 @@ export default function TournamentDetailsPage() {
                 ) : (
                   <div className="grid grid-cols-2 gap-4">
                     {teams.map(team => (
-                      <div key={team.id} className="flex flex-col items-center text-center p-3 rounded-xl bg-background border border-border hover:border-primary/50 transition-colors">
-                        <img src={team.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} alt={team.name} className="w-12 h-12 rounded-full mb-2 object-cover" />
-                        <span className="text-xs font-600 text-white truncate w-full">{team.name}</span>
-                      </div>
+                      <Link 
+                        key={team.id} 
+                        href={`/equipos/${getTeamSlug(team)}`}
+                        className="flex flex-col items-center text-center p-3 rounded-xl bg-background border border-border hover:border-primary/50 transition-colors group block"
+                      >
+                        <img src={team.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} alt={team.name} className="w-12 h-12 rounded-full mb-2 object-cover group-hover:scale-105 transition-transform" />
+                        <span className="text-xs font-600 text-white group-hover:text-primary transition-colors truncate w-full">{team.name}</span>
+                      </Link>
                     ))}
                   </div>
                 )}

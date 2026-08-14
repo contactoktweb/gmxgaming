@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Check, X, Shield, Users, Clock, AlertCircle } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
-import { cn } from '@/lib/utils'
+import { cn, formatRolesList } from '@/lib/utils'
 
 interface Contract {
   id: string
@@ -166,7 +166,7 @@ export function ManagerDashboard() {
                 <div className="space-y-2 mb-6">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Roles:</span>
-                    <span className="text-white font-500">{contract.roles.join(', ')}</span>
+                    <span className="text-white font-500">{formatRolesList(contract.roles)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Vence:</span>
@@ -211,7 +211,7 @@ export function ManagerDashboard() {
                   <img src={contract.players.avatar || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} alt="" className="w-10 h-10 rounded-full border border-border object-cover" />
                   <div>
                     <h4 className="font-600 text-white truncate text-sm">{contract.players.name}</h4>
-                    <p className="text-xs text-primary font-500">{contract.roles.join(', ')}</p>
+                    <p className="text-xs text-primary font-500">{formatRolesList(contract.roles)}</p>
                   </div>
                 </div>
                 <div className="flex items-center justify-between text-xs pt-3 border-t border-border">

@@ -140,13 +140,12 @@ export function Media() {
                   }`}>
                     <Play className="h-5 w-5" />
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="font-display text-[10px] font-600 uppercase tracking-widest text-primary">
-                      VIDEO 0{idx + 1}
-                    </span>
-                    <span className="line-clamp-2 text-sm font-500 text-white">
+                  <div className="flex flex-col justify-center min-w-0 flex-1">
+                    <h3 className={`font-display text-sm font-700 uppercase tracking-tight transition-colors line-clamp-2 ${
+                      activeVideo?.id === video.id ? 'text-primary' : 'text-white group-hover:text-primary'
+                    }`}>
                       {video.title}
-                    </span>
+                    </h3>
                   </div>
                 </button>
               ))}

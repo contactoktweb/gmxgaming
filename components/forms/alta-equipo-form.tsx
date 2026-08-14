@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Upload, Image as ImageIcon, Loader2, CheckCircle2, HelpCircle } from 'lucide-react'
+import { Upload, Image as ImageIcon, Loader2, CheckCircle2, HelpCircle, ShieldAlert } from 'lucide-react'
 import { GmxButton } from '@/components/gmx-button'
 import { PhoneInput } from '@/components/forms/phone-input'
 import { FileUpload } from '@/components/forms/file-upload'
@@ -38,6 +38,7 @@ export function AltaEquipoForm() {
   ])
   const [selectedGames, setSelectedGames] = useState<string[]>(['Mobile Legends'])
   const [loadingConfig, setLoadingConfig] = useState(true)
+  const [blockMessage, setBlockMessage] = useState<string | null>(null)
 
   // Validation state
   const [teamName, setTeamName] = useState('')
@@ -48,6 +49,32 @@ export function AltaEquipoForm() {
 
   useEffect(() => {
     async function loadConfig() {
+      if (!user) {
+        setBlockMessage('Debes iniciar sesión para poder registrar un equipo.')
+        setLoadingConfig(false)
+        return
+      }
+
+      // Validar si el usuario es jugador profesional aprobado
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_player, player_status')
+        .eq('id', user.id)
+        .single()
+
+      const isApproved = Boolean(profile?.is_player && (profile?.player_status === 'active' || profile?.player_status === 'approved'))
+      if (!isApproved) {
+        if (!profile?.is_player) {
+          setBlockMessage('Para dar de alta un equipo en GMX Gaming, primero debes estar registrado y aprobado como Jugador Profesional.')
+        } else if (profile?.player_status === 'pending') {
+          setBlockMessage('Tu registro como Jugador Profesional se encuentra actualmente en revisión por los administradores. Podrás registrar equipos una vez que tu solicitud sea aprobada.')
+        } else {
+          setBlockMessage('Tu perfil de Jugador Profesional no se encuentra activo.')
+        }
+        setLoadingConfig(false)
+        return
+      }
+
       const { data } = await supabase.from('app_settings').select('*')
       if (data && data.length > 0) {
         const countryConfig = data.find(c => c.id === 'enabled_countries')
@@ -75,7 +102,7 @@ export function AltaEquipoForm() {
       setLoadingConfig(false)
     }
     loadConfig()
-  }, [])
+  }, [user])
 
   const handleTeamNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // Solo mayúsculas, sin caracteres especiales
@@ -168,6 +195,39 @@ export function AltaEquipoForm() {
   
   if (loadingConfig) {
     return <div className="h-96 w-full animate-pulse rounded-xl border border-border bg-surface" />
+  }
+
+  if (blockMessage) {
+    return (
+      <div className="mx-auto w-full max-w-2xl rounded-xl border border-border bg-surface p-8 sm:p-12 text-center shadow-2xl space-y-6">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+          <ShieldAlert className="h-8 w-8" />
+        </div>
+        <div>
+          <h2 className="font-display text-2xl sm:text-3xl font-700 uppercase tracking-tight text-white">
+            Requisito: Jugador Profesional Aprobado
+          </h2>
+          <p className="mt-3 text-muted-foreground text-sm max-w-md mx-auto leading-relaxed">
+            {blockMessage}
+          </p>
+        </div>
+        <div className="pt-2 flex flex-col sm:flex-row justify-center gap-4">
+          {!user ? (
+            <GmxButton href="/login" className="px-8">
+              INICIAR SESIÓN
+            </GmxButton>
+          ) : !user.is_player ? (
+            <GmxButton href="/registro/alta-de-jugador" className="px-8">
+              REGISTRARME COMO JUGADOR
+            </GmxButton>
+          ) : (
+            <GmxButton href="/micuenta" variant="secondary" className="px-8">
+              IR A MI CUENTA
+            </GmxButton>
+          )}
+        </div>
+      </div>
+    )
   }
 
   return (

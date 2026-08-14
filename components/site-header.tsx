@@ -24,6 +24,10 @@ export function SiteHeader() {
     setOpen(false)
   }
 
+  const isApprovedPlayer = Boolean(
+    user?.is_player && (user?.player_status === 'active' || user?.player_status === 'approved')
+  )
+
   const handleRestrictedClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
     if (!user && href.includes('/registro')) {
       e.preventDefault()
@@ -34,14 +38,28 @@ export function SiteHeader() {
           onClick: () => window.location.href = '/login'
         }
       })
+      return
+    }
+
+    if ((href === '/registro/alta-de-equipo' || href === '/registro/alta-de-contrato') && !isApprovedPlayer) {
+      e.preventDefault()
+      toast.error('Acceso Restringido', {
+        description: 'Debes ser un Jugador Profesional Aprobado para registrar un equipo o contrato.',
+        action: {
+          label: 'Ver Mi Cuenta',
+          onClick: () => window.location.href = '/micuenta'
+        }
+      })
+      return
     }
   }
 
   const getFilteredSubmenu = (submenu: typeof NAV_LINKS[0]['submenu']) => {
     if (!submenu) return undefined;
     return submenu.filter(sub => {
-      if (sub.href === '/registro/alta-de-contrato') {
-        return user?.is_player && (user?.player_status === 'active' || user?.player_status === 'approved');
+      // Alta de Equipo y Alta de Contrato SOLO para jugadores aprobados
+      if (sub.href === '/registro/alta-de-equipo' || sub.href === '/registro/alta-de-contrato') {
+        return isApprovedPlayer;
       }
       return true;
     });

@@ -2,11 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Settings, CheckSquare, Users, Trophy, ScrollText, ShieldCheck, Loader2, PlaySquare, Mic } from 'lucide-react'
+import { Settings, CheckSquare, Users, Trophy, ShieldCheck, Loader2, PlaySquare, Mic } from 'lucide-react'
 import { AdminValidations } from '@/components/dashboard/admin-validations'
 import { AdminPlayers } from '@/components/dashboard/admin-players'
 import { AdminTournaments } from '@/components/dashboard/admin-tournaments'
-import { AdminContracts } from '@/components/dashboard/admin-contracts'
 import { AdminTeams } from '@/components/dashboard/admin-teams'
 import { AdminSettings } from '@/components/dashboard/admin-settings'
 import { AdminMedia } from '@/components/dashboard/admin-media'
@@ -20,7 +19,7 @@ import { Preloader } from '@/components/preloader'
 import { useAuth } from '@/lib/auth-context'
 import { cn } from '@/lib/utils'
 
-type Tab = 'validaciones' | 'jugadores' | 'equipos' | 'contratos' | 'torneos' | 'media' | 'casters' | 'ajustes'
+type Tab = 'validaciones' | 'jugadores' | 'equipos' | 'torneos' | 'media' | 'casters' | 'ajustes'
 
 export default function AdministracionPage() {
   const { user, isLoading } = useAuth()
@@ -124,19 +123,6 @@ export default function AdministracionPage() {
               </button>
 
               <button
-                onClick={() => setActiveTab('contratos')}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-600 uppercase tracking-wider transition-colors whitespace-nowrap",
-                  activeTab === 'contratos'
-                    ? "bg-primary text-white"
-                    : "text-muted-foreground hover:bg-white/5 hover:text-white"
-                )}
-              >
-                <ScrollText className="h-5 w-5" />
-                Contratos
-              </button>
-
-              <button
                 onClick={() => setActiveTab('media')}
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-600 uppercase tracking-wider transition-colors whitespace-nowrap",
@@ -182,7 +168,6 @@ export default function AdministracionPage() {
             {activeTab === 'jugadores' && <AdminPlayers />}
             {activeTab === 'equipos' && <AdminTeams />}
             {activeTab === 'torneos' && <AdminTournaments />}
-            {activeTab === 'contratos' && <AdminContracts />}
             {activeTab === 'media' && <AdminMedia />}
             {activeTab === 'casters' && <AdminCasters />}
             {activeTab === 'ajustes' && <AdminSettings />}

@@ -10,6 +10,7 @@ import { SiteFooter } from '@/components/sections/site-footer'
 import { Reveal } from '@/components/anim'
 import { Calendar, Users, Trophy, ArrowUpRight, Gamepad2 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
+import { getTournamentSlug } from '@/lib/utils'
 import Link from 'next/link'
 
 export default function TorneosPage() {
@@ -36,7 +37,7 @@ export default function TorneosPage() {
   const finished = tournaments.filter(t => t.status === 'finished')
 
   const renderTournamentCard = (t: any) => (
-    <Link href={`/torneos/${t.id}`} key={t.id} className="group relative rounded-xl border border-border bg-surface p-6 sm:p-8 transition-colors hover:border-primary/50 block">
+    <Link href={`/torneos/${getTournamentSlug(t)}`} key={t.id} className="group relative rounded-xl border border-border bg-surface p-6 sm:p-8 transition-colors hover:border-primary/50 block">
       <div className="flex flex-col sm:flex-row gap-6">
         <div className="shrink-0 flex justify-center sm:justify-start">
           <img 

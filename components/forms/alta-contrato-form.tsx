@@ -31,18 +31,46 @@ export function AltaContratoForm() {
 
   useEffect(() => {
     async function init() {
-      if (!user) return
-
-      // Obtener equipos activos y aprobados (y pendientes para que puedan ver todos)
-      const { data: teamsData } = await supabase.from('teams').select('id, name, status').in('status', ['active', 'approved', 'pending'])
-      if (teamsData) {
-        setTeams(teamsData)
+      if (!user) {
+        setBlockMessage('Debes iniciar sesión para poder registrar un contrato.')
+        setFormStatus('blocked')
+        return
       }
 
-      // Validar limites de contratos
-      const { data: profile } = await supabase.from('profiles').select('gender').eq('id', user.id).single()
+      // Validar si el usuario es jugador profesional aprobado
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('gender, is_player, player_status')
+        .eq('id', user.id)
+        .single()
+
+      const isApproved = Boolean(profile?.is_player && (profile?.player_status === 'active' || profile?.player_status === 'approved'))
+      if (!isApproved) {
+        if (!profile?.is_player) {
+          setBlockMessage('Debes estar registrado y aprobado como Jugador Profesional para poder registrar contratos con equipos.')
+        } else if (profile?.player_status === 'pending') {
+          setBlockMessage('Tu registro como Jugador Profesional se encuentra actualmente en revisión por los administradores. Podrás solicitar contratos tan pronto como sea aprobado.')
+        } else {
+          setBlockMessage('Tu perfil de Jugador Profesional no se encuentra activo.')
+        }
+        setFormStatus('blocked')
+        return
+      }
+
       if (profile && profile.gender) {
         setPlayerGender(profile.gender)
+      }
+
+      // Obtener equipos activos y aprobados (excluyendo los que el usuario lidera)
+      const { data: teamsData } = await supabase
+        .from('teams')
+        .select('id, name, status, manager_id')
+        .in('status', ['active', 'approved', 'pending'])
+
+      if (teamsData) {
+        // Un líder de equipo no puede solicitar contrato a su propio equipo
+        const availableTeams = teamsData.filter(t => t.manager_id !== user.id)
+        setTeams(availableTeams)
       }
 
       // Obtener contratos activos o pendientes
@@ -89,11 +117,19 @@ export function AltaContratoForm() {
 
     const teamId = formData.get('item_meta[879]') as string
     
+    // Validar que no sea el líder del equipo
+    const selectedTeam = teams.find(t => t.id === teamId)
+    if (selectedTeam && selectedTeam.manager_id === user?.id) {
+      setFormStatus('idle')
+      alert('No puedes solicitar un contrato hacia tu propio equipo siendo el líder.')
+      return
+    }
+
     // Add the specific lane role if they selected player
     const rolesToSave = [...selectedRoles]
     const linea = formData.get('item_meta_linea')
     if (selectedRoles.includes('JUGADOR(A)') && linea) {
-      rolesToSave.push(`ROL_JUEGO: ${linea}`)
+      rolesToSave.push(`Línea: ${linea}`)
     }
 
     const payload = {

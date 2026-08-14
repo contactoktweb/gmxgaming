@@ -1,11 +1,68 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { User, Mail, Gamepad2, Shield, Eye, X, Phone, Calendar, Filter, Ban, CheckCircle2, Edit, Download, Save, ZoomIn, Star } from 'lucide-react'
+import { User, Mail, Gamepad2, Shield, Eye, X, Phone, Calendar, Filter, Ban, CheckCircle2, Edit, Download, Save, ZoomIn, Star, ChevronDown } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { GmxButton } from '@/components/gmx-button'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+
+const FIELD_LABELS: Record<string, string> = {
+  name: 'Nombre Completo',
+  nickname: 'Nickname / Apodo',
+  game_nickname: 'Nombre en Juego (IGN)',
+  discord_handle: 'Usuario de Discord',
+  avatar_url: 'Foto de Perfil',
+  closest_airport: 'País / Aeropuerto',
+  country: 'País de Residencia',
+  bio: 'Biografía / Descripción',
+  description: 'Descripción',
+  passport_number: 'Nº Pasaporte / Documento',
+  id_photo_url: 'Documento de Identidad (DNI/INE)',
+  passport_photo_url: 'Foto del Pasaporte',
+  jersey_url: 'Diseño de Camiseta (Jersey)',
+  game: 'Juego Principal',
+  game_id: 'ID de Cuenta / Juego',
+  server: 'Servidor / Región',
+  country_account: 'País de la Cuenta',
+  social_ig: 'Instagram',
+  social_tiktok: 'TikTok',
+  social_yt: 'YouTube',
+  social_twitch: 'Twitch',
+  social_kick: 'Kick',
+  social_x: 'X (Twitter)',
+  social_fb: 'Facebook',
+  status: 'Estado del Registro',
+  player_status: 'Estado como Jugador'
+}
+
+const EXCLUDED_FIELDS = new Set([
+  'id',
+  'user_id',
+  'manager_id',
+  'profile_id',
+  'created_at',
+  'updated_at',
+  'cover_url',
+  'role',
+  'is_player',
+  'is_featured',
+  'edit_requested',
+  'can_edit_profile',
+  'contracts'
+])
+
+function getFieldLabel(key: string): string {
+  const lower = key.toLowerCase()
+  if (FIELD_LABELS[lower]) return FIELD_LABELS[lower]
+  if (FIELD_LABELS[key]) return FIELD_LABELS[key]
+  return key
+    .replace(/_/g, ' ')
+    .replace(/([A-Z])/g, ' $1')
+    .toLowerCase()
+    .replace(/\b\w/g, char => char.toUpperCase())
+    .trim()
+}
 
 interface Player {
   id: string
@@ -262,38 +319,47 @@ export function AdminPlayers() {
               className="w-full sm:w-64 rounded-md border border-border bg-background px-4 py-2 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
             
-            <div className="flex gap-3 w-full sm:w-auto">
-              <select 
-                value={filterStatus} 
-                onChange={e => setFilterStatus(e.target.value)}
-                className="flex-1 sm:flex-none rounded-md border border-border bg-background px-3 py-2 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              >
-                <option value="all">Todos los Estados</option>
-                <option value="active">Activos</option>
-                <option value="inactive">Inactivos</option>
-                <option value="banned">Baneados</option>
-              </select>
+            <div className="flex flex-wrap sm:flex-nowrap gap-3 w-full sm:w-auto">
+              <div className="relative flex-1 sm:flex-none">
+                <select 
+                  value={filterStatus} 
+                  onChange={e => setFilterStatus(e.target.value)}
+                  className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-2.5 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer font-500"
+                >
+                  <option value="all">Todos los Estados</option>
+                  <option value="active">Activos</option>
+                  <option value="inactive">Inactivos</option>
+                  <option value="banned">Baneados</option>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              </div>
 
-              <select 
-                value={filterTeam} 
-                onChange={e => setFilterTeam(e.target.value)}
-                className="flex-1 sm:flex-none rounded-md border border-border bg-background px-3 py-2 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              >
-                <option value="all">Todos los Equipos</option>
-                {uniqueTeams.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+              <div className="relative flex-1 sm:flex-none">
+                <select 
+                  value={filterTeam} 
+                  onChange={e => setFilterTeam(e.target.value)}
+                  className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-2.5 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer font-500"
+                >
+                  <option value="all">Todos los Equipos</option>
+                  {uniqueTeams.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              </div>
 
+            <div className="relative flex-1 sm:flex-none sm:w-44 min-w-0">
               <select 
                 value={filterCountry} 
                 onChange={e => setFilterCountry(e.target.value)}
-                className="flex-1 sm:flex-none rounded-md border border-border bg-background px-3 py-2 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-2.5 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer font-500 truncate"
               >
                 <option value="all">Todos los Países</option>
                 {uniqueCountries.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             </div>
           </div>
         </div>
+      </div>
         
         {loading ? (
           <div className="flex justify-center items-center py-12">
@@ -428,73 +494,76 @@ export function AdminPlayers() {
             {/* Body con Scroll */}
             <div data-lenis-prevent data-modal-scrollbody className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6">
               <div className="grid sm:grid-cols-2 gap-6">
-                {Object.entries(editingDetails).map(([key, value]) => {
-                  if (key === 'contracts') return null // Do not show raw contracts object
-                  const isImage = typeof value === 'string' && (value.startsWith('http') || value.startsWith('data:image')) && !value.endsWith('.pdf');
-                  const isBoolean = typeof value === 'boolean';
-                  
-                  return (
-                    <div key={key} className={cn("space-y-2", isImage ? "col-span-full sm:col-span-1" : "")}>
-                      <label className="text-xs font-600 uppercase tracking-widest text-primary">
-                        {key.replace(/([A-Z])/g, ' $1').trim().replace(/_/g, ' ')}
-                      </label>
+                {Object.entries(editingDetails)
+                  .filter(([key, value]) => {
+                    const lower = key.toLowerCase()
+                    if (EXCLUDED_FIELDS.has(lower)) return false
+                    if (value === null || value === undefined || value === '') return false
+                    return true
+                  })
+                  .map(([key, value]) => {
+                    const isImage = typeof value === 'string' && (value.startsWith('http') || value.startsWith('data:image')) && !value.endsWith('.pdf');
+                    const isBoolean = typeof value === 'boolean';
+                    const labelTitle = getFieldLabel(key);
+                    
+                    return (
+                      <div key={key} className={cn("space-y-2", isImage ? "col-span-full sm:col-span-1" : "")}>
+                        <label className="text-xs font-700 uppercase tracking-wider text-primary">
+                          {labelTitle}
+                        </label>
 
-                      {isImage ? (
-                        <div className="rounded-lg border border-border bg-background p-2">
-                          <button 
-                            onClick={() => setLightboxImage({ src: value as string, label: key })}
-                            className="block w-full aspect-video relative rounded-md overflow-hidden bg-white/5 group border border-border/50 cursor-zoom-in"
-                          >
-                            <img src={value as string} alt={key} className="absolute inset-0 w-full h-full object-contain" />
-                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-sm">
-                              <ZoomIn className="w-6 h-6 text-white" />
-                              <span className="text-xs font-500 text-white uppercase">Ver</span>
+                        {isImage ? (
+                          <div className="rounded-xl border border-border bg-background p-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                            <div className="relative w-20 h-20 shrink-0 rounded-xl overflow-hidden border-2 border-border bg-surface shadow-md">
+                              <img src={value as string} alt={labelTitle} className="w-full h-full object-cover" />
                             </div>
-                          </button>
-                          <input 
-                            type="text" 
-                            value={value as string} 
+                            <button 
+                              type="button"
+                              onClick={() => setLightboxImage({ src: value as string, label: labelTitle })}
+                              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface border border-border text-white hover:border-primary hover:text-primary text-xs font-600 uppercase tracking-wider transition-colors shadow-sm"
+                            >
+                              <ZoomIn className="w-4 h-4 text-primary" />
+                              Agrandar Imagen
+                            </button>
+                          </div>
+                        ) : isBoolean ? (
+                          <div className="relative">
+                            <select
+                              className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-2.5 pr-10 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer"
+                              value={value ? 'true' : 'false'}
+                              onChange={(e) => setEditingDetails({ ...editingDetails, [key]: e.target.value === 'true' })}
+                            >
+                              <option value="true">Sí</option>
+                              <option value="false">No</option>
+                            </select>
+                            <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          </div>
+                        ) : key === 'player_status' || key === 'status' ? (
+                          <div className="relative">
+                            <select
+                              className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-2.5 pr-10 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer font-500"
+                              value={value as string || 'pending'}
+                              onChange={(e) => setEditingDetails({ ...editingDetails, [key]: e.target.value })}
+                            >
+                              <option value="active">Activo</option>
+                              <option value="inactive">Inactivo</option>
+                              <option value="banned">Baneado</option>
+                              <option value="pending">Pendiente</option>
+                              <option value="rejected">Rechazado</option>
+                            </select>
+                            <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          </div>
+                        ) : (
+                          <input
+                            type="text"
+                            value={value as string || ''}
                             onChange={(e) => setEditingDetails({ ...editingDetails, [key]: e.target.value })}
-                            className="w-full mt-2 text-xs rounded border border-border bg-surface px-2 py-1 text-white focus:border-primary focus:outline-none"
-                            placeholder="URL de imagen..."
+                            className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                           />
-                        </div>
-                      ) : isBoolean ? (
-                        <select
-                          className="w-full rounded-md border border-border bg-background px-4 py-2 text-white focus:border-primary focus:outline-none"
-                          value={value ? 'true' : 'false'}
-                          onChange={(e) => setEditingDetails({ ...editingDetails, [key]: e.target.value === 'true' })}
-                        >
-                          <option value="true">Sí</option>
-                          <option value="false">No</option>
-                        </select>
-                      ) : key === 'player_status' ? (
-                        <select
-                          className="w-full rounded-md border border-border bg-background px-4 py-2 text-white focus:border-primary focus:outline-none"
-                          value={value as string || 'pending'}
-                          onChange={(e) => setEditingDetails({ ...editingDetails, [key]: e.target.value })}
-                        >
-                          <option value="active">Activo</option>
-                          <option value="inactive">Inactivo</option>
-                          <option value="banned">Baneado</option>
-                          <option value="pending">Pendiente</option>
-                          <option value="rejected">Rechazado</option>
-                        </select>
-                      ) : (
-                        <input
-                          type="text"
-                          disabled={key === 'id' || key === 'created_at'}
-                          value={value as string || ''}
-                          onChange={(e) => setEditingDetails({ ...editingDetails, [key]: e.target.value })}
-                          className={cn(
-                            "w-full rounded-md border border-border bg-background px-4 py-2 text-white focus:border-primary focus:outline-none",
-                            (key === 'id' || key === 'created_at') && "bg-surface text-white/70 opacity-70 cursor-not-allowed"
-                          )}
-                        />
-                      )}
-                    </div>
-                  )
-                })}
+                        )}
+                      </div>
+                    )
+                  })}
               </div>
             </div>
 
@@ -527,38 +596,44 @@ export function AdminPlayers() {
 
             {actionModal.type === 'status' ? (
               <div className="space-y-4 mb-8">
-                <label className="text-sm font-500 text-white">Nuevo Estado</label>
-                <select
-                  value={newStatus}
-                  onChange={(e) => setNewStatus(e.target.value as any)}
-                  className="w-full rounded-md border border-border bg-background px-4 py-3 text-white focus:border-primary focus:outline-none"
-                >
-                  <option value="active">Activo</option>
-                  <option value="inactive">Inactivo</option>
-                  <option value="banned">Baneado</option>
-                </select>
+                <label className="text-xs font-700 uppercase tracking-wider text-primary block">Nuevo Estado</label>
+                <div className="relative">
+                  <select
+                    value={newStatus}
+                    onChange={(e) => setNewStatus(e.target.value as any)}
+                    className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-3 pr-10 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer font-500"
+                  >
+                    <option value="active">Activo</option>
+                    <option value="inactive">Inactivo</option>
+                    <option value="banned">Baneado</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                </div>
                 {newStatus === 'banned' && (
                   <p className="text-xs text-red-400">El jugador no podrá iniciar sesión si es baneado.</p>
                 )}
               </div>
             ) : (
               <div className="space-y-4 mb-8">
-                <label className="text-sm font-500 text-white">Seleccionar Equipo</label>
-                <select
-                  value={newTeam}
-                  onChange={(e) => setNewTeam(e.target.value)}
-                  className="w-full rounded-md border border-border bg-background px-4 py-3 text-white focus:border-primary focus:outline-none"
-                >
-                  <option value="">Ninguno / Sin Equipo</option>
-                  {availableTeams.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
+                <label className="text-xs font-700 uppercase tracking-wider text-primary block">Seleccionar Equipo</label>
+                <div className="relative">
+                  <select
+                    value={newTeam}
+                    onChange={(e) => setNewTeam(e.target.value)}
+                    className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-3 pr-10 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer font-500"
+                  >
+                    <option value="">Ninguno / Sin Equipo</option>
+                    {availableTeams.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                </div>
               </div>
             )}
 
             <div className="flex gap-3">
               <button 
                 onClick={() => setActionModal(null)}
-                className="flex-1 rounded-md border border-border bg-transparent px-4 py-3 font-display text-[13px] font-600 uppercase tracking-widest text-muted-foreground transition-colors hover:text-white"
+                className="flex-1 rounded-lg border border-border bg-transparent px-4 py-3 font-display text-xs font-600 uppercase tracking-widest text-muted-foreground transition-colors hover:text-white hover:border-primary/50"
               >
                 CANCELAR
               </button>

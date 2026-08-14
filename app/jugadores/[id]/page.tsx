@@ -1,33 +1,58 @@
 import { createClient } from '@/utils/supabase/server'
 import { notFound } from 'next/navigation'
+import Link from 'next/link'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/sections/site-footer'
 import { Trophy, Shield, Gamepad2, Users, Medal, ExternalLink, Camera, Tv } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, formatRoleTitle, getPlayerSlug, getTeamSlug, slugify } from '@/lib/utils'
 import { cookies } from 'next/headers'
 
 export const revalidate = 60
 
 export default async function PlayerDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
+  const { id: paramSlug } = await params
   const cookieStore = await cookies()
   const supabase = createClient(cookieStore)
 
-  // Fetch Player
-  const { data: player } = await supabase
-    .from('profiles')
-    .select(`
-      *,
-      player_game_info (
-        game,
-        game_id,
-        server,
-        game_nickname,
-        country_account
-      )
-    `)
-    .eq('id', id)
-    .single()
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(paramSlug)
+
+  let player = null
+  if (isUuid) {
+    const { data } = await supabase
+      .from('profiles')
+      .select(`
+        *,
+        player_game_info (
+          game,
+          game_id,
+          server,
+          game_nickname,
+          country_account
+        )
+      `)
+      .eq('id', paramSlug)
+      .single()
+    player = data
+  } else {
+    // Buscar jugador por slug de nickname o nombre
+    const { data: allPlayers } = await supabase
+      .from('profiles')
+      .select(`
+        *,
+        player_game_info (
+          game,
+          game_id,
+          server,
+          game_nickname,
+          country_account
+        )
+      `)
+      .eq('is_player', true)
+
+    if (allPlayers) {
+      player = allPlayers.find(p => getPlayerSlug(p) === paramSlug || slugify(p.nickname) === paramSlug || slugify(p.name) === paramSlug || p.id === paramSlug)
+    }
+  }
 
   if (!player || !player.is_player) {
     notFound()
@@ -163,9 +188,9 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
                     {contracts.map((contract: any, idx: number) => {
                       const team = contract.teams
                       return (
-                        <a 
+                        <Link 
                           key={idx}
-                          href={`/equipos/${team.id}`}
+                          href={`/equipos/${getTeamSlug(team)}`}
                           className="group flex items-center justify-between rounded-xl border border-border bg-surface p-5 transition-colors hover:border-primary/50 hover:bg-white/5"
                         >
                           <div className="flex items-center gap-4">
@@ -180,9 +205,11 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
                               <span className="font-display text-xl font-700 uppercase tracking-tight text-white group-hover:text-primary transition-colors">
                                 {team.name}
                               </span>
-                              <div className="mt-1 flex gap-2 text-xs font-500 uppercase tracking-widest text-muted-foreground">
+                              <div className="mt-1 flex flex-wrap gap-2 text-xs font-500 text-muted-foreground">
                                 {contract.roles && contract.roles.map((r: string, i: number) => (
-                                  <span key={i}>{r}</span>
+                                  <span key={i} className="rounded bg-white/5 px-2 py-0.5 text-xs font-600 text-white/80 border border-white/10">
+                                    {formatRoleTitle(r)}
+                                  </span>
                                 ))}
                               </div>
                             </div>
@@ -191,7 +218,7 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
                           <div className="rounded bg-emerald-500/10 px-3 py-1 text-xs font-600 uppercase tracking-widest text-emerald-500">
                             Activo
                           </div>
-                        </a>
+                        </Link>
                       )
                     })}
                   </div>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ShieldCheck, Users, MapPin, ExternalLink, Eye, Trash2, X, AlertCircle, Check, ImageIcon, FileText, Download, Save, Upload, ZoomIn } from 'lucide-react'
+import { ShieldCheck, Users, MapPin, ExternalLink, Eye, Trash2, X, AlertCircle, Check, ImageIcon, FileText, Download, Save, Upload, ZoomIn, ChevronDown } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { cn } from '@/lib/utils'
 import { GmxButton } from '@/components/gmx-button'
@@ -166,26 +166,32 @@ export function AdminTeams() {
               className="w-full sm:w-64 rounded-md border border-border bg-background px-4 py-2 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
             
-            <div className="flex gap-3 w-full sm:w-auto">
-              <select 
-                value={filterStatus} 
-                onChange={e => setFilterStatus(e.target.value)}
-                className="flex-1 sm:flex-none rounded-md border border-border bg-background px-3 py-2 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              >
-                <option value="all">Todos los Estados</option>
-                <option value="active">Activos</option>
-                <option value="inactive">Inactivos</option>
-                <option value="banned">Baneados</option>
-              </select>
+            <div className="flex flex-wrap sm:flex-nowrap gap-3 w-full sm:w-auto">
+              <div className="relative flex-1 sm:flex-none">
+                <select 
+                  value={filterStatus} 
+                  onChange={e => setFilterStatus(e.target.value)}
+                  className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-2.5 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer font-500"
+                >
+                  <option value="all">Todos los Estados</option>
+                  <option value="active">Activos</option>
+                  <option value="inactive">Inactivos</option>
+                  <option value="banned">Baneados</option>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              </div>
 
-              <select 
-                value={filterRegion} 
-                onChange={e => setFilterRegion(e.target.value)}
-                className="flex-1 sm:flex-none rounded-md border border-border bg-background px-3 py-2 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              >
-                <option value="all">Todos los Países</option>
-                {uniqueRegions.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
+              <div className="relative flex-1 sm:flex-none">
+                <select 
+                  value={filterRegion} 
+                  onChange={e => setFilterRegion(e.target.value)}
+                  className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-2.5 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer font-500"
+                >
+                  <option value="all">Todos los Países</option>
+                  {uniqueRegions.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              </div>
             </div>
           </div>
         </div>
@@ -346,29 +352,31 @@ export function AdminTeams() {
                       <p className="text-sm font-500 text-white truncate">{selectedTeam.region}</p>
                     </div>
                     <div className="rounded-lg border border-border bg-background p-4 flex flex-col justify-center">
-                      <p className="text-xs text-muted-foreground uppercase tracking-widest font-600 mb-1">Estatus</p>
-                      <select 
-                        className={cn(
-                          "w-full rounded border border-border bg-surface px-2 py-1 text-sm font-500 uppercase focus:border-primary focus:outline-none cursor-pointer mt-1",
-                          selectedTeam.status === 'active' ? 'text-emerald-500' : selectedTeam.status === 'banned' ? 'text-red-500' : 'text-yellow-500'
-                        )}
-                        value={selectedTeam.status}
-                        onChange={async (e) => {
-                          const newStatus = e.target.value;
-                          const { error } = await supabase.from('teams').update({ status: newStatus }).eq('id', selectedTeam.id);
-                          if (!error) {
-                            setTeams(prev => prev.map(t => t.id === selectedTeam.id ? { ...t, status: newStatus } : t));
-                            setSelectedTeam({ ...selectedTeam, status: newStatus });
-                            toast.success('Estado actualizado correctamente');
-                          } else {
-                            toast.error('Error al actualizar el estado');
-                          }
-                        }}
-                      >
-                        <option value="active" className="text-emerald-500">Activo</option>
-                        <option value="inactive" className="text-yellow-500">Inactivo</option>
-                        <option value="banned" className="text-red-500">Baneado</option>
-                      </select>
+                      <div className="relative mt-1">
+                        <select 
+                          className={cn(
+                            "w-full appearance-none rounded-lg border border-border bg-surface px-3 py-2 pr-8 text-xs font-600 uppercase focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer transition-colors",
+                            selectedTeam.status === 'active' ? 'text-emerald-400 border-emerald-500/30' : selectedTeam.status === 'banned' ? 'text-red-400 border-red-500/30' : 'text-amber-400 border-amber-500/30'
+                          )}
+                          value={selectedTeam.status}
+                          onChange={async (e) => {
+                            const newStatus = e.target.value;
+                            const { error } = await supabase.from('teams').update({ status: newStatus }).eq('id', selectedTeam.id);
+                            if (!error) {
+                              setTeams(prev => prev.map(t => t.id === selectedTeam.id ? { ...t, status: newStatus } : t));
+                              setSelectedTeam({ ...selectedTeam, status: newStatus });
+                              toast.success('Estado actualizado correctamente');
+                            } else {
+                              toast.error('Error al actualizar el estado');
+                            }
+                          }}
+                        >
+                          <option value="active" className="text-emerald-500">Activo</option>
+                          <option value="inactive" className="text-yellow-500">Inactivo</option>
+                          <option value="banned" className="text-red-500">Baneado</option>
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                      </div>
                     </div>
                     <div className="rounded-lg border border-border bg-background p-4">
                       <p className="text-xs text-muted-foreground uppercase tracking-widest font-600 mb-1">Fundación</p>

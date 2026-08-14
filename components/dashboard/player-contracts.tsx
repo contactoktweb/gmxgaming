@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { ScrollText, Calendar, Clock, AlertCircle } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
-import { cn } from '@/lib/utils'
+import { cn, formatRoleTitle } from '@/lib/utils'
 
 export function PlayerContracts() {
   const { user } = useAuth()
@@ -55,10 +55,10 @@ export function PlayerContracts() {
         ) : (
           <div className="space-y-4">
             {contracts.map((contract) => {
-              const isActive = contract.status === 'activo'
-              const isPending = contract.status === 'pendiente'
-              const isCancelled = contract.status === 'cancelado'
-              const isCompleted = contract.status === 'completado'
+              const isActive = contract.status === 'activo' || contract.status === 'active'
+              const isPending = contract.status === 'pendiente' || contract.status === 'pending_manager'
+              const isCancelled = contract.status === 'cancelado' || contract.status === 'cancelled'
+              const isCompleted = contract.status === 'completado' || contract.status === 'completed'
 
               return (
                 <div 
@@ -71,7 +71,7 @@ export function PlayerContracts() {
                   <div className="shrink-0 flex sm:flex-col items-center sm:items-start gap-4">
                     <img 
                       src={contract.teams?.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
-                      alt={contract.teams?.name}
+                      alt={contract.teams?.name} 
                       className={cn("w-16 h-16 rounded-lg object-cover bg-surface", !isActive && !isPending && "grayscale opacity-70")}
                     />
                     <div className={cn(
@@ -81,14 +81,30 @@ export function PlayerContracts() {
                       isCancelled ? "bg-red-500/10 text-red-500 border-red-500/20" :
                       "bg-blue-500/10 text-blue-500 border-blue-500/20"
                     )}>
-                      {contract.status}
+                      {isActive ? 'Activo' : isPending ? 'Pendiente' : isCancelled ? 'Cancelado' : 'Completado'}
                     </div>
                   </div>
 
                   <div className="flex-1 space-y-4">
                     <div>
                       <h4 className="font-display text-xl font-700 text-white uppercase">{contract.teams?.name}</h4>
-                      <p className="text-sm font-500 text-primary uppercase tracking-widest mt-1">Rol: {contract.role}</p>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                        <span className="text-xs text-muted-foreground font-500">Roles asignados:</span>
+                        {Array.isArray(contract.roles) ? (
+                          contract.roles.map((r: string, idx: number) => (
+                            <span 
+                              key={idx} 
+                              className="inline-flex items-center px-2.5 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 text-xs font-600"
+                            >
+                              {formatRoleTitle(r)}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 text-xs font-600">
+                            {formatRoleTitle(contract.roles || contract.role || 'Jugador')}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="grid sm:grid-cols-2 gap-4 pt-4 border-t border-border/50">

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { SplitText } from '@/components/split-text'
 import { Reveal } from '@/components/anim'
 import { createClient } from '@/utils/supabase/client'
+import { getTeamSlug } from '@/lib/utils'
 import { ChevronLeft, ChevronRight, MapPin } from 'lucide-react'
 import Link from 'next/link'
 
@@ -85,7 +86,7 @@ export function Teams() {
           {teams.map((t) => (
             <Link
               key={t.id}
-              href={`/equipos/${t.id}`}
+              href={`/equipos/${getTeamSlug(t)}`}
               className="snap-start group flex h-48 w-[280px] sm:w-[320px] shrink-0 flex-col items-center justify-center gap-4 border border-border bg-surface transition-all duration-300 hover:border-primary hover:bg-elevated clip-corner"
               data-cursor
             >

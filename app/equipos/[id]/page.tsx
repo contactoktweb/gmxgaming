@@ -12,7 +12,7 @@ import { SiteFooter } from '@/components/sections/site-footer'
 import { Reveal } from '@/components/anim'
 import { Users, Trophy, ShieldAlert, MapPin, CheckCircle2, User, Swords } from 'lucide-react'
 import Link from 'next/link'
-import { cn } from '@/lib/utils'
+import { cn, formatRoleTitle, formatRolesList, getPlayerSlug, slugify } from '@/lib/utils'
 
 export default function TeamDetailsPage() {
   const params = useParams()
@@ -29,23 +29,34 @@ export default function TeamDetailsPage() {
       if (!params.id) return
       const supabase = createClient()
       
-      const teamId = params.id
-      
-      // Fetch Team details
-      const { data: teamData } = await supabase.from('teams').select('*').eq('id', teamId).single()
+      const paramSlug = Array.isArray(params.id) ? params.id[0] : params.id
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(paramSlug)
+
+      let teamData = null
+      if (isUuid) {
+        const { data } = await supabase.from('teams').select('*').eq('id', paramSlug).single()
+        teamData = data
+      } else {
+        const { data: allTeams } = await supabase.from('teams').select('*')
+        if (allTeams) {
+          teamData = allTeams.find(t => slugify(t.name) === paramSlug || slugify(t.tag) === paramSlug || t.id === paramSlug)
+        }
+      }
       
       if (teamData) {
         setTeam(teamData)
+        const teamId = teamData.id
         
         // Fetch Roster (Active contracts)
         const { data: rosterData } = await supabase
           .from('contracts')
           .select(`
-            role, 
-            profiles!contracts_player_id_fkey (id, name, avatar, country, discord_handle)
+            roles, 
+            status,
+            profiles!contracts_player_id_fkey (id, name, nickname, avatar_url, country:closest_airport, discord_handle)
           `)
           .eq('team_id', teamId)
-          .eq('status', 'activo')
+          .in('status', ['active', 'activo'])
         
         if (rosterData) {
           setRoster(rosterData)
@@ -182,25 +193,36 @@ export default function TeamDetailsPage() {
                     {roster.map((contract, i) => {
                       const player = contract.profiles
                       if (!player) return null
+                      const playerSlug = getPlayerSlug(player)
+                      const playerAvatar = player.avatar_url || player.avatar || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
+
                       return (
-                        <div key={i} className="group relative flex items-center gap-4 p-4 rounded-xl bg-background border border-border hover:border-primary/50 transition-all overflow-hidden">
+                        <Link 
+                          key={i} 
+                          href={`/jugadores/${playerSlug}`}
+                          className="group relative flex items-center gap-4 p-4 rounded-xl bg-background border border-border hover:border-primary/50 transition-all overflow-hidden block"
+                        >
                           <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
                             <span className="font-display text-6xl font-700 text-primary">{i+1}</span>
                           </div>
                           <img 
-                            src={player.avatar || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
-                            alt={player.name}
+                            src={playerAvatar} 
+                            alt={player.nickname || player.name}
                             className="w-16 h-16 rounded-lg object-cover bg-surface border border-border shrink-0 z-10"
                           />
-                          <div className="z-10">
-                            <h4 className="font-display text-lg font-700 text-white leading-tight">{player.name}</h4>
+                          <div className="z-10 min-w-0">
+                            <h4 className="font-display text-lg font-700 text-white group-hover:text-primary transition-colors truncate">
+                              {player.nickname ? `${player.name} (${player.nickname})` : player.name}
+                            </h4>
                             <div className="flex items-center gap-2 mt-1">
-                              <span className="text-[10px] font-600 text-primary uppercase tracking-widest">{contract.role}</span>
+                              <span className="text-[10px] font-600 text-primary uppercase tracking-widest">
+                                {formatRolesList(contract.roles)}
+                              </span>
                               <span className="w-1 h-1 rounded-full bg-border" />
-                              <span className="text-[10px] font-600 text-muted-foreground uppercase">{player.country || 'N/A'}</span>
+                              <span className="text-[10px] font-600 text-muted-foreground uppercase">{player.country || 'eSports'}</span>
                             </div>
                           </div>
-                        </div>
+                        </Link>
                       )
                     })}
                   </div>
