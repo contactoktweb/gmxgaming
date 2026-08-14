@@ -39,13 +39,20 @@ export async function middleware(request: NextRequest) {
 
   // Si no hay usuario y trata de entrar a rutas restringidas
   if (isRestricted && !user) {
-    // Redirigir al login
-    return NextResponse.redirect(new URL('/login', request.url))
+    const redirectRes = NextResponse.redirect(new URL('/login', request.url))
+    supabaseResponse.cookies.getAll().forEach(({ name, value, ...options }) => {
+      redirectRes.cookies.set(name, value, options)
+    })
+    return redirectRes
   }
 
   // Si ya hay usuario y trata de ir al login, enviarlo a su cuenta
   if (isAuthRoute && user) {
-    return NextResponse.redirect(new URL('/micuenta', request.url))
+    const redirectRes = NextResponse.redirect(new URL('/micuenta', request.url))
+    supabaseResponse.cookies.getAll().forEach(({ name, value, ...options }) => {
+      redirectRes.cookies.set(name, value, options)
+    })
+    return redirectRes
   }
 
   return supabaseResponse
@@ -58,8 +65,9 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
+     * - auth (OAuth/email callbacks — must pass through without middleware interference)
      * - images, logos, etc (static files)
      */
-    '/((?!_next/static|_next/image|favicon.ico|logos|images|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|auth|logos|images|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

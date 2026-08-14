@@ -1,34 +1,57 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Eye, EyeOff, Mail } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { createClient } from '@/utils/supabase/client'
 
-export function RegisterForm() {
+function RegisterFormContent() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [error, setError] = useState('')
-  const [successMsg, setSuccessMsg] = useState('')
+  const [emailNotConfirmed, setEmailNotConfirmed] = useState(false)
   const { register } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
 
+  useEffect(() => {
+    const errorParam = searchParams.get('error')
+    if (errorParam) {
+      if (errorParam === 'auth_callback_failed') {
+        setError('No se pudo completar el registro con Google. Por favor intenta de nuevo.')
+      } else {
+        setError(decodeURIComponent(errorParam))
+      }
+    }
+  }, [searchParams])
+
   const handleGoogleLogin = async () => {
+    setError('')
+    setIsGoogleLoading(true)
     try {
+      const redirectUrl = `${window.location.origin}/auth/callback?next=/micuenta`
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/micuenta`,
+          redirectTo: redirectUrl,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
         },
       })
       if (error) throw error
     } catch (err: any) {
       setError(err.message || 'Error al iniciar sesión con Google')
+      setIsGoogleLoading(false)
     }
   }
 
@@ -36,7 +59,7 @@ export function RegisterForm() {
     e.preventDefault()
     setIsLoading(true)
     setError('')
-    setSuccessMsg('')
+    setEmailNotConfirmed(false)
 
     if (password !== confirmPassword) {
       setError('Las contraseñas no coinciden')
@@ -44,15 +67,19 @@ export function RegisterForm() {
       return
     }
 
-    const { success, error: registerError } = await register(email, password)
-    
-    if (success) {
-      setSuccessMsg('Cuenta creada exitosamente. Redirigiendo...')
-      setTimeout(() => {
+    const result = await register(email, password) as any
+
+    if (result.success) {
+      if (result.emailNotConfirmed) {
+        setEmailNotConfirmed(true)
+        setTimeout(() => {
+          router.push('/micuenta')
+        }, 2000)
+      } else {
         router.push('/micuenta')
-      }, 1500)
+      }
     } else {
-      setError(registerError || 'Error al crear la cuenta. Por favor intenta de nuevo.')
+      setError(result.error || 'Error al crear la cuenta. Por favor intenta de nuevo.')
       setIsLoading(false)
     }
   }
@@ -72,7 +99,6 @@ export function RegisterForm() {
       </div>
 
       <div className="space-y-6">
-
         <div className="space-y-2">
           <label htmlFor="email" className="text-sm font-500 text-white">
             Correo Electrónico <span className="text-primary">*</span>
@@ -91,30 +117,50 @@ export function RegisterForm() {
           <label htmlFor="password" className="text-sm font-500 text-white">
             Contraseña <span className="text-primary">*</span>
           </label>
-          <input
-            type="password"
-            id="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={6}
-            className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          />
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              id="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
+              className="w-full rounded-md border border-border bg-background px-4 py-3 pr-12 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white transition-colors"
+              aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+            >
+              {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+            </button>
+          </div>
         </div>
 
         <div className="space-y-2">
           <label htmlFor="confirmPassword" className="text-sm font-500 text-white">
             Confirmar Contraseña <span className="text-primary">*</span>
           </label>
-          <input
-            type="password"
-            id="confirmPassword"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            required
-            minLength={6}
-            className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          />
+          <div className="relative">
+            <input
+              type={showConfirm ? 'text' : 'password'}
+              id="confirmPassword"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              minLength={6}
+              className="w-full rounded-md border border-border bg-background px-4 py-3 pr-12 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirm(!showConfirm)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white transition-colors"
+              aria-label={showConfirm ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+            >
+              {showConfirm ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -124,16 +170,22 @@ export function RegisterForm() {
         </p>
       )}
 
-      {successMsg && (
-        <p className="text-sm text-green-500 font-500 text-center pt-2">
-          {successMsg}
-        </p>
+      {emailNotConfirmed && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
+          <Mail className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-600 text-amber-400">Verifica tu correo</p>
+            <p className="text-xs text-amber-400/80 mt-1">
+              Te enviamos un correo de verificación. Puedes continuar usando la plataforma, pero te recomendamos verificarlo pronto.
+            </p>
+          </div>
+        </div>
       )}
 
       <div className="pt-4 text-center space-y-4">
         <button
           type="submit"
-          disabled={isLoading}
+          disabled={isLoading || isGoogleLoading}
           className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden bg-primary px-8 py-4 font-display text-[15px] font-600 uppercase tracking-[0.18em] text-white transition-colors duration-300 clip-corner hover:bg-primary-dark disabled:opacity-70 disabled:cursor-not-allowed"
         >
           <span className="relative z-10 flex items-center gap-2">
@@ -149,38 +201,55 @@ export function RegisterForm() {
 
         <button
           type="button"
+          disabled={isGoogleLoading || isLoading}
           onClick={handleGoogleLogin}
-          className="group relative inline-flex w-full items-center justify-center gap-3 overflow-hidden bg-white px-8 py-4 font-display text-[14px] font-600 uppercase tracking-[0.15em] text-black transition-colors duration-300 clip-corner hover:bg-gray-100"
+          className="group relative inline-flex w-full items-center justify-center gap-3 overflow-hidden bg-white px-8 py-4 font-display text-[14px] font-600 uppercase tracking-[0.15em] text-black transition-colors duration-300 clip-corner hover:bg-gray-100 disabled:opacity-70 disabled:cursor-not-allowed"
         >
-          <svg className="w-5 h-5" viewBox="0 0 24 24">
-            <path
-              fill="currentColor"
-              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-            />
-            <path
-              fill="#34A853"
-              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-            />
-            <path
-              fill="#FBBC05"
-              d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-            />
-            <path
-              fill="#EA4335"
-              d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-            />
-          </svg>
+          {isGoogleLoading ? (
+            <Loader2 className="h-5 w-5 animate-spin text-black" />
+          ) : (
+            <svg className="w-5 h-5" viewBox="0 0 24 24">
+              <path
+                fill="currentColor"
+                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+              />
+              <path
+                fill="#EA4335"
+                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+              />
+            </svg>
+          )}
           <span className="relative z-10 flex items-center gap-2">
-            CONTINUAR CON GOOGLE
+            {isGoogleLoading ? 'CONECTANDO CON GOOGLE...' : 'CONTINUAR CON GOOGLE'}
           </span>
         </button>
       </div>
       
       <div className="text-center mt-4">
-        <a href="/login" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+        <Link href="/login" className="text-sm text-muted-foreground hover:text-primary transition-colors">
           ¿Ya tienes una cuenta? Inicia sesión aquí.
-        </a>
+        </Link>
       </div>
     </form>
+  )
+}
+
+export function RegisterForm() {
+  return (
+    <Suspense fallback={
+      <div className="mx-auto w-full max-w-md p-8 text-center text-white">
+        <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+      </div>
+    }>
+      <RegisterFormContent />
+    </Suspense>
   )
 }

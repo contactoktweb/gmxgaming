@@ -338,24 +338,30 @@ export function AdminValidations() {
                           <Eye className="h-4 w-4" />
                         </button>
                         
-                        {req.status === 'pending' && (
-                          <>
-                            <button
-                              onClick={() => setConfirmAction({ id: req.id, action: 'approved', name: req.target_name })}
-                              title="Aprobar"
-                              className="flex h-8 w-8 items-center justify-center rounded border border-emerald-500/20 bg-emerald-500/10 text-emerald-500 transition-colors hover:bg-emerald-500 hover:text-white"
-                            >
-                              <Check className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => setConfirmAction({ id: req.id, action: 'rejected', name: req.target_name })}
-                              title="Rechazar"
-                              className="flex h-8 w-8 items-center justify-center rounded border border-red-500/20 bg-red-500/10 text-red-500 transition-colors hover:bg-red-500 hover:text-white"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          </>
-                        )}
+                        <button
+                          onClick={() => setConfirmAction({ id: req.id, action: 'approved', name: req.target_name })}
+                          title="Aprobar / Activar"
+                          className={cn(
+                            "flex h-8 w-8 items-center justify-center rounded border transition-colors",
+                            (req.status === 'active' || req.status === 'approved')
+                              ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-400"
+                              : "border-emerald-500/20 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white"
+                          )}
+                        >
+                          <Check className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => setConfirmAction({ id: req.id, action: 'rejected', name: req.target_name })}
+                          title="Rechazar"
+                          className={cn(
+                            "flex h-8 w-8 items-center justify-center rounded border transition-colors",
+                            req.status === 'rejected'
+                              ? "border-red-500/50 bg-red-500/20 text-red-400"
+                              : "border-red-500/20 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white"
+                          )}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
 
                         <button
                           onClick={() => setConfirmAction({ id: req.id, action: 'deleted', name: req.target_name })}
@@ -527,29 +533,32 @@ export function AdminValidations() {
                 GUARDAR CAMBIOS
               </GmxButton>
 
-              <div className="flex gap-4">
-                {selectedRequest.status === 'pending' && (
-                  <>
-                    <GmxButton 
-                      variant="secondary"
-                      onClick={() => {
-                        setConfirmAction({ id: selectedRequest.id, action: 'rejected', name: selectedRequest.target_name })
-                        setSelectedRequest(null)
-                      }}
-                      className="border-red-500/20 text-red-500 hover:border-red-500 hover:text-white hover:bg-red-500/20"
-                    >
-                      RECHAZAR
-                    </GmxButton>
-                    <GmxButton 
-                      onClick={() => {
-                        setConfirmAction({ id: selectedRequest.id, action: 'approved', name: selectedRequest.target_name })
-                        setSelectedRequest(null)
-                      }}
-                    >
-                      APROBAR SOLICITUD
-                    </GmxButton>
-                  </>
-                )}
+              {/* Siempre mostramos los botones de acción, sin importar el status actual */}
+              <div className="flex gap-3">
+                <GmxButton 
+                  variant="secondary"
+                  onClick={() => {
+                    setConfirmAction({ id: selectedRequest.id, action: 'rejected', name: selectedRequest.target_name })
+                    setSelectedRequest(null)
+                  }}
+                  className={cn(
+                    "border-red-500/20 text-red-500 hover:border-red-500 hover:text-white hover:bg-red-500/20",
+                    selectedRequest.status === 'rejected' && "border-red-500/50 bg-red-500/10"
+                  )}
+                >
+                  {selectedRequest.status === 'rejected' ? '✓ RECHAZADO' : 'RECHAZAR'}
+                </GmxButton>
+                <GmxButton 
+                  onClick={() => {
+                    setConfirmAction({ id: selectedRequest.id, action: 'approved', name: selectedRequest.target_name })
+                    setSelectedRequest(null)
+                  }}
+                  className={cn(
+                    (selectedRequest.status === 'active' || selectedRequest.status === 'approved') && "bg-emerald-600/80"
+                  )}
+                >
+                  {(selectedRequest.status === 'active' || selectedRequest.status === 'approved') ? '✓ APROBADO' : 'APROBAR SOLICITUD'}
+                </GmxButton>
               </div>
             </div>
           </div>

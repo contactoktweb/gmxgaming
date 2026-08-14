@@ -156,6 +156,10 @@ export function AltaEquipoForm() {
 
     if (!teamError) {
       setFormStatus('success')
+      // Desplazar al inicio para que el usuario vea la pantalla de éxito
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      }
     } else {
       setFormStatus('idle')
       alert('Error al enviar el registro del equipo.')
@@ -292,8 +296,8 @@ export function AltaEquipoForm() {
               Tipo de Equipo <span className="text-primary">*</span>
               <FieldTooltip text="Categoría competitiva del equipo." />
             </label>
-            <div className="flex h-[50px] items-center gap-6 rounded-md border border-border bg-background px-4 overflow-x-auto scrollbar-hide">
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-white transition-colors hover:text-primary whitespace-nowrap">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-md border border-border bg-background px-4 py-3">
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-white transition-colors hover:text-primary">
                 <input
                   type="radio"
                   name="item_meta[782]"
@@ -303,7 +307,7 @@ export function AltaEquipoForm() {
                 />
                 Varonil / Mixto
               </label>
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-white transition-colors hover:text-primary whitespace-nowrap">
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-white transition-colors hover:text-primary">
                 <input
                   type="radio"
                   name="item_meta[782]"

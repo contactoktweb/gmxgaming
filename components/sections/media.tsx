@@ -15,8 +15,28 @@ type MediaLink = {
 
 function getYouTubeEmbedUrl(url: string) {
   if (!url) return ''
-  const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&?]{11})/)
-  return match && match[1] ? `https://www.youtube.com/embed/${match[1]}` : url
+  // Extrae el video ID de cualquier formato de URL de YouTube
+  const patterns = [
+    /youtu\.be\/([^\?&"'>]{11})/,
+    /youtube\.com\/watch\?v=([^\?&"'>]{11})/,
+    /youtube\.com\/embed\/([^\?&"'>]{11})/,
+    /youtube\.com\/v\/([^\?&"'>]{11})/,
+    /youtube\.com\/shorts\/([^\?&"'>]{11})/,
+  ]
+
+  for (const pattern of patterns) {
+    const match = url.match(pattern)
+    if (match && match[1]) {
+      const videoId = match[1]
+      const origin = typeof window !== 'undefined' ? window.location.origin : ''
+      return `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&enablejsapi=1&origin=${encodeURIComponent(origin)}`
+    }
+  }
+
+  // Si ya es una URL de embed, devolverla tal cual
+  if (url.includes('youtube.com/embed/')) return url
+
+  return url
 }
 
 export function Media() {
@@ -72,6 +92,7 @@ export function Media() {
           <SplitText
             as="h2"
             variant="title"
+            text="CONTENIDO DESTACADO"
             lines={['CONTENIDO', 'DESTACADO']}
             className="font-display text-5xl font-700 uppercase leading-[0.95] tracking-tight text-white sm:text-6xl lg:text-7xl"
           />

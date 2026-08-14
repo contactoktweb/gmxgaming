@@ -33,8 +33,8 @@ export function AltaContratoForm() {
     async function init() {
       if (!user) return
 
-      // Obtener equipos
-      const { data: teamsData } = await supabase.from('teams').select('id, name').in('status', ['active', 'approved'])
+      // Obtener equipos activos y aprobados (y pendientes para que puedan ver todos)
+      const { data: teamsData } = await supabase.from('teams').select('id, name, status').in('status', ['active', 'approved', 'pending'])
       if (teamsData) {
         setTeams(teamsData)
       }
@@ -191,7 +191,11 @@ export function AltaContratoForm() {
               >
                 <option value="" disabled>Selecciona tu equipo</option>
                 {teams.length > 0 ? (
-                  teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)
+                  teams.map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}{t.status === 'pending' ? ' (Pendiente de aprobación)' : t.status === 'active' ? ' (Activo)' : ''}
+                    </option>
+                  ))
                 ) : (
                   <option value="" disabled>No hay equipos disponibles</option>
                 )}

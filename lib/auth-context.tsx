@@ -4,7 +4,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 
-export type Role = 'admin' | 'jugador'
+export type Role = 'admin' | 'jugador' | 'user'
 
 export interface User {
   id: string
@@ -36,6 +36,88 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
+    async function fetchProfile(authUser: any) {
+      if (!mounted) return;
+
+      const metadata = authUser.user_metadata || {}
+      const googleName = metadata.full_name || metadata.name || authUser.email?.split('@')[0] || 'Usuario'
+      const googleAvatar = metadata.avatar_url || metadata.picture || null
+
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', authUser.id)
+          .single()
+
+        let activeProfile = profile
+
+        // Si no existe el perfil en la base de datos, lo creamos automáticamente
+        if (!profile) {
+          const { data: newProfile } = await supabase
+            .from('profiles')
+            .upsert({
+              id: authUser.id,
+              name: googleName,
+              avatar_url: googleAvatar,
+              role: 'user',
+              is_player: false,
+              player_status: 'none'
+            })
+            .select('*')
+            .single()
+
+          if (newProfile) {
+            activeProfile = newProfile
+          }
+        } else if ((!profile.name && googleName) || (!profile.avatar_url && googleAvatar)) {
+          // Si existe pero le falta nombre o avatar, completamos con Google
+          const updates: Record<string, any> = {}
+          if (!profile.name && googleName) updates.name = googleName
+          if (!profile.avatar_url && googleAvatar) updates.avatar_url = googleAvatar
+
+          const { data: updatedProfile } = await supabase
+            .from('profiles')
+            .update(updates)
+            .eq('id', authUser.id)
+            .select('*')
+            .single()
+
+          if (updatedProfile) {
+            activeProfile = updatedProfile
+          }
+        }
+
+        if (mounted) {
+          setUser({
+            id: authUser.id,
+            name: activeProfile?.name || googleName,
+            email: authUser.email || '',
+            role: activeProfile?.role === 'admin' ? 'admin' : 'jugador',
+            avatar: activeProfile?.avatar_url || activeProfile?.avatar || googleAvatar || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg',
+            is_player: activeProfile?.is_player || false,
+            player_status: activeProfile?.player_status || 'none'
+          })
+          setIsLoading(false)
+        }
+      } catch (err) {
+        console.error('Error fetching/creating profile:', err)
+        if (mounted) {
+          // Fallback usando directamente datos de autenticación
+          setUser({
+            id: authUser.id,
+            name: googleName,
+            email: authUser.email || '',
+            role: 'jugador',
+            avatar: googleAvatar || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg',
+            is_player: false,
+            player_status: 'none'
+          })
+          setIsLoading(false)
+        }
+      }
+    }
+
     async function getInitialSession() {
       const { data: { session } } = await supabase.auth.getSession()
       
@@ -46,28 +128,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(null)
           setIsLoading(false)
         }
-      }
-    }
-
-    async function fetchProfile(authUser: any) {
-      if (!mounted) return;
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', authUser.id)
-        .single()
-
-      if (mounted) {
-        setUser({
-          id: authUser.id,
-          name: profile?.name || authUser.email?.split('@')[0] || 'Usuario',
-          email: authUser.email || '',
-          role: profile?.role === 'admin' ? 'admin' : 'jugador',
-          avatar: profile?.avatar || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg',
-          is_player: profile?.is_player || false,
-          player_status: profile?.player_status || 'none'
-        })
-        setIsLoading(false)
       }
     }
 
@@ -91,7 +151,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = async (email: string, password?: string) => {
-    // If no password provided (shouldn't happen with real form, but for typing), fail
     if (!password) return { success: false, error: 'Contraseña requerida' };
 
     setIsLoading(true)
@@ -115,6 +174,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        emailRedirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/confirm`,
+      },
     })
 
     if (error) {
@@ -122,15 +184,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: false, error: error.message }
     }
 
-    // Attempt to automatically log in the user after registration
-    // This depends on Supabase settings (whether email confirmation is required)
+    // Si Supabase ya devolvió sesión (email confirmations OFF), usar directamente
     if (data.session) {
       return { success: true }
-    } else {
-      // If email confirmation is required, they won't have a session right away
-      setIsLoading(false)
-      return { success: true }
     }
+
+    // Si requiere confirmación de email, intentamos auto-login
+    const { error: loginError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+
+    if (loginError) {
+      setIsLoading(false)
+      return { success: true, emailNotConfirmed: true } as any
+    }
+
+    return { success: true }
   }
 
   const logout = async () => {
@@ -139,7 +209,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
     setIsLoading(false)
     
-    if (pathname === '/micuenta' || pathname.startsWith('/dashboard')) {
+    if (pathname === '/micuenta' || pathname.startsWith('/dashboard') || pathname.startsWith('/administracion')) {
       router.push('/login')
     } else {
       router.refresh()

@@ -158,29 +158,63 @@ function FormContent() {
       // Since it's prod, we should continue or show error. We'll proceed with whatever uploaded.
     }
     
-    const profilePayload = {
-      name: formData.get('item_meta[674][first]') + ' ' + formData.get('item_meta[674][last]'),
+    // Payload principal — campos garantizados que existen en la tabla profiles
+    const corePayload: Record<string, any> = {
+      name: (formData.get('item_meta[674][first]') || '') + ' ' + (formData.get('item_meta[674][last]') || ''),
       nickname: nickname,
-      discord_handle: formData.get('item_meta[684]'),
+      discord_handle: formData.get('item_meta[684]') || null,
       is_player: true,
       player_status: 'pending',
-      passport_photo_url: urlPasaporte,
-      id_photo_url: urlIdentidad,
-      avatar_url: urlFoto,
-      closest_airport: formData.get('item_meta[781]'),
-      social_ig: formData.get('social_instagram'),
-      social_tiktok: formData.get('social_tiktok'),
-      social_yt: formData.get('social_youtube'),
-      social_fb: formData.get('social_facebook'),
-      social_twitch: formData.get('social_twitch'),
-      social_kick: formData.get('social_kick'),
-      social_x: formData.get('social_x'),
     }
+
+    // Campos opcionales — se agregan solo si tienen valor
+    const socialLinks: Record<string, any> = {}
+    const socialMap: Record<string, string> = {
+      social_ig: 'social_instagram',
+      social_tiktok: 'social_tiktok',
+      social_yt: 'social_youtube',
+      social_fb: 'social_facebook',
+      social_twitch: 'social_twitch',
+      social_kick: 'social_kick',
+      social_x: 'social_x',
+    }
+    Object.entries(socialMap).forEach(([dbField, formField]) => {
+      const val = formData.get(formField)
+      if (val) socialLinks[dbField] = val
+    })
+
+    if (urlFoto) corePayload.avatar_url = urlFoto
+    if (urlIdentidad) corePayload.id_photo_url = urlIdentidad
+    if (urlPasaporte) corePayload.passport_photo_url = urlPasaporte
+    if (formData.get('item_meta[781]')) corePayload.closest_airport = formData.get('item_meta[781]')
+
+    // Fusionar con redes sociales
+    const fullPayload = { ...corePayload, ...socialLinks }
 
     const { error: profileError } = await supabase
       .from('profiles')
-      .update(profilePayload)
+      .update(fullPayload)
       .eq('id', user?.id)
+
+    if (profileError) {
+      console.error('Error al actualizar perfil:', profileError)
+      // Si el error es de columna inexistente, intentar solo los campos core
+      if (profileError.code === '42703' || profileError.message?.includes('column')) {
+        const { error: coreErr } = await supabase
+          .from('profiles')
+          .update(corePayload)
+          .eq('id', user?.id)
+        if (coreErr) {
+          setFormStatus('idle')
+          alert('Error al guardar tu perfil: ' + coreErr.message)
+          return
+        }
+      } else {
+        setFormStatus('idle')
+        alert('Error al enviar tu solicitud: ' + profileError.message)
+        return
+      }
+    }
 
     let gameInfoError = null
 
@@ -191,20 +225,17 @@ function FormContent() {
         game: 'Mobile Legends',
         game_id: formData.get('item_meta[697]'),
         server: formData.get('item_meta[784]'),
-        game_nickname: nickname, // Usually matches or can be separate
+        game_nickname: nickname,
         country_account: formData.get('item_meta[722]')
       }
       const { error: gErr } = await supabase.from('player_game_info').insert(gamePayload)
-      gameInfoError = gErr
+      if (gErr) {
+        console.warn('Error al guardar info de juego (no bloquea el registro):', gErr)
+        // No bloqueamos — el perfil ya se actualizó
+      }
     }
     
-    if (!profileError && !gameInfoError) {
-      setFormStatus('success')
-    } else {
-      setFormStatus('idle')
-      alert('Hubo un error al enviar tu solicitud. Intenta de nuevo.')
-      console.error(profileError, gameInfoError)
-    }
+    setFormStatus('success')
   }
 
   if (loadingConfig && formStatus !== 'already_registered') {

@@ -40,7 +40,12 @@ export function UserProfile() {
       // Fetch DB Profile
       const fetchProfile = async () => {
         const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-        if (data) setProfileData(data)
+        if (data) {
+          setProfileData(data)
+          if (data.name) setName(data.name)
+          if (data.avatar_url || data.avatar) setProfilePhoto(data.avatar_url || data.avatar)
+          if (data.cover_url) setCoverPhoto(data.cover_url)
+        }
       }
       fetchProfile()
     }
@@ -82,7 +87,8 @@ export function UserProfile() {
     if (user) {
       await supabase.from('profiles').update({
         name: editForm.name,
-        avatar: editForm.profilePhoto || user.avatar
+        avatar_url: editForm.profilePhoto || user.avatar,
+        cover_url: editForm.coverPhoto || coverPhoto
       }).eq('id', user.id)
     }
 

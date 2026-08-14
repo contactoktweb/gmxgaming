@@ -124,11 +124,13 @@ export function AdminTournaments() {
 
     const templateId = formData.get('template_id') as string
     const tmpl = templates.find(t => t.id === templateId)
+    // Si no hay plantilla, usar el juego seleccionado directamente en el form
+    const gameSelected = (formData.get('game') as string) || (tmpl ? tmpl.game : 'Mobile Legends')
 
     const newTournament = {
       name: formData.get('name') as string,
-      game: tmpl ? tmpl.game : 'Mobile Legends',
-      template_id: templateId,
+      game: gameSelected,
+      template_id: templateId || null,
       start_date: formData.get('start_date') as string,
       end_date: formData.get('end_date') as string,
       prizepool_total: formData.get('prizepool_total') as string,
@@ -145,6 +147,8 @@ export function AdminTournaments() {
         setIsCreating(false)
         setDistPlaces([''])
       }, 2000)
+    } else {
+      alert('Error al crear el torneo: ' + error.message)
     }
   }
 
@@ -238,14 +242,26 @@ export function AdminTournaments() {
                 <input name="name" type="text" required className="w-full rounded-md border border-border bg-background px-4 py-3 text-white focus:border-primary focus:outline-none" />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-500 text-white">Plantilla Base</label>
-                <select name="template_id" required className="w-full rounded-md border border-border bg-background px-4 py-3 text-white focus:border-primary focus:outline-none">
-                  <option value="">Selecciona una plantilla...</option>
+                <label className="text-sm font-500 text-white">Juego
+                  <span className="text-primary"> *</span>
+                </label>
+                <select name="game" required className="w-full rounded-md border border-border bg-background px-4 py-3 text-white focus:border-primary focus:outline-none">
+                  <option value="Mobile Legends">Mobile Legends</option>
+                  <option value="Free Fire">Free Fire</option>
+                  <option value="Valorant">Valorant</option>
+                  <option value="League of Legends">League of Legends</option>
+                  <option value="Otro">Otro</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-500 text-white">Plantilla Base <span className="text-xs text-muted-foreground">(Opcional)</span></label>
+                <select name="template_id" className="w-full rounded-md border border-border bg-background px-4 py-3 text-white focus:border-primary focus:outline-none">
+                  <option value="">Sin plantilla</option>
                   {templates.map(t => (
                     <option key={t.id} value={t.id}>{t.name} ({t.game})</option>
                   ))}
                 </select>
-                {templates.length === 0 && <p className="text-xs text-red-400">Debes crear plantillas primero en Configuración.</p>}
+                {templates.length === 0 && <p className="text-xs text-muted-foreground">No tienes plantillas creadas en Configuración. Puedes crear el torneo sin plantilla.</p>}
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-500 text-white">Fecha de Inicio</label>
@@ -301,9 +317,12 @@ export function AdminTournaments() {
               >
                 Cancelar
               </button>
-              <GmxButton type="submit" disabled={templates.length === 0}>
+              <button
+                type="submit"
+                className="inline-flex items-center justify-center gap-2 overflow-hidden bg-primary px-8 py-3 font-display text-[13px] font-600 uppercase tracking-widest text-white transition-colors duration-300 clip-corner hover:bg-primary/90"
+              >
                 CREAR TORNEO
-              </GmxButton>
+              </button>
             </div>
           </form>
         )}
