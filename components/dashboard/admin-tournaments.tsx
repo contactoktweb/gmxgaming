@@ -688,7 +688,17 @@ export function AdminTournaments() {
                     </div>
                     <div className="p-4 rounded-lg border border-border bg-surface">
                       <p className="text-xs font-600 text-muted-foreground uppercase tracking-widest mb-1">Tipo</p>
-                      <p className="text-sm font-500 text-white">{selectedTournament.templates?.type || 'N/A'}</p>
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {selectedTournament.templates?.type ? (
+                          selectedTournament.templates.type.split(',').map((t: string, idx: number) => (
+                            <span key={idx} className="px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-xs font-600">
+                              {t.trim()}
+                            </span>
+                          ))
+                        ) : (
+                          <p className="text-sm font-500 text-white">N/A</p>
+                        )}
+                      </div>
                     </div>
                   </div>
 

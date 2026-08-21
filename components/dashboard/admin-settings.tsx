@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Settings, Globe, Gamepad2, Loader2, Save, X, Plus } from 'lucide-react'
+import { Settings, Globe, Gamepad2, Loader2, Save, X, Plus, ChevronDown, Tag } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { GmxButton } from '@/components/gmx-button'
 import { FileUpload } from '@/components/forms/file-upload'
@@ -31,7 +31,9 @@ export function AdminSettings() {
   const [newGameImage, setNewGameImage] = useState<File | null>(null)
   
   const [templates, setTemplates] = useState<TournamentTemplate[]>([])
-  const [newTemplate, setNewTemplate] = useState({name: '', game: 'Mobile Legends', type: 'Relámpago (1 día)', logo_url: ''})
+  const [newTemplate, setNewTemplate] = useState({name: '', game: 'Mobile Legends', type: '', logo_url: ''})
+  const [selectedTemplateTypes, setSelectedTemplateTypes] = useState<string[]>([])
+  const [typeInput, setTypeInput] = useState('')
   const [templateImage, setTemplateImage] = useState<File | null>(null)
 
   const [loading, setLoading] = useState(true)
@@ -124,20 +126,51 @@ export function AdminSettings() {
     setNewGameImage(null)
   }
 
+  const handleAddTypeChip = (typeName?: string) => {
+    const targetType = (typeName || typeInput).trim()
+    if (!targetType) return
+
+    // Agregar al listado de tipos seleccionados para la plantilla
+    if (!selectedTemplateTypes.includes(targetType)) {
+      setSelectedTemplateTypes(prev => [...prev, targetType])
+    }
+
+    // Si no existe en los tipos globales guardados, lo agregamos y persistimos en DB
+    if (!tournamentTypes.some(t => t.toLowerCase() === targetType.toLowerCase())) {
+      const updated = [...tournamentTypes, targetType]
+      setTournamentTypes(updated)
+      supabase.from('app_settings').upsert({
+        id: 'tournament_types',
+        value: updated
+      })
+    }
+
+    setTypeInput('')
+  }
+
+  const handleRemoveTypeChip = (typeToRemove: string) => {
+    setSelectedTemplateTypes(prev => prev.filter(t => t !== typeToRemove))
+  }
+
   const addTemplate = async () => {
     if (!newTemplate.name.trim()) return
     setSaving(true)
 
-    // Si el tipo de torneo es nuevo, lo añadimos a la lista de tipos y guardamos
-    const currentType = newTemplate.type.trim()
-    if (currentType && !tournamentTypes.includes(currentType)) {
-      const updatedTypes = [...tournamentTypes, currentType]
-      setTournamentTypes(updatedTypes)
-      await supabase.from('app_settings').upsert({
-        id: 'tournament_types',
-        value: updatedTypes
-      })
+    // Combinar los chips seleccionados o el texto que esté escrito
+    let finalTypes = [...selectedTemplateTypes]
+    if (typeInput.trim() && !finalTypes.includes(typeInput.trim())) {
+      finalTypes.push(typeInput.trim())
+      if (!tournamentTypes.some(t => t.toLowerCase() === typeInput.trim().toLowerCase())) {
+        const updated = [...tournamentTypes, typeInput.trim()]
+        setTournamentTypes(updated)
+        await supabase.from('app_settings').upsert({
+          id: 'tournament_types',
+          value: updated
+        })
+      }
     }
+
+    const finalTypeString = finalTypes.length > 0 ? finalTypes.join(', ') : 'Relámpago (1 día)'
 
     let logoUrl = newTemplate.logo_url
     if (templateImage) {
@@ -152,14 +185,16 @@ export function AdminSettings() {
     const { data, error } = await supabase.from('tournament_templates').insert({
       name: newTemplate.name.trim(),
       game: newTemplate.game,
-      type: currentType,
+      type: finalTypeString,
       logo_url: logoUrl
     }).select().single()
     
     if (data) {
       setTemplates([data, ...templates])
     }
-    setNewTemplate({name: '', game: 'Mobile Legends', type: currentType || 'Relámpago (1 día)', logo_url: ''})
+    setNewTemplate({name: '', game: 'Mobile Legends', type: '', logo_url: ''})
+    setSelectedTemplateTypes([])
+    setTypeInput('')
     setTemplateImage(null)
     setSaving(false)
   }
@@ -377,19 +412,78 @@ export function AdminSettings() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Tipo de Torneo</label>
-                  <input
-                    type="text"
-                    list="tournament-types"
-                    value={newTemplate.type}
-                    onChange={e => setNewTemplate({...newTemplate, type: e.target.value})}
-                    onKeyDown={e => e.key === 'Enter' && addTemplate()}
-                    className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
-                    placeholder="Escribe o selecciona..."
-                  />
-                  <datalist id="tournament-types">
-                    {tournamentTypes.map(t => <option key={t} value={t} />)}
-                  </datalist>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs text-muted-foreground block">Tipo(s) de Torneo</label>
+                    <span className="text-[10px] text-primary/80">Escribe y pulsa Enter</span>
+                  </div>
+
+                  {/* Selected Chips */}
+                  {selectedTemplateTypes.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-2.5 p-2 rounded-lg bg-surface border border-border">
+                      {selectedTemplateTypes.map(t => (
+                        <span 
+                          key={t}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-600 bg-primary/15 text-primary border border-primary/30 animate-in zoom-in-95 duration-150"
+                        >
+                          {t}
+                          <button 
+                            type="button"
+                            onClick={() => handleRemoveTypeChip(t)}
+                            className="hover:text-white rounded-full p-0.5 transition-colors"
+                            title="Quitar tipo"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Input with Enter and Add button */}
+                  <div className="flex gap-2 mb-2">
+                    <input
+                      type="text"
+                      value={typeInput}
+                      onChange={e => setTypeInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          handleAddTypeChip()
+                        }
+                      }}
+                      className="flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
+                      placeholder="Escribe nuevo tipo y pulsa Enter..."
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleAddTypeChip()}
+                      disabled={!typeInput.trim()}
+                      className="px-3 py-2 rounded-md bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 text-xs font-600 disabled:opacity-40 transition-colors flex items-center gap-1 shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Añadir
+                    </button>
+                  </div>
+
+                  {/* Saved Types Select */}
+                  <div className="relative">
+                    <select
+                      value=""
+                      onChange={e => {
+                        if (e.target.value) {
+                          handleAddTypeChip(e.target.value)
+                        }
+                      }}
+                      className="w-full appearance-none rounded-md border border-border bg-surface px-3 py-2 pr-8 text-xs text-muted-foreground focus:text-white focus:border-primary focus:outline-none cursor-pointer font-500"
+                    >
+                      <option value="">+ Seleccionar de tipos existentes...</option>
+                      {tournamentTypes.map(t => (
+                        <option key={t} value={t} disabled={selectedTemplateTypes.includes(t)}>
+                          {t} {selectedTemplateTypes.includes(t) ? '(Añadido)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  </div>
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground mb-1 block">Logo (Opcional)</label>
@@ -425,14 +519,21 @@ export function AdminSettings() {
                       <img 
                         src={tmpl.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
                         alt={tmpl.name} 
-                        className="w-14 h-14 rounded-lg object-cover bg-surface"
+                        className="w-14 h-14 rounded-lg object-cover bg-surface shrink-0"
                       />
-                      <div>
-                        <h4 className="font-600 text-white text-sm">{tmpl.name}</h4>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-xs text-primary">{tmpl.game}</span>
+                      <div className="min-w-0 flex-1">
+                        <h4 className="font-600 text-white text-sm truncate">{tmpl.name}</h4>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                          <span className="text-xs text-primary font-500">{tmpl.game}</span>
                           <span className="w-1 h-1 rounded-full bg-border" />
-                          <span className="text-xs text-muted-foreground">{tmpl.type}</span>
+                          {tmpl.type?.split(',').map((t, idx) => (
+                            <span 
+                              key={idx} 
+                              className="px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-[10px] font-600 whitespace-nowrap"
+                            >
+                              {t.trim()}
+                            </span>
+                          ))}
                         </div>
                       </div>
                     </div>
