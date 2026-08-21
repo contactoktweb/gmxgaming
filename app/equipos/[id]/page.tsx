@@ -96,7 +96,7 @@ export default function TeamDetailsPage() {
           })
 
           const teamMap = new Map<string, any>()
-          if (team) teamMap.set(team.id, team)
+          if (teamData) teamMap.set(teamData.id, teamData)
 
           const missingIds = Array.from(matchTeamIds).filter(id => !teamMap.has(id))
           if (missingIds.length > 0) {
@@ -123,15 +123,24 @@ export default function TeamDetailsPage() {
             }
           })
           setMatches(populatedMatches)
+        } else {
+          setMatches([])
         }
         
-        // Fetch Unique Tournaments count
-        const { count } = await supabase
+        // Fetch Unique Tournaments count (combinando registros de torneos y encuentros)
+        const { data: ttData } = await supabase
           .from('tournament_teams')
-          .select('*', { count: 'exact', head: true })
+          .select('tournament_id')
           .eq('team_id', teamId)
           
-        if (count !== null) setTournamentsCount(count)
+        const tourneySet = new Set<string>()
+        if (ttData) {
+          ttData.forEach((t: any) => { if (t.tournament_id) tourneySet.add(t.tournament_id) })
+        }
+        if (matchesData) {
+          matchesData.forEach((m: any) => { if (m.tournament_id) tourneySet.add(m.tournament_id) })
+        }
+        setTournamentsCount(tourneySet.size)
       }
       
       setLoading(false)
@@ -157,6 +166,8 @@ export default function TeamDetailsPage() {
       </div>
     )
   }
+
+  const isTeamActive = team.status === 'activo' || team.status === 'active' || team.status === 'approved'
 
   return (
     <>
@@ -186,11 +197,12 @@ export default function TeamDetailsPage() {
             
             <div className="flex-1 mt-4 md:mt-6">
               <div className="flex flex-wrap justify-center md:justify-start items-center gap-3 mb-4">
-                <span className={cn("px-3 py-1 text-xs font-600 uppercase tracking-widest rounded-full", 
-                  team.status === 'activo' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                  'bg-white/5 text-muted-foreground border border-white/10'
+                <span className={cn("px-3 py-1 text-xs font-600 uppercase tracking-widest rounded-full border", 
+                  isTeamActive ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                  team.status === 'pending' || team.status === 'pendiente' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                  'bg-white/5 text-muted-foreground border-white/10'
                 )}>
-                  {team.status}
+                  {isTeamActive ? 'Activo' : team.status === 'pending' || team.status === 'pendiente' ? 'Pendiente' : team.status === 'banned' ? 'Baneado' : 'Inactivo'}
                 </span>
                 <span className="text-xs font-600 text-muted-foreground uppercase tracking-widest flex items-center gap-1 bg-white/5 border border-white/10 px-3 py-1 rounded-full">
                   <MapPin className="w-3 h-3" /> {team.country || 'Desconocido'}
