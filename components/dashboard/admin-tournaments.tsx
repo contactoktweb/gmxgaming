@@ -58,6 +58,7 @@ export function AdminTournaments() {
   const [newTeamId, setNewTeamId] = useState('')
   const [newMatch, setNewMatch] = useState({ phase: 'Fase de Grupos', date: '', t1: '', t2: '', s1: 0, s2: 0 })
   const [editMatch, setEditMatch] = useState<{ id: string, s1: number, s2: number, t1_name?: string, t2_name?: string } | null>(null)
+  const [matchToDelete, setMatchToDelete] = useState<any | null>(null)
 
   // Tournament form dates
   const todayStr = new Date().toISOString().split('T')[0]
@@ -352,9 +353,17 @@ export function AdminTournaments() {
     }
   }
 
-  const handleDeleteMatch = async (matchId: string) => {
-    await supabase.from('matches').delete().eq('id', matchId)
-    setTourneyMatches(prev => prev.filter(m => m.id !== matchId))
+  const handleConfirmDeleteMatch = async () => {
+    if (!matchToDelete) return
+    const matchId = matchToDelete.id
+    const { error } = await supabase.from('matches').delete().eq('id', matchId)
+    if (!error) {
+      setTourneyMatches(prev => prev.filter(m => m.id !== matchId))
+      toast.success('Encuentro eliminado correctamente')
+    } else {
+      toast.error('Error al eliminar el encuentro: ' + error.message)
+    }
+    setMatchToDelete(null)
   }
 
   const handleUpdateMatchScore = async () => {
@@ -880,7 +889,13 @@ export function AdminTournaments() {
                             >
                               <Edit className="w-4 h-4"/>
                             </button>
-                            <button onClick={() => handleDeleteMatch(m.id)} className="text-muted-foreground hover:text-red-500 p-2"><Trash2 className="w-4 h-4"/></button>
+                            <button 
+                              onClick={() => setMatchToDelete(m)} 
+                              className="text-muted-foreground hover:text-red-500 p-2"
+                              title="Eliminar Encuentro"
+                            >
+                              <Trash2 className="w-4 h-4"/>
+                            </button>
                           </div>
                         </div>
                       ))
@@ -971,6 +986,55 @@ export function AdminTournaments() {
               </button>
               <button 
                 onClick={handleDelete}
+                className="flex-1 rounded-md px-4 py-3 font-display text-[13px] font-600 uppercase tracking-widest text-white transition-colors relative overflow-hidden clip-corner group bg-red-600 hover:bg-red-500"
+              >
+                <span className="relative z-10 flex items-center justify-center gap-2">
+                  ELIMINAR <Trash2 className="w-4 h-4" />
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Match Delete Confirmation Modal */}
+      {matchToDelete && (
+        <div className="fixed inset-0 z-[1060] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setMatchToDelete(null)} />
+          <div className="relative w-full max-w-md rounded-xl border border-border bg-surface p-6 sm:p-8 shadow-2xl animate-in zoom-in-95 duration-200 text-center">
+            
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full mb-6 bg-red-500/10 text-red-500">
+              <AlertCircle className="h-8 w-8" />
+            </div>
+
+            <h3 className="font-display text-2xl font-700 uppercase tracking-tight text-white mb-2">
+              ¿Eliminar Encuentro?
+            </h3>
+            
+            <p className="text-muted-foreground mb-4 text-sm">
+              Estás a punto de eliminar este encuentro del torneo:
+            </p>
+
+            <div className="p-4 rounded-lg bg-background border border-border mb-6">
+              <div className="text-xs text-primary font-600 uppercase mb-1">
+                {matchToDelete.phase} • {matchToDelete.match_date ? new Date(matchToDelete.match_date).toLocaleDateString() : 'TBD'}
+              </div>
+              <div className="flex items-center justify-center gap-3 text-white font-700 text-sm">
+                <span>{matchToDelete.team1?.name || 'Equipo A'}</span>
+                <span className="text-xs text-muted-foreground">VS</span>
+                <span>{matchToDelete.team2?.name || 'Equipo B'}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button 
+                onClick={() => setMatchToDelete(null)}
+                className="flex-1 rounded-md border border-border bg-transparent px-4 py-3 font-display text-[13px] font-600 uppercase tracking-widest text-muted-foreground transition-colors hover:text-white"
+              >
+                CANCELAR
+              </button>
+              <button 
+                onClick={handleConfirmDeleteMatch}
                 className="flex-1 rounded-md px-4 py-3 font-display text-[13px] font-600 uppercase tracking-widest text-white transition-colors relative overflow-hidden clip-corner group bg-red-600 hover:bg-red-500"
               >
                 <span className="relative z-10 flex items-center justify-center gap-2">
