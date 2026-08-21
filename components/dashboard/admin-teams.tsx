@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { ShieldCheck, Users, MapPin, ExternalLink, Eye, Trash2, X, AlertCircle, Check, ImageIcon, FileText, Download, Save, Upload, ZoomIn, ChevronDown } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
-import { cn } from '@/lib/utils'
+import { cn, formatLocation } from '@/lib/utils'
 import { GmxButton } from '@/components/gmx-button'
 import { toast } from 'sonner'
 
@@ -408,7 +408,7 @@ export function AdminTeams() {
                           <tr key={idx} className="transition-colors hover:bg-white/5">
                             <td className="px-4 py-3 font-500 text-white">{p.nickname}</td>
                             <td className="px-4 py-3 text-muted-foreground flex items-center gap-2">
-                              <span className="text-[10px]">🌐</span> {p.country}
+                              <span className="text-[10px]">🌐</span> {formatLocation(p.country)}
                             </td>
                             <td className="px-4 py-3 text-primary">{p.discord}</td>
                           </tr>

@@ -100,53 +100,69 @@ export function Casters() {
           </div>
         ) : (
           <Stagger className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {casters.map((caster) => (
-              <StaggerItem key={caster.id}>
-                <motion.div 
-                  style={{ y }}
-                  className="group relative overflow-hidden bg-surface clip-corner aspect-[3/4]"
-                >
-                  <img
-                    src={caster.avatar_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'}
-                    alt={caster.nickname}
-                    className="h-full w-full object-cover opacity-80 transition-transform duration-700 group-hover:scale-105 group-hover:opacity-100"
-                  />
-                  
-                  {/* Overlay gradient */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-deep/90 via-deep/40 to-transparent" />
-                  
-                  {/* Content */}
-                  <div className="absolute inset-x-0 bottom-0 p-6 flex flex-col items-center text-center">
-                    <div className="mb-4 rounded-full bg-primary/20 p-3 backdrop-blur-sm transition-transform duration-300 group-hover:-translate-y-2">
-                      <Mic className="h-6 w-6 text-primary" />
-                    </div>
+            {casters.map((caster) => {
+              const photo = caster.photo_url || (caster as any).avatar_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
+              const instagram = caster.social_ig || (caster as any).instagram_url
+              const twitch = caster.social_twitch || (caster as any).twitch_url
+              const twitter = caster.social_x || (caster as any).twitter_url
+
+              return (
+                <StaggerItem key={caster.id}>
+                  <motion.div 
+                    style={{ y }}
+                    className="group relative overflow-hidden bg-surface clip-corner aspect-[3/4]"
+                  >
+                    <img
+                      src={photo}
+                      alt={caster.nickname || caster.name}
+                      className="h-full w-full object-cover opacity-80 transition-transform duration-700 group-hover:scale-105 group-hover:opacity-100"
+                    />
                     
-                    <h3 className="font-display text-2xl font-700 uppercase tracking-tight text-white">
-                      {caster.nickname}
-                    </h3>
-                    <p className="mt-1 text-sm font-500 text-muted-foreground">
-                      {caster.name}
-                    </p>
+                    {/* Overlay gradient */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-deep/90 via-deep/40 to-transparent" />
                     
-                    {/* Socials - Reveal on hover */}
-                    <div className="mt-4 flex gap-3 overflow-hidden">
-                      <div className="flex gap-3 translate-y-8 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
-                        {caster.instagram_url && (
-                          <a href={caster.instagram_url} target="_blank" rel="noopener noreferrer" className="p-2 bg-surface border border-border rounded-full text-muted-foreground hover:text-pink-500 hover:border-pink-500/50 transition-colors">
-                            <Camera className="w-4 h-4" />
-                          </a>
-                        )}
-                        {caster.twitch_url && (
-                          <a href={caster.twitch_url} target="_blank" rel="noopener noreferrer" className="p-2 bg-surface border border-border rounded-full text-muted-foreground hover:text-purple-500 hover:border-purple-500/50 transition-colors">
-                            <Tv className="w-4 h-4" />
-                          </a>
-                        )}
+                    {/* Content */}
+                    <div className="absolute inset-x-0 bottom-0 p-6 flex flex-col items-center text-center">
+                      <div className="mb-4 rounded-full bg-primary/20 p-3 backdrop-blur-sm transition-transform duration-300 group-hover:-translate-y-2">
+                        <Mic className="h-6 w-6 text-primary" />
+                      </div>
+                      
+                      <h3 className="font-display text-2xl font-700 uppercase tracking-tight text-white">
+                        {caster.nickname || caster.name}
+                      </h3>
+                      {caster.nickname && caster.nickname !== caster.name && (
+                        <p className="mt-1 text-sm font-500 text-muted-foreground">
+                          {caster.name}
+                        </p>
+                      )}
+                      
+                      {/* Socials - Reveal on hover */}
+                      <div className="mt-4 flex gap-3 overflow-hidden">
+                        <div className="flex gap-2.5 translate-y-8 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+                          {instagram && (
+                            <a href={instagram} target="_blank" rel="noopener noreferrer" className="p-2 bg-surface border border-border rounded-full text-muted-foreground hover:text-pink-500 hover:border-pink-500/50 transition-colors" title="Instagram">
+                              <Camera className="w-4 h-4" />
+                            </a>
+                          )}
+                          {twitch && (
+                            <a href={twitch} target="_blank" rel="noopener noreferrer" className="p-2 bg-surface border border-border rounded-full text-muted-foreground hover:text-purple-500 hover:border-purple-500/50 transition-colors" title="Twitch">
+                              <Tv className="w-4 h-4" />
+                            </a>
+                          )}
+                          {twitter && (
+                            <a href={twitter} target="_blank" rel="noopener noreferrer" className="p-2 bg-surface border border-border rounded-full text-muted-foreground hover:text-white hover:border-white/50 transition-colors" title="X / Twitter">
+                              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                              </svg>
+                            </a>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </motion.div>
-              </StaggerItem>
-            ))}
+                  </motion.div>
+                </StaggerItem>
+              )
+            })}
           </Stagger>
         )}
       </div>

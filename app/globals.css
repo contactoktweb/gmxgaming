@@ -60,13 +60,6 @@
   }
 }
 
-/* Hide default cursor when custom cursor is active (pointer devices only) */
-@media (pointer: fine) {
-  .custom-cursor-active,
-  .custom-cursor-active * {
-    cursor: none !important;
-  }
-}
 
 /* Thin scrollbar */
 ::-webkit-scrollbar {
@@ -178,11 +171,26 @@
   clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
 }
 
+/* Gate collision impact camera shake */
+@keyframes gate-impact-shake {
+  0% { transform: translate(0, 0) scale(1); }
+  20% { transform: translate(-3px, 3px) scale(0.998); }
+  40% { transform: translate(3px, -2px) scale(0.999); }
+  60% { transform: translate(-2px, 1px) scale(1); }
+  80% { transform: translate(1px, -1px) scale(1); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+.animate-gate-impact-shake {
+  animation: gate-impact-shake 0.22s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-marquee-left,
   .animate-marquee-right,
   .animate-ripple,
-  .animate-float-bob-y {
+  .animate-float-bob-y,
+  .animate-gate-impact-shake {
     animation: none !important;
   }
 }
+

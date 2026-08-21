@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Loader2, CheckCircle2, HelpCircle, AlertTriangle } from 'lucide-react'
+import { Loader2, CheckCircle2, HelpCircle, AlertTriangle, ShieldCheck, Info } from 'lucide-react'
 import { GmxButton } from '@/components/gmx-button'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
@@ -25,9 +25,11 @@ export function AltaContratoForm() {
   const supabase = createClient()
   
   const [selectedRoles, setSelectedRoles] = useState<string[]>(['JUGADOR(A)'])
-  const [playerGender, setPlayerGender] = useState<string>('Masculino')
+  const [playerGender, setPlayerGender] = useState<'Masculino' | 'Femenino'>('Masculino')
   const [blockMessage, setBlockMessage] = useState('')
+  const [infoNotice, setInfoNotice] = useState('')
   const [teams, setTeams] = useState<any[]>([])
+  const [allowedDivision, setAllowedDivision] = useState<'all' | 'Varonil / Mixto' | 'Femenil'>('all')
 
   useEffect(() => {
     async function init() {
@@ -37,10 +39,10 @@ export function AltaContratoForm() {
         return
       }
 
-      // Validar si el usuario es jugador profesional aprobado
+      // 1. Validar si el usuario es jugador profesional aprobado
       const { data: profile } = await supabase
         .from('profiles')
-        .select('gender, is_player, player_status')
+        .select('is_player, player_status')
         .eq('id', user.id)
         .single()
 
@@ -57,38 +59,107 @@ export function AltaContratoForm() {
         return
       }
 
-      if (profile && profile.gender) {
-        setPlayerGender(profile.gender)
-      }
+      // 2. Detectar género del jugador desde validaciones
+      let detectedGender: 'Masculino' | 'Femenino' = 'Masculino'
+      const { data: userValidations } = await supabase
+        .from('validations')
+        .select('details')
+        .or(`submitted_by.eq.${user.id},submitted_by.eq.${user.email || 'none'},details->>user_id.eq.${user.id}`)
+        .order('created_at', { ascending: false })
+        .limit(5)
 
-      // Obtener equipos activos y aprobados (excluyendo los que el usuario lidera)
+      if (userValidations && userValidations.length > 0) {
+        for (const v of userValidations) {
+          const g = v.details?.gender || v.details?.genero || v.details?.['item_meta[783]'] || v.details?.item_meta?.[783]
+          if (typeof g === 'string') {
+            if (g.toLowerCase().includes('fem') || g.toLowerCase() === 'f') {
+              detectedGender = 'Femenino'
+              break
+            }
+          }
+        }
+      }
+      setPlayerGender(detectedGender)
+
+      // 3. Obtener equipos y sus divisiones registradas
       const { data: teamsData } = await supabase
         .from('teams')
         .select('id, name, status, manager_id')
         .in('status', ['active', 'approved', 'pending'])
 
-      if (teamsData) {
-        // Un líder de equipo no puede solicitar contrato a su propio equipo
-        const availableTeams = teamsData.filter(t => t.manager_id !== user.id)
-        setTeams(availableTeams)
+      const { data: teamValidations } = await supabase
+        .from('validations')
+        .select('details')
+        .eq('type', 'equipo')
+
+      const teamCategoryMap = new Map<string, 'Varonil / Mixto' | 'Femenil'>()
+      if (teamValidations) {
+        teamValidations.forEach((tv: any) => {
+          const tId = tv.details?.team_id || tv.details?.id
+          const cat = tv.details?.tipoEquipo || tv.details?.['item_meta[782]'] || ''
+          if (tId) {
+            teamCategoryMap.set(tId, cat.toLowerCase().includes('fem') ? 'Femenil' : 'Varonil / Mixto')
+          }
+        })
       }
 
-      // Obtener contratos activos o pendientes
-      const { data: contracts } = await supabase.from('contracts').select('*, teams(name)').eq('player_id', user.id).in('status', ['active', 'pending_manager'])
-      
-      if (contracts && contracts.length > 0) {
-        if (profile?.gender === 'Masculino' || !profile?.gender) {
-          setBlockMessage('Ya tienes un contrato activo o en proceso. Los jugadores de la división varonil/mixta solo pueden tener 1 contrato activo a la vez.')
+      const parsedTeams = (teamsData || [])
+        .filter(t => t.manager_id !== user.id)
+        .map(t => {
+          const category = teamCategoryMap.get(t.id) || (t.name.toLowerCase().includes('fem') ? 'Femenil' : 'Varonil / Mixto')
+          return { ...t, category }
+        })
+
+      // 4. Obtener contratos activos o en proceso
+      const { data: contracts } = await supabase
+        .from('contracts')
+        .select('*, teams(id, name)')
+        .eq('player_id', user.id)
+        .in('status', ['active', 'activo', 'pending_manager', 'pendiente'])
+
+      const activeList = contracts || []
+      const hasVaronil = activeList.some((c: any) => {
+        const cat = c.team_gender_category === 'female' ? 'Femenil' : (teamCategoryMap.get(c.team_id) || 'Varonil / Mixto')
+        return cat === 'Varonil / Mixto'
+      })
+      const hasFemenil = activeList.some((c: any) => {
+        const cat = c.team_gender_category === 'female' ? 'Femenil' : (teamCategoryMap.get(c.team_id) || 'Varonil / Mixto')
+        return cat === 'Femenil'
+      })
+
+      // 5. Aplicar regla de contratos según género
+      if (detectedGender === 'Masculino') {
+        // Hombre: Solo 1 contrato activo de equipo varonil/mixto
+        if (activeList.length >= 1) {
+          setBlockMessage('Ya tienes un contrato activo o en proceso. Los jugadores varoniles solo pueden tener 1 contrato activo de equipo varonil/mixto a la vez.')
           setFormStatus('blocked')
-        } else if (profile?.gender === 'Femenino') {
-          // Check divisiones
-          const hasVaronil = contracts.some((c: any) => c.teams?.type === 'Varonil / Mixto')
-          const hasFemenil = contracts.some((c: any) => c.teams?.type === 'Femenil')
-          
-          if (hasVaronil && hasFemenil) {
-            setBlockMessage('Has alcanzado el límite máximo de contratos (1 Femenil y 1 Varonil/Mixto).')
-            setFormStatus('blocked')
-          }
+          return
+        }
+
+        // Solo permitir equipos Varonil / Mixto
+        setAllowedDivision('Varonil / Mixto')
+        setTeams(parsedTeams.filter(t => t.category === 'Varonil / Mixto'))
+        setInfoNotice('Regla de contratos: Como jugador varonil, tienes permitido contar con 1 contrato activo en división Varonil / Mixto.')
+      } else {
+        // Mujer: Hasta 2 activos (1 varonil/mixto y 1 femenil)
+        if (hasVaronil && hasFemenil) {
+          setBlockMessage('Has alcanzado el límite máximo de contratos permitidos para jugadoras (1 en equipo Varonil/Mixto y 1 en equipo Femenil).')
+          setFormStatus('blocked')
+          return
+        }
+
+        if (hasVaronil) {
+          setAllowedDivision('Femenil')
+          setTeams(parsedTeams.filter(t => t.category === 'Femenil'))
+          setInfoNotice('Tienes 1 contrato activo en división Varonil / Mixto. Tu cupo restante disponible es para 1 equipo de división Femenil.')
+        } else if (hasFemenil) {
+          setAllowedDivision('Varonil / Mixto')
+          setTeams(parsedTeams.filter(t => t.category === 'Varonil / Mixto'))
+          setInfoNotice('Tienes 1 contrato activo en división Femenil. Tu cupo restante disponible es para 1 equipo de división Varonil / Mixto.')
+        } else {
+          setAllowedDivision('all')
+          setTeams(parsedTeams)
+          setInfoNotice('Regla para jugadoras: Puedes tener hasta 2 contratos activos simultáneos (1 en equipo Varonil/Mixto y 1 en equipo Femenil).')
         }
       }
     }
@@ -132,12 +203,15 @@ export function AltaContratoForm() {
       rolesToSave.push(`Línea: ${linea}`)
     }
 
+    const isFemenil = selectedTeam?.category === 'Femenil'
+
     const payload = {
       player_id: user?.id,
       team_id: teamId,
       roles: rolesToSave,
       end_date: formData.get('item_meta[882]'),
-      status: 'pending_manager'
+      status: 'pending_manager',
+      team_gender_category: isFemenil ? 'female' : 'mixed'
     }
 
     const { error } = await supabase.from('contracts').insert(payload)
@@ -146,7 +220,7 @@ export function AltaContratoForm() {
       setFormStatus('success')
     } else {
       setFormStatus('idle')
-      alert('Error al enviar el contrato.')
+      alert('Error al enviar el contrato: ' + error.message)
       console.error(error)
     }
   }
@@ -154,13 +228,13 @@ export function AltaContratoForm() {
   if (formStatus === 'blocked') {
     return (
       <div className="mx-auto w-full max-w-2xl rounded-xl border border-border bg-surface p-12 text-center shadow-2xl">
-        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-amber-500/10">
+        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-amber-500/10 border border-amber-500/20">
           <AlertTriangle className="h-10 w-10 text-amber-500" />
         </div>
         <h2 className="font-display text-3xl font-700 uppercase tracking-tight text-white mb-4">
           LÍMITE DE CONTRATOS ALCANZADO
         </h2>
-        <p className="text-muted-foreground mb-8">
+        <p className="text-muted-foreground mb-8 text-sm sm:text-base leading-relaxed max-w-lg mx-auto">
           {blockMessage}
         </p>
         <GmxButton href="/micuenta" className="px-8">
@@ -186,7 +260,7 @@ export function AltaContratoForm() {
 
       {formStatus === 'success' && (
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-surface animate-in fade-in duration-500">
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500/10 mb-6">
+          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500/10 mb-6 border border-emerald-500/20">
             <CheckCircle2 className="h-10 w-10 text-emerald-500" />
           </div>
           <h2 className="font-display text-3xl font-700 uppercase tracking-tight text-white mb-2 text-center">
@@ -208,14 +282,28 @@ export function AltaContratoForm() {
         <p className="mt-3 text-muted-foreground">
           Formaliza tu vinculación y acuerdo con tu equipo en la plataforma oficial de GMX Gaming.
         </p>
+
+        {infoNotice && (
+          <div className="mt-6 mx-auto max-w-2xl rounded-lg border border-primary/30 bg-primary/5 p-4 flex items-center gap-3 text-left">
+            <Info className="h-5 w-5 text-primary shrink-0" />
+            <p className="text-xs sm:text-sm text-white/90 leading-relaxed">
+              {infoNotice}
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="space-y-8">
         <div className="grid gap-6 sm:grid-cols-2">
           {/* Equipo */}
           <div className="space-y-2">
-            <label htmlFor="field_8bh2e" className="text-sm font-500 text-white">
-              Equipo <span className="text-primary">*</span>
+            <label htmlFor="field_8bh2e" className="text-sm font-500 text-white flex items-center justify-between">
+              <span>Equipo <span className="text-primary">*</span></span>
+              {allowedDivision !== 'all' && (
+                <span className="text-[11px] font-600 text-primary uppercase tracking-wider">
+                  División: {allowedDivision}
+                </span>
+              )}
             </label>
             <div className="relative">
               <select
@@ -229,11 +317,11 @@ export function AltaContratoForm() {
                 {teams.length > 0 ? (
                   teams.map(t => (
                     <option key={t.id} value={t.id}>
-                      {t.name}{t.status === 'pending' ? ' (Pendiente de aprobación)' : t.status === 'active' ? ' (Activo)' : ''}
+                      {t.name} [{t.category || 'Varonil / Mixto'}]{t.status === 'pending' ? ' (Pendiente)' : ''}
                     </option>
                   ))
                 ) : (
-                  <option value="" disabled>No hay equipos disponibles</option>
+                  <option value="" disabled>No hay equipos disponibles en esta división</option>
                 )}
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-muted-foreground">
@@ -258,7 +346,6 @@ export function AltaContratoForm() {
               className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
-
 
           {/* Roles en el Equipo */}
           <div className="space-y-4 sm:col-span-2 pt-4 border-t border-border/50">
@@ -348,7 +435,7 @@ export function AltaContratoForm() {
       <div className="pt-8 text-center sm:text-left border-t border-border mt-8">
         <button
           type="submit"
-          className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden bg-primary px-8 py-5 font-display text-[15px] font-600 uppercase tracking-[0.18em] text-white transition-colors duration-300 clip-corner hover:bg-primary-dark sm:w-auto mt-4"
+          className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden bg-primary px-8 py-5 font-display text-[15px] font-600 uppercase tracking-[0.18em] text-white transition-colors duration-300 clip-corner hover:bg-primary-dark sm:w-auto mt-4 cursor-pointer"
         >
           <span className="relative z-10 flex items-center gap-2">
             ACEPTAR ACUERDO Y ENVIAR AL MANAGER

@@ -125,19 +125,38 @@ function getModificationDiffs(details: any): DiffField[] {
     checkField('logo_url', 'original_logo', 'Logo del Equipo', 'image')
   }
 
-  // 2. Campos de Modificación de Perfil de Usuario
-  if (details.user_id !== undefined || details.bio !== undefined || details.avatar_url !== undefined) {
+  // 2. Campos de Modificación de Perfil de Usuario y Jugador Profesional
+  if (details.user_id !== undefined || details.bio !== undefined || details.avatar_url !== undefined || details.nickname !== undefined || details.game_id !== undefined) {
     if (!diffs.some(d => d.key === 'name')) {
-      checkField('name', 'original_name', 'Nombre del Usuario', 'text')
+      checkField('name', 'original_name', 'Nombre Real', 'text')
     }
+    checkField('nickname', 'original_nickname', 'Nickname / IGN', 'text')
+    checkField('game_nickname', 'original_game_nickname', 'Nombre en Juego (IGN)', 'text')
+    checkField('discord_handle', 'original_discord_handle', 'Usuario de Discord', 'text')
+    checkField('closest_airport', 'original_closest_airport', 'País / Aeropuerto', 'text')
+    checkField('country', 'original_country', 'País de Residencia', 'text')
     checkField('avatar_url', 'original_avatar', 'Foto de Perfil / Avatar', 'image')
-    checkField('bio', 'original_bio', 'Biografía / Descripción', 'longtext')
+    checkField('bio', 'original_bio', 'Biografía / Trayectoria', 'longtext')
+    checkField('game', 'original_game', 'Juego Principal', 'text')
+    checkField('game_id', 'original_game_id', 'ID de Juego / Cuenta', 'text')
+    checkField('server', 'original_server', 'Servidor / Región', 'text')
+    checkField('country_account', 'original_country_account', 'País de la Cuenta', 'text')
+    checkField('social_ig', 'original_social_ig', 'Instagram', 'text')
+    checkField('social_tiktok', 'original_social_tiktok', 'TikTok', 'text')
+    checkField('social_yt', 'original_social_yt', 'YouTube', 'text')
+    checkField('social_twitch', 'original_social_twitch', 'Twitch', 'text')
+    checkField('social_kick', 'original_social_kick', 'Kick', 'text')
+    checkField('social_x', 'original_social_x', 'X (Twitter)', 'text')
+    checkField('social_fb', 'original_social_fb', 'Facebook', 'text')
   }
 
   // Fallback para otros campos que tengan original_
   // Se excluyen los campos ya procesados explícitamente para evitar duplicados
   const ALREADY_HANDLED_KEYS = new Set([
     'name', 'tag', 'country', 'logo_url', 'avatar_url', 'bio', 'description',
+    'nickname', 'game_nickname', 'discord_handle', 'closest_airport',
+    'game', 'game_id', 'server', 'country_account',
+    'social_ig', 'social_tiktok', 'social_yt', 'social_twitch', 'social_kick', 'social_x', 'social_fb',
     // Variantes que se derivan de original_ pero son alias de los anteriores
     'avatar', 'logo', 'photo'
   ])
@@ -394,15 +413,55 @@ export function AdminValidations() {
               }).eq('id', confirmAction.id)
             }
           } else {
-            // Modificación de Perfil de Usuario
+            // Modificación de Perfil de Usuario / Jugador Profesional
             const userId = details.user_id || confirmAction.id
             if (isApproved) {
               const updates: any = { edit_requested: false }
-              if (details.name) updates.name = details.name
-              if (details.avatar_url) updates.avatar_url = details.avatar_url
-              if (details.bio) updates.bio = details.bio
-              
+              if (details.name !== undefined) updates.name = details.name
+              if (details.nickname !== undefined) updates.nickname = details.nickname
+              if (details.game_nickname !== undefined) updates.game_nickname = details.game_nickname
+              if (details.discord_handle !== undefined) updates.discord_handle = details.discord_handle
+              if (details.closest_airport !== undefined) updates.closest_airport = details.closest_airport
+              if (details.country !== undefined) updates.country = details.country
+              if (details.avatar_url !== undefined) updates.avatar_url = details.avatar_url
+              if (details.bio !== undefined) updates.bio = details.bio
+              if (details.social_ig !== undefined) updates.social_ig = details.social_ig
+              if (details.social_tiktok !== undefined) updates.social_tiktok = details.social_tiktok
+              if (details.social_yt !== undefined) updates.social_yt = details.social_yt
+              if (details.social_twitch !== undefined) updates.social_twitch = details.social_twitch
+              if (details.social_kick !== undefined) updates.social_kick = details.social_kick
+              if (details.social_x !== undefined) updates.social_x = details.social_x
+              if (details.social_fb !== undefined) updates.social_fb = details.social_fb
+
               await supabase.from('profiles').update(updates).eq('id', userId)
+
+              // Actualizar datos de juego en player_game_info si fueron provistos
+              if (details.game_id !== undefined || details.server !== undefined || details.country_account !== undefined || details.game !== undefined) {
+                const gameUpdates: any = {}
+                if (details.game_id !== undefined) gameUpdates.game_id = details.game_id
+                if (details.server !== undefined) gameUpdates.server = details.server
+                if (details.country_account !== undefined) gameUpdates.country_account = details.country_account
+                if (details.game !== undefined) gameUpdates.game = details.game
+                if (details.game_nickname !== undefined || details.nickname !== undefined) {
+                  gameUpdates.game_nickname = details.game_nickname || details.nickname
+                }
+
+                const { data: existingGameInfo } = await supabase
+                  .from('player_game_info')
+                  .select('id')
+                  .eq('profile_id', userId)
+                  .limit(1)
+
+                if (existingGameInfo && existingGameInfo.length > 0) {
+                  await supabase.from('player_game_info').update(gameUpdates).eq('id', existingGameInfo[0].id)
+                } else {
+                  await supabase.from('player_game_info').insert({
+                    profile_id: userId,
+                    game: details.game || 'Mobile Legends',
+                    ...gameUpdates
+                  })
+                }
+              }
               
               await supabase.from('validations').update({
                 status: 'approved',
@@ -415,9 +474,20 @@ export function AdminValidations() {
             } else {
               // Revertir y registrar rechazo con motivo obligatorio
               const updates: any = { edit_requested: false }
-              if (details.original_name) updates.name = details.original_name
-              if (details.original_avatar) updates.avatar_url = details.original_avatar
-              if (details.original_bio) updates.bio = details.original_bio
+              if (details.original_name !== undefined) updates.name = details.original_name
+              if (details.original_avatar !== undefined) updates.avatar_url = details.original_avatar
+              if (details.original_bio !== undefined) updates.bio = details.original_bio
+              if (details.original_nickname !== undefined) updates.nickname = details.original_nickname
+              if (details.original_game_nickname !== undefined) updates.game_nickname = details.original_game_nickname
+              if (details.original_discord_handle !== undefined) updates.discord_handle = details.original_discord_handle
+              if (details.original_closest_airport !== undefined) updates.closest_airport = details.original_closest_airport
+              if (details.original_social_ig !== undefined) updates.social_ig = details.original_social_ig
+              if (details.original_social_tiktok !== undefined) updates.social_tiktok = details.original_social_tiktok
+              if (details.original_social_yt !== undefined) updates.social_yt = details.original_social_yt
+              if (details.original_social_twitch !== undefined) updates.social_twitch = details.original_social_twitch
+              if (details.original_social_kick !== undefined) updates.social_kick = details.original_social_kick
+              if (details.original_social_x !== undefined) updates.social_x = details.original_social_x
+              if (details.original_social_fb !== undefined) updates.social_fb = details.original_social_fb
 
               await supabase.from('profiles').update(updates).eq('id', userId)
 

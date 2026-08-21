@@ -1,18 +1,24 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, Mic, Image as ImageIcon, ExternalLink, Camera, MessageCircle, Tv } from 'lucide-react'
+import { Plus, Trash2, Mic, Image as ImageIcon, ExternalLink, Camera, MessageCircle, Tv, Edit3, X, Save } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { GmxButton } from '@/components/gmx-button'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 
 interface Caster {
   id: string
   name: string
-  avatar_url: string
-  instagram_url: string
-  twitter_url: string
-  twitch_url: string
+  nickname?: string
+  photo_url?: string
+  avatar_url?: string
+  social_ig?: string
+  social_x?: string
+  social_twitch?: string
+  instagram_url?: string
+  twitter_url?: string
+  twitch_url?: string
   created_at: string
 }
 
@@ -20,7 +26,16 @@ export function AdminCasters() {
   const [casters, setCasters] = useState<Caster[]>([])
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [newCaster, setNewCaster] = useState({ name: '', avatar_url: '', instagram_url: '', twitter_url: '', twitch_url: '' })
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const [casterForm, setCasterForm] = useState({
+    name: '',
+    nickname: '',
+    photo_url: '',
+    social_ig: '',
+    social_x: '',
+    social_twitch: ''
+  })
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const supabase = createClient()
@@ -31,46 +46,98 @@ export function AdminCasters() {
 
   const fetchCasters = async () => {
     setLoading(true)
-    const { data } = await supabase.from('casters').select('*').order('created_at', { ascending: false })
-    if (data) setCasters(data)
+    const { data, error } = await supabase.from('casters').select('*').order('created_at', { ascending: false })
+    if (error) {
+      console.error('Error fetching casters:', error)
+      toast.error('Error al cargar casters: ' + error.message)
+    } else if (data) {
+      setCasters(data)
+    }
     setLoading(false)
   }
 
+  const openNewCasterModal = () => {
+    setEditingId(null)
+    setCasterForm({ name: '', nickname: '', photo_url: '', social_ig: '', social_x: '', social_twitch: '' })
+    setAvatarFile(null)
+    setAvatarPreview(null)
+    setIsModalOpen(true)
+  }
+
+  const openEditCasterModal = (caster: Caster) => {
+    setEditingId(caster.id)
+    setCasterForm({
+      name: caster.name || '',
+      nickname: caster.nickname || caster.name || '',
+      photo_url: caster.photo_url || caster.avatar_url || '',
+      social_ig: caster.social_ig || caster.instagram_url || '',
+      social_x: caster.social_x || caster.twitter_url || '',
+      social_twitch: caster.social_twitch || caster.twitch_url || ''
+    })
+    setAvatarFile(null)
+    setAvatarPreview(caster.photo_url || caster.avatar_url || null)
+    setIsModalOpen(true)
+  }
+
   const handleSave = async () => {
-    if (!newCaster.name) {
-      toast.error('El nombre es obligatorio')
+    if (!casterForm.name.trim()) {
+      toast.error('El nombre del caster es obligatorio')
       return
     }
 
-    let avatarUrl = newCaster.avatar_url;
+    setIsSaving(true)
 
-    if (avatarFile) {
-      toast.loading('Subiendo foto...')
-      const fileExt = avatarFile.name.split('.').pop()
-      const fileName = `caster-${Date.now()}.${fileExt}`
-      const { error: uploadError, data } = await supabase.storage.from('teams').upload(`casters/${fileName}`, avatarFile)
-      toast.dismiss()
-      
-      if (uploadError) {
-        toast.error('Error al subir la foto')
-        return
+    try {
+      let finalPhotoUrl = casterForm.photo_url || ''
+
+      if (avatarFile) {
+        toast.loading('Subiendo foto del caster...', { id: 'caster-upload' })
+        const fileExt = avatarFile.name.split('.').pop()
+        const fileName = `caster-${Date.now()}.${fileExt}`
+        const { error: uploadError, data } = await supabase.storage.from('teams').upload(`casters/${fileName}`, avatarFile)
+        toast.dismiss('caster-upload')
+        
+        if (uploadError) {
+          console.error('Error al subir foto:', uploadError)
+          toast.error('Error al subir la foto: ' + (uploadError.message || 'Inténtalo de nuevo'))
+          setIsSaving(false)
+          return
+        }
+        
+        const { data: publicUrlData } = supabase.storage.from('teams').getPublicUrl(data.path)
+        finalPhotoUrl = publicUrlData.publicUrl
       }
-      
-      const { data: publicUrlData } = supabase.storage.from('teams').getPublicUrl(data.path)
-      avatarUrl = publicUrlData.publicUrl
-    }
 
-    const { error } = await supabase.from('casters').insert([{ ...newCaster, avatar_url: avatarUrl }])
-    
-    if (error) {
-      toast.error('Error al guardar el caster')
-    } else {
-      toast.success('Caster agregado correctamente')
+      const payload = {
+        name: casterForm.name.trim(),
+        nickname: (casterForm.nickname || casterForm.name).trim(),
+        photo_url: finalPhotoUrl || null,
+        social_ig: casterForm.social_ig?.trim() || null,
+        social_x: casterForm.social_x?.trim() || null,
+        social_twitch: casterForm.social_twitch?.trim() || null
+      }
+
+      if (editingId) {
+        const { error } = await supabase.from('casters').update(payload).eq('id', editingId)
+        if (error) throw error
+        toast.success('Caster actualizado correctamente')
+      } else {
+        const { error } = await supabase.from('casters').insert([payload])
+        if (error) throw error
+        toast.success('Caster agregado correctamente')
+      }
+
       setIsModalOpen(false)
-      setNewCaster({ name: '', avatar_url: '', instagram_url: '', twitter_url: '', twitch_url: '' })
+      setCasterForm({ name: '', nickname: '', photo_url: '', social_ig: '', social_x: '', social_twitch: '' })
       setAvatarFile(null)
       setAvatarPreview(null)
+      setEditingId(null)
       fetchCasters()
+    } catch (err: any) {
+      console.error('Error al guardar caster:', err)
+      toast.error('Error al guardar el caster: ' + (err.message || 'Error desconocido'))
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -78,7 +145,7 @@ export function AdminCasters() {
     if (window.confirm('¿Seguro que deseas eliminar este caster?')) {
       const { error } = await supabase.from('casters').delete().eq('id', id)
       if (error) {
-        toast.error('Error al eliminar')
+        toast.error('Error al eliminar: ' + error.message)
       } else {
         toast.success('Caster eliminado')
         setCasters(prev => prev.filter(c => c.id !== id))
@@ -91,11 +158,16 @@ export function AdminCasters() {
       <div className="rounded-xl border border-border bg-surface p-6 sm:p-8">
         
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-8">
-          <h2 className="font-display text-2xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
-            <Mic className="w-6 h-6 text-primary" />
-            Casters GMX
-          </h2>
-          <GmxButton onClick={() => setIsModalOpen(true)} className="gap-2">
+          <div>
+            <h2 className="font-display text-2xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
+              <Mic className="w-6 h-6 text-primary" />
+              Casters GMX
+            </h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              Gestiona el talento y las voces oficiales de las transmisiones de GMX Gaming.
+            </p>
+          </div>
+          <GmxButton onClick={openNewCasterModal} className="gap-2">
             <Plus className="w-4 h-4" /> Agregar Caster
           </GmxButton>
         </div>
@@ -109,52 +181,72 @@ export function AdminCasters() {
           </div>
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {casters.map(caster => (
-              <div key={caster.id} className="relative rounded-xl border border-border bg-background p-5 hover:border-primary/50 transition-colors">
-                <button 
-                  onClick={() => handleDelete(caster.id)}
-                  className="absolute top-4 right-4 p-2 rounded-full bg-surface border border-border text-muted-foreground hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/50 transition-all z-10"
-                  title="Eliminar"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+            {casters.map(caster => {
+              const photo = caster.photo_url || caster.avatar_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
+              const twitch = caster.social_twitch || caster.twitch_url
+              const instagram = caster.social_ig || caster.instagram_url
+              const twitter = caster.social_x || caster.twitter_url
 
-                <div className="flex flex-col items-center text-center mt-2">
-                  <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-primary/20 mb-4 bg-surface">
-                    <img 
-                      src={caster.avatar_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
-                      alt={caster.name}
-                      className="w-full h-full object-cover"
-                    />
+              return (
+                <div key={caster.id} className="relative rounded-xl border border-border bg-background p-5 hover:border-primary/50 transition-colors group">
+                  <div className="absolute top-4 right-4 flex items-center gap-1.5 z-10">
+                    <button 
+                      onClick={() => openEditCasterModal(caster)}
+                      className="p-2 rounded-full bg-surface border border-border text-muted-foreground hover:bg-primary/10 hover:text-primary hover:border-primary/50 transition-all cursor-pointer"
+                      title="Editar Caster"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                    <button 
+                      onClick={() => handleDelete(caster.id)}
+                      className="p-2 rounded-full bg-surface border border-border text-muted-foreground hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/50 transition-all cursor-pointer"
+                      title="Eliminar Caster"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                  <h3 className="font-display text-lg font-700 text-white uppercase tracking-tight mb-4">{caster.name}</h3>
-                  
-                  <div className="flex items-center gap-3">
-                    {caster.twitch_url && (
-                      <a href={caster.twitch_url} target="_blank" rel="noopener noreferrer" className="p-2 rounded bg-surface border border-border text-muted-foreground hover:text-[#9146FF] hover:border-[#9146FF]/30 transition-colors" title="Twitch">
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/>
-                        </svg>
-                      </a>
+
+                  <div className="flex flex-col items-center text-center mt-2">
+                    <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-primary/20 mb-4 bg-surface shadow-md">
+                      <img 
+                        src={photo} 
+                        alt={caster.nickname || caster.name}
+                        className="w-full h-full object-cover" 
+                      />
+                    </div>
+                    <h3 className="font-display text-lg font-700 text-white uppercase tracking-tight">
+                      {caster.nickname || caster.name}
+                    </h3>
+                    {caster.nickname && caster.nickname !== caster.name && (
+                      <p className="text-xs text-muted-foreground font-500 mb-3">{caster.name}</p>
                     )}
-                    {caster.instagram_url && (
-                      <a href={caster.instagram_url} target="_blank" rel="noopener noreferrer" className="p-2 rounded bg-surface border border-border text-muted-foreground hover:text-[#E1306C] hover:border-[#E1306C]/30 transition-colors" title="Instagram">
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
-                        </svg>
-                      </a>
-                    )}
-                    {caster.twitter_url && (
-                      <a href={caster.twitter_url} target="_blank" rel="noopener noreferrer" className="p-2 rounded bg-surface border border-border text-muted-foreground hover:text-white hover:border-white/30 transition-colors" title="X / Twitter">
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                        </svg>
-                      </a>
-                    )}
+                    
+                    <div className="flex items-center gap-2.5 mt-3">
+                      {twitch && (
+                        <a href={twitch} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg bg-surface border border-border text-muted-foreground hover:text-[#9146FF] hover:border-[#9146FF]/30 transition-colors" title="Twitch">
+                          <Tv className="w-4 h-4" />
+                        </a>
+                      )}
+                      {instagram && (
+                        <a href={instagram} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg bg-surface border border-border text-muted-foreground hover:text-[#E1306C] hover:border-[#E1306C]/30 transition-colors" title="Instagram">
+                          <Camera className="w-4 h-4" />
+                        </a>
+                      )}
+                      {twitter && (
+                        <a href={twitter} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg bg-surface border border-border text-muted-foreground hover:text-white hover:border-white/30 transition-colors" title="X / Twitter">
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                          </svg>
+                        </a>
+                      )}
+                      {!twitch && !instagram && !twitter && (
+                        <span className="text-[11px] text-muted-foreground/60 italic">Sin redes agregadas</span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
 
@@ -168,22 +260,44 @@ export function AdminCasters() {
             <div className="flex shrink-0 items-center justify-between border-b border-border p-6 bg-surface z-10">
               <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
                 <Mic className="w-5 h-5 text-primary" />
-                Nuevo Caster
+                {editingId ? "Editar Caster" : "Nuevo Caster"}
               </h3>
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className="text-muted-foreground hover:text-white transition-colors p-1.5 rounded-full hover:bg-white/5 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
             
             <div data-lenis-prevent data-modal-scrollbody className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6 space-y-4">
-              <div className="space-y-2">
-                <label className="text-xs font-600 uppercase tracking-widest text-primary">Nombre del Caster</label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-600 uppercase tracking-widest text-primary">
+                  Nombre del Caster <span className="text-red-400">*</span>
+                </label>
                 <input 
                   type="text" 
-                  value={newCaster.name}
-                  onChange={e => setNewCaster({...newCaster, name: e.target.value})}
-                  className="w-full rounded-md border border-border bg-background px-4 py-2 text-white focus:border-primary focus:outline-none"
-                  placeholder="Nombre o Nickname"
+                  value={casterForm.name}
+                  onChange={e => setCasterForm({...casterForm, name: e.target.value})}
+                  className="w-full rounded-md border border-border bg-background px-4 py-2.5 text-sm text-white focus:border-primary focus:outline-none"
+                  placeholder="Ej: Carlos Mendoza o Nickname"
                 />
               </div>
-              <div className="space-y-2">
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-600 uppercase tracking-widest text-primary">
+                  Nickname / IGN (Opcional)
+                </label>
+                <input 
+                  type="text" 
+                  value={casterForm.nickname}
+                  onChange={e => setCasterForm({...casterForm, nickname: e.target.value})}
+                  className="w-full rounded-md border border-border bg-background px-4 py-2.5 text-sm text-white focus:border-primary focus:outline-none"
+                  placeholder="Ej: CasterPro"
+                />
+              </div>
+
+              <div className="space-y-1.5">
                 <label className="text-xs font-600 uppercase tracking-widest text-primary">Foto del Caster</label>
                 <div 
                   className="relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-background p-6 transition-colors hover:border-primary/50"
@@ -211,7 +325,7 @@ export function AdminCasters() {
                     className="absolute inset-0 z-50 h-full w-full cursor-pointer opacity-0"
                   />
                   {avatarPreview ? (
-                    <div className="relative h-24 w-24 overflow-hidden rounded-full border-2 border-primary/20">
+                    <div className="relative h-24 w-24 overflow-hidden rounded-full border-2 border-primary/20 shadow-md">
                       <img src={avatarPreview} alt="Preview" className="h-full w-full object-cover" />
                     </div>
                   ) : (
@@ -223,31 +337,37 @@ export function AdminCasters() {
                   )}
                 </div>
               </div>
-              <div className="space-y-2">
+
+              <div className="space-y-1.5">
                 <label className="text-xs font-600 uppercase tracking-widest text-primary">Twitch (URL) - Opcional</label>
                 <input 
                   type="text" 
-                  value={newCaster.twitch_url}
-                  onChange={e => setNewCaster({...newCaster, twitch_url: e.target.value})}
-                  className="w-full rounded-md border border-border bg-background px-4 py-2 text-white focus:border-primary focus:outline-none"
+                  value={casterForm.social_twitch}
+                  onChange={e => setCasterForm({...casterForm, social_twitch: e.target.value})}
+                  className="w-full rounded-md border border-border bg-background px-4 py-2.5 text-sm text-white focus:border-primary focus:outline-none"
+                  placeholder="https://twitch.tv/usuario"
                 />
               </div>
-              <div className="space-y-2">
+
+              <div className="space-y-1.5">
                 <label className="text-xs font-600 uppercase tracking-widest text-primary">Instagram (URL) - Opcional</label>
                 <input 
                   type="text" 
-                  value={newCaster.instagram_url}
-                  onChange={e => setNewCaster({...newCaster, instagram_url: e.target.value})}
-                  className="w-full rounded-md border border-border bg-background px-4 py-2 text-white focus:border-primary focus:outline-none"
+                  value={casterForm.social_ig}
+                  onChange={e => setCasterForm({...casterForm, social_ig: e.target.value})}
+                  className="w-full rounded-md border border-border bg-background px-4 py-2.5 text-sm text-white focus:border-primary focus:outline-none"
+                  placeholder="https://instagram.com/usuario"
                 />
               </div>
-              <div className="space-y-2">
+
+              <div className="space-y-1.5">
                 <label className="text-xs font-600 uppercase tracking-widest text-primary">Twitter / X (URL) - Opcional</label>
                 <input 
                   type="text" 
-                  value={newCaster.twitter_url}
-                  onChange={e => setNewCaster({...newCaster, twitter_url: e.target.value})}
-                  className="w-full rounded-md border border-border bg-background px-4 py-2 text-white focus:border-primary focus:outline-none"
+                  value={casterForm.social_x}
+                  onChange={e => setCasterForm({...casterForm, social_x: e.target.value})}
+                  className="w-full rounded-md border border-border bg-background px-4 py-2.5 text-sm text-white focus:border-primary focus:outline-none"
+                  placeholder="https://x.com/usuario"
                 />
               </div>
             </div>
@@ -255,12 +375,16 @@ export function AdminCasters() {
             <div className="flex shrink-0 gap-3 border-t border-border p-6 bg-surface z-10">
               <button 
                 onClick={() => setIsModalOpen(false)}
-                className="flex-1 rounded-md border border-border bg-transparent px-4 py-3 font-display text-[13px] font-600 uppercase tracking-widest text-muted-foreground hover:text-white"
+                className="flex-1 rounded-md border border-border bg-transparent px-4 py-3 font-display text-[13px] font-600 uppercase tracking-widest text-muted-foreground hover:text-white cursor-pointer"
               >
                 Cancelar
               </button>
-              <GmxButton onClick={handleSave} className="flex-1 px-4 py-3">
-                Guardar
+              <GmxButton 
+                onClick={handleSave} 
+                disabled={isSaving || !casterForm.name.trim()}
+                className="flex-1 px-4 py-3"
+              >
+                {isSaving ? "Guardando..." : "Guardar"}
               </GmxButton>
             </div>
           </div>
@@ -269,3 +393,4 @@ export function AdminCasters() {
     </div>
   )
 }
+

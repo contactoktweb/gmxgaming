@@ -18,9 +18,13 @@ import {
   UserCheck, 
   ScrollText, 
   Clock, 
-  Calendar 
+  Calendar,
+  Eye,
+  Gamepad2,
+  Globe,
+  Share2
 } from 'lucide-react'
-import { cn, formatRoleTitle, formatRolesList } from '@/lib/utils'
+import { cn, formatRoleTitle, formatRolesList, formatLocation } from '@/lib/utils'
 import { GmxButton } from '@/components/gmx-button'
 import { useAuth } from '@/lib/auth-context'
 import { createClient } from '@/utils/supabase/client'
@@ -38,15 +42,39 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
 
   // Edit Modal State
   const [isEditing, setIsEditing] = useState(false)
+  const [isEditingPlayer, setIsEditingPlayer] = useState(false)
   const [showPlayerModal, setShowPlayerModal] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [fotoFile, setFotoFile] = useState<File | null>(null)
+  const [playerFotoFile, setPlayerFotoFile] = useState<File | null>(null)
   const supabase = createClient()
   
   const [editForm, setEditForm] = useState({
     name: '',
     bio: '',
     profilePhoto: null as string | null,
+    imagesChanged: false
+  })
+
+  const [playerEditForm, setPlayerEditForm] = useState({
+    name: '',
+    nickname: '',
+    discord_handle: '',
+    closest_airport: '',
+    bio: '',
+    profilePhoto: null as string | null,
+    game: 'Mobile Legends',
+    game_id: '',
+    server: '',
+    country_account: '',
+    social_ig: '',
+    social_tiktok: '',
+    social_yt: '',
+    social_twitch: '',
+    social_kick: '',
+    social_x: '',
+    social_fb: '',
     imagesChanged: false
   })
 
@@ -69,6 +97,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
   const isPlayerRejected = isPlayer && playerStatus === 'rejected'
 
   const hasRejectedModification = latestValidation?.type === 'modificacion' && latestValidation?.status === 'rejected' && !isRequested
+  const isPlayerModificationPending = latestValidation?.type === 'modificacion' && latestValidation?.status === 'pending' && isRequested
   const rejectionReasonText = latestValidation?.details?.rejection_reason
   
   useEffect(() => {
@@ -164,7 +193,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
   }, [user])
 
   useEffect(() => {
-    if (isEditing || showPlayerModal) {
+    if (isEditing || isEditingPlayer || showPlayerModal) {
       window.__lenis?.stop()
       const blockScroll = (e: WheelEvent) => {
         const modalBody = document.querySelector('[data-modal-scrollbody]')
@@ -179,33 +208,55 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
     } else {
       window.__lenis?.start()
     }
-  }, [isEditing, showPlayerModal])
+  }, [isEditing, isEditingPlayer, showPlayerModal])
 
   const openEdit = () => {
-    // Si hay una solicitud pendiente o rechazada, pre-cargar los datos que el usuario solicitó
-    const pendingDetails = (isRequested || hasRejectedModification) ? latestValidation?.details : null
-    const initialName = pendingDetails?.name || name
-    const initialBio = pendingDetails?.bio || bio
-    const initialPhoto = pendingDetails?.avatar_url || profilePhoto
-
     setEditForm({
-      name: initialName || '',
-      bio: initialBio || '',
-      profilePhoto: initialPhoto || null,
+      name: profileData?.name || name || '',
+      bio: profileData?.bio || bio || '',
+      profilePhoto: profileData?.avatar_url || profilePhoto || null,
       imagesChanged: false
     })
+    setFotoFile(null)
     setIsEditing(true)
   }
 
-  // Detect if any field has actually changed compared to current or pending state
-  const pendingDetails = (isRequested || hasRejectedModification) ? latestValidation?.details : null
-  const currentBaseName = pendingDetails?.name || name
-  const currentBaseBio = pendingDetails?.bio || bio
-  const currentBasePhoto = pendingDetails?.avatar_url || profilePhoto
+  const openEditPlayer = () => {
+    const pendingDetails = (isRequested || hasRejectedModification) ? latestValidation?.details : null
+    const gameInfo = profileData?.player_game_info?.[0] || {}
+
+    setPlayerEditForm({
+      name: pendingDetails?.name || profileData?.name || name || '',
+      nickname: pendingDetails?.nickname || pendingDetails?.game_nickname || profileData?.nickname || profileData?.game_nickname || '',
+      discord_handle: pendingDetails?.discord_handle || profileData?.discord_handle || '',
+      closest_airport: pendingDetails?.closest_airport || profileData?.closest_airport || '',
+      bio: pendingDetails?.bio || profileData?.bio || bio || '',
+      profilePhoto: pendingDetails?.avatar_url || profileData?.avatar_url || profilePhoto || null,
+      game: pendingDetails?.game || gameInfo.game || 'Mobile Legends',
+      game_id: pendingDetails?.game_id || gameInfo.game_id || '',
+      server: pendingDetails?.server || gameInfo.server || '',
+      country_account: pendingDetails?.country_account || gameInfo.country_account || '',
+      social_ig: pendingDetails?.social_ig || profileData?.social_ig || '',
+      social_tiktok: pendingDetails?.social_tiktok || profileData?.social_tiktok || '',
+      social_yt: pendingDetails?.social_yt || profileData?.social_yt || '',
+      social_twitch: pendingDetails?.social_twitch || profileData?.social_twitch || '',
+      social_kick: pendingDetails?.social_kick || profileData?.social_kick || '',
+      social_x: pendingDetails?.social_x || profileData?.social_x || '',
+      social_fb: pendingDetails?.social_fb || profileData?.social_fb || '',
+      imagesChanged: false
+    })
+    setPlayerFotoFile(null)
+    setIsEditingPlayer(true)
+  }
+
+  // Detect if personal profile fields have changed
+  const currentBaseName = (profileData?.name || name || '').trim()
+  const currentBaseBio = (profileData?.bio || bio || '').trim()
+  const currentBasePhoto = profileData?.avatar_url || profilePhoto || null
 
   const hasChanges = 
-    editForm.name.trim() !== (currentBaseName || '').trim() ||
-    editForm.bio.trim() !== (currentBaseBio || '').trim() ||
+    editForm.name.trim() !== currentBaseName ||
+    editForm.bio.trim() !== currentBaseBio ||
     editForm.profilePhoto !== currentBasePhoto ||
     editForm.imagesChanged
 
@@ -213,6 +264,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
     const file = e.target.files?.[0]
     if (!file) return
 
+    setFotoFile(file)
     const reader = new FileReader()
     reader.onload = (event) => {
       const result = event.target?.result as string
@@ -225,11 +277,17 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
     reader.readAsDataURL(file)
   }
 
+  // Guardar datos del Perfil Personal directamente (sin requerir aprobación de admin)
   const handleSave = async () => {
     if (!hasChanges) {
       toast.info('No hay cambios', {
-        description: 'Realiza alguna modificación antes de guardar o enviar la solicitud.'
+        description: 'Realiza alguna modificación antes de guardar.'
       })
+      return
+    }
+
+    if (!editForm.name.trim()) {
+      toast.error('El nombre no puede estar vacío')
       return
     }
 
@@ -237,91 +295,191 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
 
     try {
       if (user) {
-        if (canEdit) {
-          // Guardar cambios directamente
-          const { error } = await supabase.from('profiles').update({
-            name: editForm.name,
-            avatar_url: editForm.profilePhoto || user.avatar
-          }).eq('id', user.id)
+        let finalAvatarUrl = editForm.profilePhoto || profilePhoto
 
-          if (error) throw error
+        if (fotoFile) {
+          toast.loading('Subiendo imagen de perfil...', { id: 'user-avatar-upload' })
+          const fileExt = fotoFile.name.split('.').pop()
+          const fileName = `avatar-${user.id}-${Date.now()}.${fileExt}`
+          const { error: uploadError, data } = await supabase.storage.from('avatars').upload(fileName, fotoFile)
+          toast.dismiss('user-avatar-upload')
 
-          setName(editForm.name)
-          setBio(editForm.bio)
-          if (editForm.profilePhoto) setProfilePhoto(editForm.profilePhoto)
-
-          toast.success('Perfil Actualizado', {
-            description: 'Tus cambios han sido guardados exitosamente.'
-          })
-        } else {
-          // Solicitar o actualizar modificación al administrador
-          const payloadDetails = {
-            user_id: user.id,
-            name: editForm.name,
-            bio: editForm.bio,
-            avatar_url: editForm.profilePhoto || profilePhoto,
-            original_name: latestValidation?.details?.original_name || name,
-            original_avatar: latestValidation?.details?.original_avatar || profilePhoto,
-            original_bio: latestValidation?.details?.original_bio || bio
+          if (!uploadError && data) {
+            const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(data.path)
+            finalAvatarUrl = publicUrlData.publicUrl
           }
-
-          let valError = null
-
-          if (latestValidation?.id && isRequested) {
-            // Actualizar la solicitud pendiente existente
-            const { error } = await supabase.from('validations').update({
-              target_name: `${name} ➔ ${editForm.name}`,
-              status: 'pending',
-              details: payloadDetails
-            }).eq('id', latestValidation.id)
-            valError = error
-          } else {
-            // Eliminar solicitudes antiguas ya procesadas (approved/rejected) para evitar conflictos
-            await supabase
-              .from('validations')
-              .delete()
-              .eq('type', 'modificacion')
-              .in('status', ['approved', 'rejected'])
-              .filter('details->>user_id', 'eq', user.id)
-
-            // Insertar nueva solicitud
-            const { error } = await supabase.from('validations').insert({
-              type: 'modificacion',
-              target_name: `${name} ➞ ${editForm.name}`,
-              submitted_by: user.email || user.name || user.id,
-              status: 'pending',
-              details: payloadDetails
-            })
-            valError = error
-          }
-
-          const { error: profError } = await supabase.from('profiles').update({
-            edit_requested: true
-          }).eq('id', user.id)
-
-          if (valError || profError) throw (valError || profError)
-
-          setProfileData((prev: any) => ({ ...prev, edit_requested: true }))
-          setLatestValidation({
-            id: latestValidation?.id,
-            type: 'modificacion',
-            status: 'pending',
-            details: payloadDetails
-          })
-
-          toast.success(isRequested ? 'Solicitud Actualizada' : 'Solicitud Enviada', {
-            description: isRequested
-              ? 'Los nuevos datos de tu solicitud fueron actualizados para el administrador.'
-              : 'Tus cambios han sido enviados al administrador para su aprobación.'
-          })
         }
+
+        const { error } = await supabase.from('profiles').update({
+          name: editForm.name.trim(),
+          bio: editForm.bio.trim(),
+          avatar_url: finalAvatarUrl
+        }).eq('id', user.id)
+
+        if (error) throw error
+
+        setName(editForm.name.trim())
+        setBio(editForm.bio.trim())
+        if (finalAvatarUrl) setProfilePhoto(finalAvatarUrl)
+        setProfileData((prev: any) => ({
+          ...prev,
+          name: editForm.name.trim(),
+          bio: editForm.bio.trim(),
+          avatar_url: finalAvatarUrl
+        }))
+
+        toast.success('Perfil Actualizado', {
+          description: 'Los datos de tu perfil personal han sido guardados exitosamente.'
+        })
       }
 
       setIsEditing(false)
+      setFotoFile(null)
     } catch (err: any) {
-      console.error('Error updating profile:', err)
+      console.error('Error updating personal profile:', err)
       toast.error('Error al guardar', {
         description: err.message || 'No se pudieron procesar los cambios. Intenta nuevamente.'
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handlePlayerAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPlayerFotoFile(file)
+
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const result = event.target?.result as string
+      setPlayerEditForm(prev => ({
+        ...prev,
+        profilePhoto: result,
+        imagesChanged: true
+      }))
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleSavePlayer = async () => {
+    if (!user || !profileData) return
+    setIsSubmitting(true)
+
+    try {
+      const gameInfo = profileData.player_game_info?.[0] || {}
+      let avatarUrl = playerEditForm.profilePhoto || profileData.avatar_url || profilePhoto
+
+      // Si subió un archivo nuevo, subirlo al storage bucket de Supabase
+      if (playerFotoFile) {
+        try {
+          const fileExt = playerFotoFile.name.split('.').pop()
+          const fileName = `${Date.now()}_player_${user.id}.${fileExt}`
+          const { error: uploadError, data } = await supabase.storage.from('avatars').upload(fileName, playerFotoFile)
+          if (!uploadError && data) {
+            const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(data.path)
+            avatarUrl = publicUrlData.publicUrl
+          }
+        } catch (uploadErr) {
+          console.warn('Could not upload avatar file, using existing URL:', uploadErr)
+        }
+      }
+
+      const payloadDetails = {
+        user_id: user.id,
+        name: playerEditForm.name.trim(),
+        nickname: playerEditForm.nickname.trim(),
+        game_nickname: playerEditForm.nickname.trim(),
+        discord_handle: playerEditForm.discord_handle.trim(),
+        closest_airport: playerEditForm.closest_airport.trim(),
+        bio: playerEditForm.bio.trim(),
+        avatar_url: avatarUrl,
+        game: playerEditForm.game,
+        game_id: playerEditForm.game_id.trim(),
+        server: playerEditForm.server.trim(),
+        country_account: playerEditForm.country_account.trim(),
+        social_ig: playerEditForm.social_ig.trim(),
+        social_tiktok: playerEditForm.social_tiktok.trim(),
+        social_yt: playerEditForm.social_yt.trim(),
+        social_twitch: playerEditForm.social_twitch.trim(),
+        social_kick: playerEditForm.social_kick.trim(),
+        social_x: playerEditForm.social_x.trim(),
+        social_fb: playerEditForm.social_fb.trim(),
+
+        // Valores originales para comparación en el panel de administración
+        original_name: profileData.name || '',
+        original_nickname: profileData.nickname || profileData.game_nickname || '',
+        original_game_nickname: profileData.game_nickname || profileData.nickname || '',
+        original_discord_handle: profileData.discord_handle || '',
+        original_closest_airport: profileData.closest_airport || '',
+        original_bio: profileData.bio || '',
+        original_avatar: profileData.avatar_url || profilePhoto || '',
+        original_game: gameInfo.game || 'Mobile Legends',
+        original_game_id: gameInfo.game_id || '',
+        original_server: gameInfo.server || '',
+        original_country_account: gameInfo.country_account || '',
+        original_social_ig: profileData.social_ig || '',
+        original_social_tiktok: profileData.social_tiktok || '',
+        original_social_yt: profileData.social_yt || '',
+        original_social_twitch: profileData.social_twitch || '',
+        original_social_kick: profileData.social_kick || '',
+        original_social_x: profileData.social_x || '',
+        original_social_fb: profileData.social_fb || ''
+      }
+
+      let valError = null
+
+      if (latestValidation?.id && isRequested) {
+        // Actualizar solicitud pendiente existente
+        const { error } = await supabase.from('validations').update({
+          target_name: `${profileData.nickname || profileData.name || 'Jugador'} ➔ ${playerEditForm.nickname || playerEditForm.name} (Modificación de Jugador)`,
+          status: 'pending',
+          details: payloadDetails
+        }).eq('id', latestValidation.id)
+        valError = error
+      } else {
+        // Eliminar solicitudes anteriores procesadas
+        await supabase
+          .from('validations')
+          .delete()
+          .eq('type', 'modificacion')
+          .in('status', ['approved', 'rejected'])
+          .filter('details->>user_id', 'eq', user.id)
+
+        // Insertar nueva solicitud
+        const { error } = await supabase.from('validations').insert({
+          type: 'modificacion',
+          target_name: `${profileData.nickname || profileData.name || 'Jugador'} ➔ ${playerEditForm.nickname || playerEditForm.name} (Modificación de Jugador)`,
+          submitted_by: user.email || user.name || user.id,
+          status: 'pending',
+          details: payloadDetails
+        })
+        valError = error
+      }
+
+      const { error: profError } = await supabase.from('profiles').update({
+        edit_requested: true
+      }).eq('id', user.id)
+
+      if (valError || profError) throw (valError || profError)
+
+      setProfileData((prev: any) => ({ ...prev, edit_requested: true }))
+      setLatestValidation({
+        id: latestValidation?.id,
+        type: 'modificacion',
+        status: 'pending',
+        details: payloadDetails
+      })
+
+      toast.success('Solicitud de Modificación Enviada', {
+        description: 'Tus cambios han sido enviados al administrador para su revisión y aprobación.'
+      })
+
+      setIsEditingPlayer(false)
+    } catch (err: any) {
+      console.error('Error submitting player modification:', err)
+      toast.error('Error al enviar la solicitud', {
+        description: err.message || 'Inténtalo de nuevo más tarde.'
       })
     } finally {
       setIsSubmitting(false)
@@ -360,31 +518,11 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               <div className="flex flex-wrap items-center gap-3">
                 <h2 className="font-display text-2xl sm:text-3xl font-700 text-white tracking-tight">{name}</h2>
                 
-                {/* Dynamic Status Badge */}
-                {isRequested || (latestValidation?.type === 'modificacion' && latestValidation?.status === 'pending') ? (
-                  <div className="flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-600 text-amber-400 border border-amber-500/20 uppercase tracking-wider animate-pulse">
-                    <AlertCircle className="h-3.5 w-3.5" />
-                    Modificación en Revisión
-                  </div>
-                ) : hasRejectedModification ? (
-                  <div className="flex items-center gap-1.5 rounded-full bg-red-500/10 px-3 py-1 text-xs font-600 text-red-400 border border-red-500/20 uppercase tracking-wider">
-                    <X className="h-3.5 w-3.5" />
-                    Modificación Rechazada
-                  </div>
-                ) : isPlayerApproved ? (
-                  <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-600 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    Jugador Aprobado
-                  </div>
-                ) : isPlayerPending ? (
-                  <div className="flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-600 text-amber-400 border border-amber-500/20 uppercase tracking-wider">
-                    <AlertCircle className="h-3.5 w-3.5" />
-                    Jugador en Revisión
-                  </div>
-                ) : isPlayerRejected ? (
-                  <div className="flex items-center gap-1.5 rounded-full bg-red-500/10 px-3 py-1 text-xs font-600 text-red-400 border border-red-500/20 uppercase tracking-wider">
-                    <X className="h-3.5 w-3.5" />
-                    Jugador Rechazado
+                {/* Personal Profile Badge */}
+                {user?.role === 'admin' ? (
+                  <div className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-600 text-primary border border-primary/20 uppercase tracking-wider">
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    Administrador
                   </div>
                 ) : (
                   <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-600 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">
@@ -403,17 +541,10 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
           <div className="shrink-0 w-full sm:w-auto">
             <button 
               onClick={openEdit}
-              className={cn(
-                "w-full sm:w-auto flex items-center justify-center gap-2 rounded-md px-5 py-3 text-sm font-600 uppercase tracking-wider transition-all clip-corner",
-                isRequested 
-                  ? "bg-amber-500/15 border border-amber-500/30 text-amber-400 hover:bg-amber-500 hover:text-black"
-                  : hasRejectedModification
-                  ? "bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-300"
-                  : "bg-white/5 hover:bg-primary border border-white/10 text-white hover:border-primary"
-              )}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-md px-5 py-3 text-sm font-600 uppercase tracking-wider transition-all clip-corner bg-white/5 hover:bg-primary border border-white/10 text-white hover:border-primary cursor-pointer"
             >
               <Edit3 className="h-4 w-4" />
-              {isRequested ? "Modificar Solicitud" : hasRejectedModification ? "Reenviar Modificación" : "Editar Perfil"}
+              Editar Perfil
             </button>
           </div>
         </div>
@@ -525,20 +656,52 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                     ? "Tu solicitud fue rechazada. Puedes volver a enviar tus datos corregidos."
                     : "No te has registrado como jugador profesional en la plataforma."}
                 </p>
+
+                {/* Banner de Estado de Modificación Pendiente o Rechazada */}
+                {isPlayer && isPlayerModificationPending && (
+                  <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 flex items-start gap-2.5 text-xs text-amber-300">
+                    <Clock className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
+                    <div>
+                      <span className="font-700 text-amber-400 block">Modificación en Revisión</span>
+                      <span className="text-[11px] text-amber-300/90 leading-snug">
+                        Enviaste cambios a tus datos de jugador. Están pendientes de aprobación por el administrador.
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {isPlayer && hasRejectedModification && (
+                  <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 flex items-start gap-2.5 text-xs text-red-300">
+                    <AlertCircle className="h-4 w-4 shrink-0 text-red-400 mt-0.5" />
+                    <div>
+                      <span className="font-700 text-red-400 block">Modificación Rechazada</span>
+                      <span className="text-[11px] text-red-300/90 leading-snug">
+                        {rejectionReasonText ? `Motivo: ${rejectionReasonText}` : "Tu solicitud de modificación fue rechazada por el administrador. Puedes corregir los datos y reenviarla."}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="pt-6">
               {isPlayerApproved || isPlayerPending ? (
-                <button 
-                  onClick={() => setShowPlayerModal(true)}
-                  className={cn(
-                    "flex items-center gap-2 text-sm font-600 transition-colors text-left",
-                    isPlayerApproved ? "text-emerald-400 hover:text-emerald-300" : "text-amber-400 hover:text-amber-300"
-                  )}
-                >
-                  {isPlayerApproved ? "Ver Mis Datos de Jugador" : "Ver Datos Enviados"} <ArrowRight className="h-4 w-4" />
-                </button>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <button 
+                    onClick={openEditPlayer}
+                    className="inline-flex items-center gap-2 rounded-lg bg-primary hover:bg-primary-dark text-white px-3.5 py-2 text-xs font-700 uppercase tracking-wider transition-all shadow-md shadow-primary/20 cursor-pointer"
+                  >
+                    <Edit3 className="h-3.5 w-3.5" />
+                    {isPlayerModificationPending ? "Editar Solicitud" : "Modificar Perfil"}
+                  </button>
+                  <button 
+                    onClick={() => setShowPlayerModal(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white px-3 py-2 text-xs font-600 uppercase tracking-wider transition-colors cursor-pointer"
+                  >
+                    <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+                    Ver Ficha
+                  </button>
+                </div>
               ) : isPlayerRejected ? (
                 <Link 
                   href="/registro/alta-de-jugador" 
@@ -724,19 +887,15 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               <div>
                 <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
                   <User className="w-5 h-5 text-primary" />
-                  {canEdit ? "Editar Perfil" : isRequested ? "Modificar Solicitud de Cambio" : "Solicitud de Modificación"}
+                  Editar Perfil Personal
                 </h3>
-                {!canEdit && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {isRequested 
-                      ? "Modifica los datos de tu solicitud pendiente de aprobación."
-                      : "Realiza tus cambios y envíalos para revisión del administrador."}
-                  </p>
-                )}
+                <p className="text-xs text-muted-foreground mt-1">
+                  Actualiza el nombre, foto de perfil y biografía de tu cuenta.
+                </p>
               </div>
               <button 
                 onClick={() => setIsEditing(false)}
-                className="text-muted-foreground hover:text-white transition-colors p-2 rounded-full hover:bg-white/5"
+                className="text-muted-foreground hover:text-white transition-colors p-2 rounded-full hover:bg-white/5 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -744,14 +903,6 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
 
             {/* Body con Scroll */}
             <div data-lenis-prevent data-modal-scrollbody className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6 space-y-6">
-              
-              {isRequested && (
-                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 flex items-center gap-3 text-xs text-amber-300">
-                  <AlertCircle className="h-4 w-4 shrink-0 text-amber-400" />
-                  <span>Se han cargado los datos de tu solicitud en curso. Puedes modificarlos y volver a enviarlos.</span>
-                </div>
-              )}
-              
               {/* Foto de Perfil */}
               <div className="space-y-3">
                 <label className="text-xs font-600 uppercase tracking-widest text-primary block">
@@ -832,7 +983,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               <div className="flex items-center gap-3">
                 <button 
                   onClick={() => setIsEditing(false)}
-                  className="rounded-md border border-border bg-transparent px-4 py-2 text-sm font-600 text-muted-foreground hover:text-white transition-colors"
+                  className="rounded-md border border-border bg-transparent px-4 py-2 text-sm font-600 text-muted-foreground hover:text-white transition-colors cursor-pointer"
                 >
                   Cancelar
                 </button>
@@ -848,7 +999,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                 >
                   <span className="relative z-10 flex items-center gap-2">
                     <Save className="w-4 h-4" />
-                    {isSubmitting ? "Enviando..." : isRequested ? "Actualizar Solicitud" : canEdit ? "Guardar Cambios" : "Solicitar Modificación"}
+                    {isSubmitting ? "Guardando..." : "Guardar Cambios"}
                   </span>
                 </button>
               </div>
@@ -893,8 +1044,8 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                   <p className="text-sm text-white font-600">{profileData.discord_handle || 'N/A'}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-500 text-muted-foreground uppercase tracking-widest mb-1">Aeropuerto más cercano</p>
-                  <p className="text-sm text-white font-600">{profileData.closest_airport || 'N/A'}</p>
+                  <p className="text-xs font-500 text-muted-foreground uppercase tracking-widest mb-1">Ubicación / País</p>
+                  <p className="text-sm text-white font-600">{formatLocation(profileData.closest_airport)}</p>
                 </div>
 
                 {profileData.player_game_info && profileData.player_game_info.length > 0 && (
@@ -934,6 +1085,342 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               <GmxButton onClick={() => setShowPlayerModal(false)}>
                 Cerrar
               </GmxButton>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Player Profile Modal (Requiere Aprobación de Administrador) */}
+      {isEditingPlayer && profileData && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsEditingPlayer(false)} />
+          <div className="relative flex flex-col w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-xl border border-border bg-surface shadow-2xl animate-in zoom-in-95 duration-200">
+            {/* Header Fijo */}
+            <div className="flex shrink-0 items-center justify-between border-b border-border p-6 bg-surface z-10">
+              <div>
+                <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
+                  <Gamepad2 className="w-5 h-5 text-primary" />
+                  {isPlayerModificationPending ? "Modificar Solicitud de Jugador" : "Modificar Perfil de Jugador"}
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Todos los cambios deben ser aprobados por un administrador antes de publicarse.
+                </p>
+              </div>
+              <button 
+                onClick={() => setIsEditingPlayer(false)}
+                className="text-muted-foreground hover:text-white transition-colors p-2 rounded-full hover:bg-white/5 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body con Scroll */}
+            <div data-lenis-prevent data-modal-scrollbody className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6 space-y-6">
+              
+              {/* Info Banner de Aprobación */}
+              <div className="rounded-xl border border-primary/30 bg-primary/10 p-3.5 flex items-start gap-3 text-xs text-primary-light">
+                <ShieldAlert className="h-4 w-4 shrink-0 text-primary mt-0.5" />
+                <span className="leading-relaxed">
+                  <strong>Aprobación Obligatoria:</strong> Al guardar, se enviará una solicitud al panel de administración. Tus datos públicos actuales se mantendrán intactos hasta que el administrador valide y apruebe tu actualización.
+                </span>
+              </div>
+
+              {/* SECCIÓN 1: FOTO & DATOS PERSONALES */}
+              <div className="space-y-4">
+                <h4 className="text-xs font-700 uppercase tracking-widest text-primary flex items-center gap-2 border-b border-border/50 pb-2">
+                  <User className="w-4 h-4" />
+                  1. Identidad eSports & Fotografía
+                </h4>
+
+                {/* Subir Foto de Perfil */}
+                <div className="flex items-center gap-5">
+                  <input 
+                    type="file" 
+                    ref={playerFileInputRef} 
+                    onChange={handlePlayerAvatarFileChange} 
+                    accept="image/*" 
+                    className="hidden" 
+                  />
+
+                  <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border-2 border-border bg-background shadow-inner">
+                    {playerEditForm.profilePhoto ? (
+                      <img src={playerEditForm.profilePhoto} alt="Player Avatar Preview" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-surface">
+                        <User className="h-8 w-8 text-muted-foreground" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <button
+                      type="button"
+                      onClick={() => playerFileInputRef.current?.click()}
+                      className="flex items-center gap-2 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2 text-xs font-600 uppercase tracking-wider text-white transition-colors cursor-pointer"
+                    >
+                      <Upload className="w-4 h-4 text-primary" />
+                      Cambiar Foto de Jugador
+                    </button>
+                    <p className="text-[11px] text-muted-foreground">
+                      Formatos recomendados: JPG, PNG o WebP.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-600 uppercase tracking-wider text-white block">
+                      Nombre Real <span className="text-red-400">*</span>
+                    </label>
+                    <input 
+                      type="text" 
+                      value={playerEditForm.name}
+                      onChange={(e) => setPlayerEditForm(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="Tu nombre completo"
+                      className="w-full rounded-md border border-border bg-background px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-600 uppercase tracking-wider text-white block">
+                      Nickname / IGN <span className="text-red-400">*</span>
+                    </label>
+                    <input 
+                      type="text" 
+                      value={playerEditForm.nickname}
+                      onChange={(e) => setPlayerEditForm(prev => ({ ...prev, nickname: e.target.value }))}
+                      placeholder="Tu apodo o tag competitivo"
+                      className="w-full rounded-md border border-border bg-background px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-600 uppercase tracking-wider text-white block">
+                      Usuario de Discord
+                    </label>
+                    <input 
+                      type="text" 
+                      value={playerEditForm.discord_handle}
+                      onChange={(e) => setPlayerEditForm(prev => ({ ...prev, discord_handle: e.target.value }))}
+                      placeholder="usuario#0000 o @usuario"
+                      className="w-full rounded-md border border-border bg-background px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-600 uppercase tracking-wider text-white block">
+                      País / Aeropuerto más cercano
+                    </label>
+                    <input 
+                      type="text" 
+                      value={playerEditForm.closest_airport}
+                      onChange={(e) => setPlayerEditForm(prev => ({ ...prev, closest_airport: e.target.value }))}
+                      placeholder="Ej: México (MEX), Colombia (BOG)"
+                      className="w-full rounded-md border border-border bg-background px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 pt-1">
+                  <label className="text-xs font-600 uppercase tracking-wider text-white block">
+                    Biografía / Trayectoria eSports
+                  </label>
+                  <textarea 
+                    value={playerEditForm.bio}
+                    onChange={(e) => setPlayerEditForm(prev => ({ ...prev, bio: e.target.value }))}
+                    rows={3}
+                    placeholder="Cuéntanos tus logros, experiencia en torneos, rol preferido, etc..."
+                    className="w-full rounded-md border border-border bg-background px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors resize-none"
+                  />
+                </div>
+              </div>
+
+              {/* SECCIÓN 2: DATOS DEL JUEGO COMPETITIVO */}
+              <div className="space-y-4 pt-2">
+                <h4 className="text-xs font-700 uppercase tracking-widest text-primary flex items-center gap-2 border-b border-border/50 pb-2">
+                  <Gamepad2 className="w-4 h-4" />
+                  2. Datos del Juego Competitivo
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-600 uppercase tracking-wider text-white block">
+                      Juego Principal
+                    </label>
+                    <select
+                      value={playerEditForm.game}
+                      onChange={(e) => setPlayerEditForm(prev => ({ ...prev, game: e.target.value }))}
+                      className="w-full rounded-md border border-border bg-background px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+                    >
+                      <option value="Mobile Legends">Mobile Legends: Bang Bang</option>
+                      <option value="Honor of Kings">Honor of Kings</option>
+                      <option value="League of Legends">League of Legends</option>
+                      <option value="Dota 2">Dota 2</option>
+                      <option value="Valorant">Valorant</option>
+                      <option value="Free Fire">Free Fire</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-600 uppercase tracking-wider text-white block">
+                      ID de Jugador (Game ID)
+                    </label>
+                    <input 
+                      type="text" 
+                      value={playerEditForm.game_id}
+                      onChange={(e) => setPlayerEditForm(prev => ({ ...prev, game_id: e.target.value }))}
+                      placeholder="Ej: 123456789"
+                      className="w-full rounded-md border border-border bg-background px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-600 uppercase tracking-wider text-white block">
+                      Servidor / Zona
+                    </label>
+                    <input 
+                      type="text" 
+                      value={playerEditForm.server}
+                      onChange={(e) => setPlayerEditForm(prev => ({ ...prev, server: e.target.value }))}
+                      placeholder="Ej: 1234"
+                      className="w-full rounded-md border border-border bg-background px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-600 uppercase tracking-wider text-white block">
+                      País de la Cuenta
+                    </label>
+                    <input 
+                      type="text" 
+                      value={playerEditForm.country_account}
+                      onChange={(e) => setPlayerEditForm(prev => ({ ...prev, country_account: e.target.value }))}
+                      placeholder="Ej: México, Colombia, Argentina"
+                      className="w-full rounded-md border border-border bg-background px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* SECCIÓN 3: REDES SOCIALES */}
+              <div className="space-y-4 pt-2">
+                <h4 className="text-xs font-700 uppercase tracking-widest text-primary flex items-center gap-2 border-b border-border/50 pb-2">
+                  <Share2 className="w-4 h-4" />
+                  3. Redes Sociales eSports (Opcional)
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-600 uppercase tracking-wider text-muted-foreground block">
+                      Instagram
+                    </label>
+                    <input 
+                      type="text" 
+                      value={playerEditForm.social_ig}
+                      onChange={(e) => setPlayerEditForm(prev => ({ ...prev, social_ig: e.target.value }))}
+                      placeholder="@tu_usuario"
+                      className="w-full rounded-md border border-border bg-background px-3.5 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-600 uppercase tracking-wider text-muted-foreground block">
+                      TikTok
+                    </label>
+                    <input 
+                      type="text" 
+                      value={playerEditForm.social_tiktok}
+                      onChange={(e) => setPlayerEditForm(prev => ({ ...prev, social_tiktok: e.target.value }))}
+                      placeholder="@tu_usuario"
+                      className="w-full rounded-md border border-border bg-background px-3.5 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-600 uppercase tracking-wider text-muted-foreground block">
+                      YouTube
+                    </label>
+                    <input 
+                      type="text" 
+                      value={playerEditForm.social_yt}
+                      onChange={(e) => setPlayerEditForm(prev => ({ ...prev, social_yt: e.target.value }))}
+                      placeholder="Canal o URL"
+                      className="w-full rounded-md border border-border bg-background px-3.5 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-600 uppercase tracking-wider text-muted-foreground block">
+                      Twitch
+                    </label>
+                    <input 
+                      type="text" 
+                      value={playerEditForm.social_twitch}
+                      onChange={(e) => setPlayerEditForm(prev => ({ ...prev, social_twitch: e.target.value }))}
+                      placeholder="twitch.tv/tu_canal"
+                      className="w-full rounded-md border border-border bg-background px-3.5 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-600 uppercase tracking-wider text-muted-foreground block">
+                      Kick
+                    </label>
+                    <input 
+                      type="text" 
+                      value={playerEditForm.social_kick}
+                      onChange={(e) => setPlayerEditForm(prev => ({ ...prev, social_kick: e.target.value }))}
+                      placeholder="kick.com/tu_canal"
+                      className="w-full rounded-md border border-border bg-background px-3.5 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-600 uppercase tracking-wider text-muted-foreground block">
+                      X (Twitter)
+                    </label>
+                    <input 
+                      type="text" 
+                      value={playerEditForm.social_x}
+                      onChange={(e) => setPlayerEditForm(prev => ({ ...prev, social_x: e.target.value }))}
+                      placeholder="@tu_usuario"
+                      className="w-full rounded-md border border-border bg-background px-3.5 py-2 text-sm text-white focus:border-primary focus:outline-none transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Footer Fijo */}
+            <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border p-6 bg-surface z-10">
+              <span className="text-xs text-muted-foreground">
+                Se enviará para revisión del Staff
+              </span>
+
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={() => setIsEditingPlayer(false)}
+                  className="rounded-md border border-border bg-transparent px-4 py-2 text-sm font-600 text-muted-foreground hover:text-white transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSavePlayer}
+                  disabled={isSubmitting || !playerEditForm.name.trim() || !playerEditForm.nickname.trim()}
+                  className={cn(
+                    "group relative inline-flex items-center justify-center gap-2 overflow-hidden px-6 py-2.5 font-display text-[13px] font-600 uppercase tracking-[0.14em] text-white transition-all duration-300 clip-corner",
+                    !isSubmitting && playerEditForm.name.trim() && playerEditForm.nickname.trim()
+                      ? "bg-primary hover:bg-primary-dark cursor-pointer shadow-lg shadow-primary/20"
+                      : "bg-white/10 text-white/40 cursor-not-allowed opacity-60"
+                  )}
+                >
+                  <span className="relative z-10 flex items-center gap-2">
+                    <Save className="w-4 h-4" />
+                    {isSubmitting ? "Enviando..." : isPlayerModificationPending ? "Actualizar Solicitud" : "Solicitar Modificación"}
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

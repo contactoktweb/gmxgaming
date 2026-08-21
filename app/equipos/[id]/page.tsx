@@ -12,13 +12,14 @@ import { SiteFooter } from '@/components/sections/site-footer'
 import { Reveal } from '@/components/anim'
 import { Users, Trophy, ShieldAlert, MapPin, CheckCircle2, User, Swords } from 'lucide-react'
 import Link from 'next/link'
-import { cn, formatRoleTitle, formatRolesList, getPlayerSlug, slugify } from '@/lib/utils'
+import { cn, formatRoleTitle, formatRolesList, formatLocation, getPlayerSlug, slugify } from '@/lib/utils'
 
 export default function TeamDetailsPage() {
   const params = useParams()
   const [ready, setReady] = useState(false)
   
   const [team, setTeam] = useState<any>(null)
+  const [manager, setManager] = useState<any>(null)
   const [roster, setRoster] = useState<any[]>([])
   const [matches, setMatches] = useState<any[]>([])
   const [tournamentsCount, setTournamentsCount] = useState(0)
@@ -46,6 +47,18 @@ export default function TeamDetailsPage() {
       if (teamData) {
         setTeam(teamData)
         const teamId = teamData.id
+
+        // Fetch Manager profile
+        if (teamData.manager_id) {
+          const { data: managerProfile } = await supabase
+            .from('profiles')
+            .select('id, name, nickname, discord_handle, avatar_url')
+            .eq('id', teamData.manager_id)
+            .maybeSingle()
+          if (managerProfile) {
+            setManager(managerProfile)
+          }
+        }
         
         // Fetch Roster (Active contracts)
         const { data: rosterData } = await supabase
@@ -67,16 +80,49 @@ export default function TeamDetailsPage() {
           .from('matches')
           .select(`
             *,
-            team1:teams!matches_team1_id_fkey(id, name, logo_url),
-            team2:teams!matches_team2_id_fkey(id, name, logo_url),
             tournaments(name)
           `)
-          .or(`team1_id.eq.${teamId},team2_id.eq.${teamId}`)
+          .or(`team_a_id.eq.${teamId},team_b_id.eq.${teamId}`)
           .order('match_date', { ascending: false })
           .limit(10)
 
         if (matchesData) {
-          setMatches(matchesData)
+          const matchTeamIds = new Set<string>()
+          matchesData.forEach(m => {
+            const t1Id = m.team_a_id || m.team1_id
+            const t2Id = m.team_b_id || m.team2_id
+            if (t1Id) matchTeamIds.add(t1Id)
+            if (t2Id) matchTeamIds.add(t2Id)
+          })
+
+          const teamMap = new Map<string, any>()
+          if (team) teamMap.set(team.id, team)
+
+          const missingIds = Array.from(matchTeamIds).filter(id => !teamMap.has(id))
+          if (missingIds.length > 0) {
+            const { data: teamsData } = await supabase
+              .from('teams')
+              .select('id, name, logo_url')
+              .in('id', missingIds)
+            if (teamsData) {
+              teamsData.forEach(t => teamMap.set(t.id, t))
+            }
+          }
+
+          const populatedMatches = matchesData.map(m => {
+            const t1Id = m.team_a_id || m.team1_id
+            const t2Id = m.team_b_id || m.team2_id
+            return {
+              ...m,
+              team1_id: t1Id,
+              team2_id: t2Id,
+              team1_score: m.score_a ?? m.team1_score ?? 0,
+              team2_score: m.score_b ?? m.team2_score ?? 0,
+              team1: teamMap.get(t1Id) || { id: t1Id, name: 'TBD', logo_url: '' },
+              team2: teamMap.get(t2Id) || { id: t2Id, name: 'TBD', logo_url: '' }
+            }
+          })
+          setMatches(populatedMatches)
         }
         
         // Fetch Unique Tournaments count
@@ -166,7 +212,12 @@ export default function TeamDetailsPage() {
                   <span className="text-[10px] font-600 text-muted-foreground uppercase tracking-widest mb-1">Manager</span>
                   <div className="flex items-center justify-center md:justify-start gap-2 text-white">
                     <User className="w-5 h-5 text-primary" />
-                    <span className="font-600">{team.manager_discord_handle || 'N/A'}</span>
+                    <span className="font-600">
+                      {manager 
+                        ? (manager.nickname ? `${manager.name} (${manager.nickname})` : manager.name)
+                        : (team.manager_discord_handle || 'N/A')
+                      }
+                    </span>
                   </div>
                 </div>
               </div>
@@ -219,7 +270,7 @@ export default function TeamDetailsPage() {
                                 {formatRolesList(contract.roles)}
                               </span>
                               <span className="w-1 h-1 rounded-full bg-border" />
-                              <span className="text-[10px] font-600 text-muted-foreground uppercase">{player.country || 'eSports'}</span>
+                              <span className="text-[10px] font-600 text-muted-foreground uppercase">{formatLocation(player.country)}</span>
                             </div>
                           </div>
                         </Link>

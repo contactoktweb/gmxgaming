@@ -87,7 +87,17 @@ export function PlayerContracts() {
 
                   <div className="flex-1 space-y-4">
                     <div>
-                      <h4 className="font-display text-xl font-700 text-white uppercase">{contract.teams?.name}</h4>
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <h4 className="font-display text-xl font-700 text-white uppercase">{contract.teams?.name}</h4>
+                        <span className={cn(
+                          "px-2.5 py-0.5 rounded-full text-[10px] font-700 uppercase tracking-wider border",
+                          contract.team_gender_category === 'female' 
+                            ? "bg-pink-500/10 text-pink-400 border-pink-500/20" 
+                            : "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                        )}>
+                          {contract.team_gender_category === 'female' ? 'División Femenil' : 'División Varonil / Mixta'}
+                        </span>
+                      </div>
                       <div className="flex flex-wrap items-center gap-1.5 mt-2">
                         <span className="text-xs text-muted-foreground font-500">Roles asignados:</span>
                         {Array.isArray(contract.roles) ? (

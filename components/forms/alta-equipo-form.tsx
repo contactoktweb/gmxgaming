@@ -55,25 +55,7 @@ export function AltaEquipoForm() {
         return
       }
 
-      // Validar si el usuario es jugador profesional aprobado
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('is_player, player_status')
-        .eq('id', user.id)
-        .single()
-
-      const isApproved = Boolean(profile?.is_player && (profile?.player_status === 'active' || profile?.player_status === 'approved'))
-      if (!isApproved) {
-        if (!profile?.is_player) {
-          setBlockMessage('Para dar de alta un equipo en GMX Gaming, primero debes estar registrado y aprobado como Jugador Profesional.')
-        } else if (profile?.player_status === 'pending') {
-          setBlockMessage('Tu registro como Jugador Profesional se encuentra actualmente en revisión por los administradores. Podrás registrar equipos una vez que tu solicitud sea aprobada.')
-        } else {
-          setBlockMessage('Tu perfil de Jugador Profesional no se encuentra activo.')
-        }
-        setLoadingConfig(false)
-        return
-      }
+      setBlockMessage(null)
 
       const { data } = await supabase.from('app_settings').select('*')
       if (data && data.length > 0) {
@@ -200,31 +182,21 @@ export function AltaEquipoForm() {
   if (blockMessage) {
     return (
       <div className="mx-auto w-full max-w-2xl rounded-xl border border-border bg-surface p-8 sm:p-12 text-center shadow-2xl space-y-6">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary border border-primary/20">
           <ShieldAlert className="h-8 w-8" />
         </div>
         <div>
           <h2 className="font-display text-2xl sm:text-3xl font-700 uppercase tracking-tight text-white">
-            Requisito: Jugador Profesional Aprobado
+            Iniciar Sesión Requerido
           </h2>
           <p className="mt-3 text-muted-foreground text-sm max-w-md mx-auto leading-relaxed">
             {blockMessage}
           </p>
         </div>
-        <div className="pt-2 flex flex-col sm:flex-row justify-center gap-4">
-          {!user ? (
-            <GmxButton href="/login" className="px-8">
-              INICIAR SESIÓN
-            </GmxButton>
-          ) : !user.is_player ? (
-            <GmxButton href="/registro/alta-de-jugador" className="px-8">
-              REGISTRARME COMO JUGADOR
-            </GmxButton>
-          ) : (
-            <GmxButton href="/micuenta" variant="secondary" className="px-8">
-              IR A MI CUENTA
-            </GmxButton>
-          )}
+        <div className="pt-2 flex justify-center">
+          <GmxButton href="/login" className="px-8">
+            INICIAR SESIÓN
+          </GmxButton>
         </div>
       </div>
     )

@@ -99,7 +99,94 @@ export function ManagerPlayers() {
   // Acciones sobre contratos
   const handleApproveContract = async (contractId: string, playerName: string) => {
     setProcessingId(contractId)
-    toast.loading('Aprobando contrato...', { id: 'contract-action' })
+    toast.loading('Validando y aprobando contrato...', { id: 'contract-action' })
+
+    const contractToApprove = contracts.find(c => c.id === contractId)
+    if (!contractToApprove) {
+      toast.error('No se encontró el contrato', { id: 'contract-action' })
+      setProcessingId(null)
+      return
+    }
+
+    const playerId = contractToApprove.player_id
+
+    // Check player's existing active contracts in database
+    const { data: activePlayerContracts } = await supabase
+      .from('contracts')
+      .select('id, team_id, team_gender_category, status')
+      .eq('player_id', playerId)
+      .in('status', ['active', 'activo'])
+
+    // Detect player gender from validations
+    let detectedGender: 'Masculino' | 'Femenino' = 'Masculino'
+    const { data: userValidations } = await supabase
+      .from('validations')
+      .select('details')
+      .or(`submitted_by.eq.${playerId},details->>user_id.eq.${playerId}`)
+      .order('created_at', { ascending: false })
+      .limit(5)
+
+    if (userValidations && userValidations.length > 0) {
+      for (const v of userValidations) {
+        const g = v.details?.gender || v.details?.genero || v.details?.['item_meta[783]'] || v.details?.item_meta?.[783]
+        if (typeof g === 'string') {
+          if (g.toLowerCase().includes('fem') || g.toLowerCase() === 'f') {
+            detectedGender = 'Femenino'
+            break
+          }
+        }
+      }
+    }
+
+    const activeList = activePlayerContracts || []
+
+    // Current team category
+    const isCurrentTeamFemale = contractToApprove.team_gender_category === 'female' || (selectedTeam?.name || '').toLowerCase().includes('fem')
+    const currentCategory = isCurrentTeamFemale ? 'Femenil' : 'Varonil / Mixto'
+
+    if (detectedGender === 'Masculino') {
+      if (activeList.length >= 1) {
+        toast.error('Límite de contratos alcanzado', {
+          id: 'contract-action',
+          description: `El jugador ${playerName} ya cuenta con 1 contrato activo. Los jugadores varoniles solo pueden tener 1 contrato activo en división Varonil/Mixto.`
+        })
+        setProcessingId(null)
+        return
+      }
+
+      if (currentCategory === 'Femenil') {
+        toast.error('Restricción de división', {
+          id: 'contract-action',
+          description: `Los jugadores varoniles no pueden formar parte de la división Femenil.`
+        })
+        setProcessingId(null)
+        return
+      }
+    } else {
+      // Femenino: max 2 (1 varonil/mixto + 1 femenil)
+      if (activeList.length >= 2) {
+        toast.error('Límite de contratos alcanzado', {
+          id: 'contract-action',
+          description: `La jugadora ${playerName} ya cuenta con 2 contratos activos (límite máximo permitido: 1 Varonil/Mixto y 1 Femenil).`
+        })
+        setProcessingId(null)
+        return
+      }
+
+      const hasSameCategory = activeList.some((c: any) => {
+        const cat = c.team_gender_category === 'female' ? 'Femenil' : 'Varonil / Mixto'
+        return cat === currentCategory
+      })
+
+      if (hasSameCategory) {
+        toast.error('Límite de división alcanzado', {
+          id: 'contract-action',
+          description: `La jugadora ${playerName} ya cuenta con un contrato activo en la división ${currentCategory}. Solo puede tener 1 activo en Varonil/Mixto y 1 en Femenil.`
+        })
+        setProcessingId(null)
+        return
+      }
+    }
 
     const { error } = await supabase
       .from('contracts')
@@ -116,7 +203,7 @@ export function ManagerPlayers() {
       })
       setContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'active', start_date: new Date().toISOString() } : c))
     } else {
-      toast.error('Error al aprobar contrato', { id: 'contract-action' })
+      toast.error('Error al aprobar contrato: ' + error.message, { id: 'contract-action' })
     }
     setProcessingId(null)
   }

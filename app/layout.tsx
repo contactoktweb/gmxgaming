@@ -33,6 +33,7 @@ export const viewport: Viewport = {
 }
 
 import { Toaster } from 'sonner'
+import { GateTransitionProvider } from '@/components/gate-transition'
 
 export default function RootLayout({
   children,
@@ -43,7 +44,9 @@ export default function RootLayout({
     <html lang="es" className={`${display.variable} ${body.variable} bg-background`}>
       <body className="font-sans antialiased">
         <AuthProvider>
-          {children}
+          <GateTransitionProvider>
+            {children}
+          </GateTransitionProvider>
           {process.env.NODE_ENV === 'production' && <Analytics />}
         </AuthProvider>
         <Toaster theme="dark" position="top-center" />

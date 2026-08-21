@@ -108,6 +108,37 @@ export function formatRolesList(roles: any, separator = ', '): string {
 }
 
 /**
+ * Limpia y resume la información de ubicación/aeropuerto a un formato limpio y elegante (ej. "México" o "Colombia").
+ * Si la cadena es tipo "MÉXICO - CIUDAD DE MEXICO - AEROPUERTO ...", extrae País de forma limpia y legible.
+ */
+export function formatLocation(rawLocation?: string | null): string {
+  if (!rawLocation) return 'eSports'
+  const trimmed = rawLocation.trim()
+  if (!trimmed || trimmed.toUpperCase() === 'N/A') return 'eSports'
+
+  // Si contiene separador de formulario GMX "PAÍS - CIUDAD - AEROPUERTO..."
+  if (trimmed.includes(' - ')) {
+    const parts = trimmed.split(' - ').map(p => p.trim())
+    const country = parts[0] ? parts[0].charAt(0).toUpperCase() + parts[0].slice(1).toLowerCase() : ''
+    
+    // Capitalizar adecuadamente el país
+    if (country) {
+      return country
+    }
+  }
+
+  // Si es un texto largo con comas o guiones
+  if (trimmed.length > 25) {
+    const firstPart = trimmed.split(/[-–,]/)[0].trim()
+    if (firstPart) {
+      return firstPart.charAt(0).toUpperCase() + firstPart.slice(1).toLowerCase()
+    }
+  }
+
+  return trimmed
+}
+
+/**
  * Convierte un texto a formato slug seguro para URLs y SEO.
  * Ej: "GMX ESPORTS" -> "gmx-esports", "José Hernández" -> "jose-hernandez"
  */

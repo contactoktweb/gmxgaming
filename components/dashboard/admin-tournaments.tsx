@@ -84,18 +84,76 @@ export function AdminTournaments() {
     fetchBaseData()
   }, [])
 
+  const fetchTourneyMatches = async (tournamentId: string) => {
+    const { data: rawMatches, error } = await supabase
+      .from('matches')
+      .select('*')
+      .eq('tournament_id', tournamentId)
+      .order('match_date', { ascending: true })
+
+    if (error) {
+      console.error('Error fetching matches:', error)
+      return
+    }
+
+    if (rawMatches) {
+      const teamIds = new Set<string>()
+      rawMatches.forEach(m => {
+        const t1Id = m.team_a_id || m.team1_id
+        const t2Id = m.team_b_id || m.team2_id
+        if (t1Id) teamIds.add(t1Id)
+        if (t2Id) teamIds.add(t2Id)
+      })
+
+      const teamMap = new Map<string, Team>()
+      availableTeams.forEach(t => teamMap.set(t.id, t))
+
+      const missingIds = Array.from(teamIds).filter(id => !teamMap.has(id))
+      if (missingIds.length > 0) {
+        const { data: fetchedTeams } = await supabase
+          .from('teams')
+          .select('id, name, logo_url')
+          .in('id', missingIds)
+        if (fetchedTeams) {
+          fetchedTeams.forEach(t => teamMap.set(t.id, t))
+        }
+      }
+
+      const populatedMatches = rawMatches.map(m => {
+        const t1Id = m.team_a_id || m.team1_id
+        const t2Id = m.team_b_id || m.team2_id
+        return {
+          ...m,
+          team1_id: t1Id,
+          team2_id: t2Id,
+          team1_score: m.score_a ?? m.team1_score ?? 0,
+          team2_score: m.score_b ?? m.team2_score ?? 0,
+          team1: teamMap.get(t1Id) || { id: t1Id, name: 'Equipo A', logo_url: '' },
+          team2: teamMap.get(t2Id) || { id: t2Id, name: 'Equipo B', logo_url: '' }
+        }
+      })
+
+      setTourneyMatches(populatedMatches as any)
+    }
+  }
+
   // Load Tab Data
   useEffect(() => {
     if (selectedTournament) {
       if (activeTab === 'teams') {
-        supabase.from('tournament_teams').select('id, teams(id, name, logo_url)').eq('tournament_id', selectedTournament.id)
-          .then(({ data }) => { if (data) setTourneyTeams(data) })
+        supabase
+          .from('tournament_teams')
+          .select('tournament_id, team_id, teams(id, name, logo_url)')
+          .eq('tournament_id', selectedTournament.id)
+          .then(({ data, error }) => {
+            if (error) console.error('Error fetching tournament teams:', error)
+            if (data) setTourneyTeams(data.filter((tt: any) => tt.teams))
+          })
       } else if (activeTab === 'matches') {
-        supabase.from('matches').select('id, phase, match_date, team1_id, team2_id, team1_score, team2_score, team1:teams!matches_team1_id_fkey(id, name, logo_url), team2:teams!matches_team2_id_fkey(id, name, logo_url)').eq('tournament_id', selectedTournament.id)
-          .then(({ data }) => { if (data) setTourneyMatches(data as any) })
+        fetchTourneyMatches(selectedTournament.id)
       }
     }
-  }, [selectedTournament, activeTab])
+  }, [selectedTournament, activeTab, availableTeams])
 
   useEffect(() => {
     if (selectedTournament || confirmAction) {
@@ -171,50 +229,126 @@ export function AdminTournaments() {
   const handleAddTeam = async () => {
     if (!selectedTournament || !newTeamId) return
 
+    // Evitar duplicados en estado local
+    const alreadyExists = tourneyTeams.some(
+      tt => tt.teams?.id === newTeamId || tt.team_id === newTeamId
+    )
+    if (alreadyExists) {
+      toast.warning('Este equipo ya está agregado a este torneo.')
+      setNewTeamId('')
+      return
+    }
+
     const { error } = await supabase
       .from('tournament_teams')
       .insert({ tournament_id: selectedTournament.id, team_id: newTeamId })
 
     if (error) {
+      if (error.code === '23505' || error.message.includes('unique constraint') || error.message.includes('duplicate key')) {
+        toast.info('El equipo ya formaba parte de este torneo.')
+        // Recargar equipos para sincronizar UI
+        const { data } = await supabase
+          .from('tournament_teams')
+          .select('tournament_id, team_id, teams(id, name, logo_url)')
+          .eq('tournament_id', selectedTournament.id)
+        if (data) setTourneyTeams(data.filter((tt: any) => tt.teams))
+        setNewTeamId('')
+        return
+      }
       toast.error('Error al agregar equipo: ' + error.message)
       return
     }
 
+    toast.success('Equipo agregado al torneo con éxito')
     // Buscar el equipo en availableTeams para actualizar el estado local
     const addedTeam = availableTeams.find(t => t.id === newTeamId)
     if (addedTeam) {
-      setTourneyTeams(prev => [...prev, {
-        tournament_id: selectedTournament.id,
-        teams: addedTeam
-      }])
+      setTourneyTeams(prev => [
+        ...prev,
+        {
+          tournament_id: selectedTournament.id,
+          team_id: newTeamId,
+          teams: addedTeam,
+        },
+      ])
     }
     setNewTeamId('')
   }
 
   const handleRemoveTeam = async (teamId: string) => {
-    await supabase
+    if (!selectedTournament) return
+    const { error } = await supabase
       .from('tournament_teams')
       .delete()
-      .eq('tournament_id', selectedTournament!.id)
+      .eq('tournament_id', selectedTournament.id)
       .eq('team_id', teamId)
-    setTourneyTeams(prev => prev.filter(t => t.teams.id !== teamId))
+
+    if (error) {
+      toast.error('Error al eliminar equipo: ' + error.message)
+      return
+    }
+
+    toast.success('Equipo eliminado del torneo')
+    setTourneyTeams(prev => prev.filter(t => t.teams?.id !== teamId && t.team_id !== teamId))
   }
 
   const handleAddMatch = async () => {
-    if (!selectedTournament || !newMatch.t1 || !newMatch.t2) return
+    if (!selectedTournament) return
+
+    if (!newMatch.t1 || !newMatch.t2) {
+      toast.error('Debes seleccionar los dos equipos para el encuentro')
+      return
+    }
+
+    if (newMatch.t1 === newMatch.t2) {
+      toast.error('Los dos equipos deben ser diferentes')
+      return
+    }
+
+    if (!newMatch.date) {
+      toast.error('Debes seleccionar una fecha para el encuentro')
+      return
+    }
+
+    const matchDateStr = newMatch.date.split('T')[0]
+    const tourneyStartStr = selectedTournament.start_date ? selectedTournament.start_date.split('T')[0] : null
+    const tourneyEndStr = selectedTournament.end_date ? selectedTournament.end_date.split('T')[0] : null
+
+    if (tourneyStartStr && matchDateStr < tourneyStartStr) {
+      toast.error(`La fecha del encuentro no puede ser anterior al inicio del torneo (${new Date(selectedTournament.start_date).toLocaleDateString()})`)
+      return
+    }
+
+    if (tourneyEndStr && matchDateStr > tourneyEndStr) {
+      toast.error(`La fecha del encuentro no puede ser posterior a la finalización del torneo (${new Date(selectedTournament.end_date).toLocaleDateString()})`)
+      return
+    }
+
     const { error } = await supabase.from('matches').insert({
       tournament_id: selectedTournament.id,
-      phase: newMatch.phase,
+      phase: newMatch.phase || 'Fase de Grupos',
       match_date: newMatch.date,
-      team1_id: newMatch.t1,
-      team2_id: newMatch.t2,
-      team1_score: newMatch.s1,
-      team2_score: newMatch.s2
+      team_a_id: newMatch.t1,
+      team_b_id: newMatch.t2,
+      score_a: newMatch.s1 || 0,
+      score_b: newMatch.s2 || 0,
+      status: 'scheduled'
     })
-    if (!error) {
-      setActiveTab('info') 
-      setTimeout(() => setActiveTab('matches'), 50)
-      setNewMatch({ phase: 'Fase de Grupos', date: '', t1: '', t2: '', s1: 0, s2: 0 })
+
+    if (error) {
+      console.error('Error creating match:', error)
+      toast.error('Error al crear el encuentro: ' + error.message)
+    } else {
+      toast.success('Encuentro programado exitosamente')
+      fetchTourneyMatches(selectedTournament.id)
+      setNewMatch({ 
+        phase: newMatch.phase || 'Fase de Grupos', 
+        date: tourneyStartStr || '', 
+        t1: '', 
+        t2: '', 
+        s1: 0, 
+        s2: 0 
+      })
     }
   }
 
@@ -226,12 +360,12 @@ export function AdminTournaments() {
   const handleUpdateMatchScore = async () => {
     if (!editMatch) return
     const { error } = await supabase.from('matches').update({
-      team1_score: editMatch.s1,
-      team2_score: editMatch.s2
+      score_a: editMatch.s1,
+      score_b: editMatch.s2
     }).eq('id', editMatch.id)
 
     if (!error) {
-      setTourneyMatches(prev => prev.map(m => m.id === editMatch.id ? { ...m, team1_score: editMatch.s1, team2_score: editMatch.s2 } : m))
+      setTourneyMatches(prev => prev.map(m => m.id === editMatch.id ? { ...m, team1_score: editMatch.s1, team2_score: editMatch.s2, score_a: editMatch.s1, score_b: editMatch.s2 } : m))
       setEditMatch(null)
     }
   }
@@ -438,9 +572,20 @@ export function AdminTournaments() {
                   </span>
                   
                   <button 
-                    onClick={() => { setSelectedTournament(tournament); setActiveTab('info'); }}
+                    onClick={() => { 
+                      setSelectedTournament(tournament); 
+                      setActiveTab('info'); 
+                      setNewMatch({
+                        phase: 'Fase de Grupos',
+                        date: tournament.start_date ? tournament.start_date.split('T')[0] : '',
+                        t1: '',
+                        t2: '',
+                        s1: 0,
+                        s2: 0
+                      });
+                    }}
                     title="Administrar" 
-                    className="px-3 py-1.5 text-xs font-500 bg-primary/20 text-primary hover:bg-primary/30 rounded transition-colors"
+                    className="px-3 py-1.5 text-xs font-500 bg-primary/20 text-primary hover:bg-primary/30 rounded transition-colors cursor-pointer"
                   >
                     Administrar
                   </button>
@@ -562,9 +707,11 @@ export function AdminTournaments() {
                         className="w-full appearance-none rounded-lg border border-border bg-surface px-4 py-2.5 pr-10 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer"
                       >
                         <option value="">Seleccionar equipo para agregar...</option>
-                        {availableTeams.filter(at => !tourneyTeams.find(tt => tt.teams.id === at.id)).map(at => (
-                          <option key={at.id} value={at.id}>{at.name}</option>
-                        ))}
+                        {availableTeams
+                          .filter(at => !tourneyTeams.find(tt => (tt.teams?.id || tt.team_id) === at.id))
+                          .map(at => (
+                            <option key={at.id} value={at.id}>{at.name}</option>
+                          ))}
                       </select>
                       <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     </div>
@@ -577,15 +724,18 @@ export function AdminTournaments() {
                     </div>
                   ) : (
                     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {tourneyTeams.map(tt => (
-                        <div key={tt.teams.id} className="flex items-center gap-3 p-4 rounded-xl border border-border bg-surface">
-                          <img src={tt.teams.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} alt="" className="w-10 h-10 rounded-full object-cover" />
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-sm font-600 text-white truncate">{tt.teams.name}</h4>
+                      {tourneyTeams.map(tt => {
+                        const team = tt.teams || { id: tt.team_id, name: 'Equipo', logo_url: '' }
+                        return (
+                          <div key={team.id || tt.team_id} className="flex items-center gap-3 p-4 rounded-xl border border-border bg-surface">
+                            <img src={team.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} alt="" className="w-10 h-10 rounded-full object-cover" />
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-sm font-600 text-white truncate">{team.name}</h4>
+                            </div>
+                            <button onClick={() => handleRemoveTeam(team.id || tt.team_id)} className="text-muted-foreground hover:text-red-500 transition-colors p-2"><Trash2 className="w-4 h-4"/></button>
                           </div>
-                          <button onClick={() => handleRemoveTeam(tt.teams.id)} className="text-muted-foreground hover:text-red-500 transition-colors p-2"><Trash2 className="w-4 h-4"/></button>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   )}
                 </div>
@@ -594,22 +744,63 @@ export function AdminTournaments() {
               {activeTab === 'matches' && (
                 <div className="space-y-8 animate-in fade-in">
                   <div className="p-5 rounded-xl border border-border bg-surface">
-                    <h4 className="text-sm font-600 text-white uppercase tracking-widest mb-4">Crear Encuentro</h4>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                      <h4 className="text-sm font-600 text-white uppercase tracking-widest">Crear Encuentro</h4>
+                      {selectedTournament?.start_date && selectedTournament?.end_date && (
+                        <span className="text-xs text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-md font-500">
+                          Fechas del Torneo: {new Date(selectedTournament.start_date).toLocaleDateString()} al {new Date(selectedTournament.end_date).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
                     <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
                       <div className="lg:col-span-1">
                         <label className="text-xs text-muted-foreground mb-1 block">Fase/Jornada</label>
                         <input type="text" value={newMatch.phase} onChange={e => setNewMatch({...newMatch, phase: e.target.value})} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-white focus:outline-none focus:border-primary" />
                       </div>
                       <div className="lg:col-span-1">
-                        <label className="text-xs text-muted-foreground mb-1 block">Fecha</label>
-                        <input type="date" value={newMatch.date} onChange={e => setNewMatch({...newMatch, date: e.target.value})} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-white focus:outline-none focus:border-primary" />
+                        <label className="text-xs text-muted-foreground mb-1 block">
+                          Fecha
+                          {selectedTournament?.start_date && selectedTournament?.end_date && (
+                            <span className="text-[10px] text-primary ml-1 font-600">
+                              ({new Date(selectedTournament.start_date).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' })} - {new Date(selectedTournament.end_date).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' })})
+                            </span>
+                          )}
+                        </label>
+                        <input 
+                          type="date" 
+                          value={newMatch.date} 
+                          min={selectedTournament?.start_date ? selectedTournament.start_date.split('T')[0] : undefined}
+                          max={selectedTournament?.end_date ? selectedTournament.end_date.split('T')[0] : undefined}
+                          onChange={e => setNewMatch({...newMatch, date: e.target.value})} 
+                          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-white focus:outline-none focus:border-primary" 
+                        />
                       </div>
                       <div className="lg:col-span-1">
                         <label className="text-xs text-muted-foreground mb-1 block">Equipo A</label>
                         <div className="relative">
-                          <select value={newMatch.t1} onChange={e => setNewMatch({...newMatch, t1: e.target.value})} className="w-full appearance-none rounded-lg border border-border bg-background px-3 py-2 pr-8 text-sm text-white focus:outline-none focus:border-primary cursor-pointer">
+                          <select 
+                            value={newMatch.t1} 
+                            onChange={e => {
+                              const val = e.target.value
+                              setNewMatch(prev => ({
+                                ...prev,
+                                t1: val,
+                                t2: prev.t2 === val ? '' : prev.t2
+                              }))
+                            }} 
+                            className="w-full appearance-none rounded-lg border border-border bg-background px-3 py-2 pr-8 text-sm text-white focus:outline-none focus:border-primary cursor-pointer"
+                          >
                             <option value="">Equipo...</option>
-                            {tourneyTeams.map(tt => <option key={tt.teams.id} value={tt.teams.id}>{tt.teams.name}</option>)}
+                            {tourneyTeams.map(tt => {
+                              const tId = tt.teams?.id || tt.team_id
+                              const tName = tt.teams?.name || 'Equipo'
+                              const isSelectedInB = tId === newMatch.t2
+                              return (
+                                <option key={tId} value={tId} disabled={isSelectedInB}>
+                                  {tName} {isSelectedInB ? '(Seleccionado en B)' : ''}
+                                </option>
+                              )
+                            })}
                           </select>
                           <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                         </div>
@@ -617,15 +808,43 @@ export function AdminTournaments() {
                       <div className="lg:col-span-1">
                         <label className="text-xs text-muted-foreground mb-1 block">Equipo B</label>
                         <div className="relative">
-                          <select value={newMatch.t2} onChange={e => setNewMatch({...newMatch, t2: e.target.value})} className="w-full appearance-none rounded-lg border border-border bg-background px-3 py-2 pr-8 text-sm text-white focus:outline-none focus:border-primary cursor-pointer">
+                          <select 
+                            value={newMatch.t2} 
+                            onChange={e => {
+                              const val = e.target.value
+                              setNewMatch(prev => ({
+                                ...prev,
+                                t2: val,
+                                t1: prev.t1 === val ? '' : prev.t1
+                              }))
+                            }} 
+                            className={`w-full appearance-none rounded-lg border bg-background px-3 py-2 pr-8 text-sm text-white focus:outline-none focus:border-primary cursor-pointer ${
+                              newMatch.t1 && newMatch.t2 && newMatch.t1 === newMatch.t2 ? 'border-red-500' : 'border-border'
+                            }`}
+                          >
                             <option value="">Equipo...</option>
-                            {tourneyTeams.map(tt => <option key={tt.teams.id} value={tt.teams.id}>{tt.teams.name}</option>)}
+                            {tourneyTeams.map(tt => {
+                              const tId = tt.teams?.id || tt.team_id
+                              const tName = tt.teams?.name || 'Equipo'
+                              const isSelectedInA = tId === newMatch.t1
+                              return (
+                                <option key={tId} value={tId} disabled={isSelectedInA}>
+                                  {tName} {isSelectedInA ? '(Seleccionado en A)' : ''}
+                                </option>
+                              )
+                            })}
                           </select>
                           <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                         </div>
                       </div>
                       <div className="lg:col-span-1">
-                        <GmxButton onClick={handleAddMatch} disabled={!newMatch.t1 || !newMatch.t2} className="w-full h-[38px]">Crear</GmxButton>
+                        <GmxButton 
+                          onClick={handleAddMatch} 
+                          disabled={!newMatch.t1 || !newMatch.t2 || newMatch.t1 === newMatch.t2} 
+                          className="w-full h-[38px]"
+                        >
+                          Crear
+                        </GmxButton>
                       </div>
                     </div>
                   </div>

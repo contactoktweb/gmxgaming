@@ -57,11 +57,49 @@ export default function TournamentDetailsPage() {
         setTournament(tournamentData)
         const [teamsRes, matchesRes] = await Promise.all([
           supabase.from('tournament_teams').select('teams(id, name, logo_url, tag)').eq('tournament_id', targetId),
-          supabase.from('matches').select('*, team1:teams!matches_team1_id_fkey(id, name, logo_url, tag), team2:teams!matches_team2_id_fkey(id, name, logo_url, tag)').eq('tournament_id', targetId).order('match_date', { ascending: true })
+          supabase.from('matches').select('*').eq('tournament_id', targetId).order('match_date', { ascending: true })
         ])
 
-        if (teamsRes.data) setTeams(teamsRes.data.map(t => t.teams))
-        if (matchesRes.data) setMatches(matchesRes.data)
+        const loadedTeams = teamsRes.data ? teamsRes.data.map((t: any) => t.teams).filter(Boolean) : []
+        setTeams(loadedTeams)
+
+        if (matchesRes.data) {
+          const teamMap = new Map<string, any>()
+          loadedTeams.forEach((t: any) => { if (t?.id) teamMap.set(t.id, t) })
+          
+          const missingIds = new Set<string>()
+          matchesRes.data.forEach(m => {
+            const t1Id = m.team_a_id || m.team1_id
+            const t2Id = m.team_b_id || m.team2_id
+            if (t1Id && !teamMap.has(t1Id)) missingIds.add(t1Id)
+            if (t2Id && !teamMap.has(t2Id)) missingIds.add(t2Id)
+          })
+
+          if (missingIds.size > 0) {
+            const { data: missingTeams } = await supabase
+              .from('teams')
+              .select('id, name, logo_url, tag')
+              .in('id', Array.from(missingIds))
+            if (missingTeams) {
+              missingTeams.forEach(t => teamMap.set(t.id, t))
+            }
+          }
+
+          const populatedMatches = matchesRes.data.map(m => {
+            const t1Id = m.team_a_id || m.team1_id
+            const t2Id = m.team_b_id || m.team2_id
+            return {
+              ...m,
+              team1_id: t1Id,
+              team2_id: t2Id,
+              team1_score: m.score_a ?? m.team1_score ?? 0,
+              team2_score: m.score_b ?? m.team2_score ?? 0,
+              team1: teamMap.get(t1Id) || { id: t1Id, name: 'TBD', logo_url: '' },
+              team2: teamMap.get(t2Id) || { id: t2Id, name: 'TBD', logo_url: '' }
+            }
+          })
+          setMatches(populatedMatches)
+        }
       }
       
       setLoading(false)

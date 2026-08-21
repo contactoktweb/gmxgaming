@@ -8,53 +8,49 @@ export function CustomCursor() {
   const [active, setActive] = useState(false)
   const [hidden, setHidden] = useState(true)
 
-  const dotX = useMotionValue(-100)
-  const dotY = useMotionValue(-100)
-  const ringX = useSpring(dotX, { stiffness: 300, damping: 28, mass: 0.5 })
-  const ringY = useSpring(dotY, { stiffness: 300, damping: 28, mass: 0.5 })
+  const cursorX = useMotionValue(-100)
+  const cursorY = useMotionValue(-100)
+  const springX = useSpring(cursorX, { stiffness: 350, damping: 30, mass: 0.4 })
+  const springY = useSpring(cursorY, { stiffness: 350, damping: 30, mass: 0.4 })
 
   useEffect(() => {
     const isFine = window.matchMedia('(pointer: fine)').matches
     if (!isFine) return
     setEnabled(true)
-    document.documentElement.classList.add('custom-cursor-active')
 
     const move = (e: MouseEvent) => {
-      dotX.set(e.clientX)
-      dotY.set(e.clientY)
+      cursorX.set(e.clientX)
+      cursorY.set(e.clientY)
       setHidden(false)
       const el = e.target as HTMLElement
-      const interactive = el.closest('a, button, [data-cursor], input, textarea, label')
+      const interactive = el.closest('a, button, [data-cursor], input, textarea, label, [role="button"]')
       setActive(Boolean(interactive))
     }
     const leave = () => setHidden(true)
 
-    window.addEventListener('mousemove', move)
+    window.addEventListener('mousemove', move, { passive: true })
     window.addEventListener('mouseleave', leave)
     return () => {
       window.removeEventListener('mousemove', move)
       window.removeEventListener('mouseleave', leave)
-      document.documentElement.classList.remove('custom-cursor-active')
     }
-  }, [dotX, dotY])
+  }, [cursorX, cursorY])
 
   if (!enabled) return null
 
   return (
-    <div aria-hidden className="pointer-events-none fixed inset-0 z-[9999]" style={{ opacity: hidden ? 0 : 1 }}>
+    <div aria-hidden className="pointer-events-none fixed inset-0 z-[9999] transition-opacity duration-300" style={{ opacity: hidden ? 0 : 1 }}>
+      {/* Animated glowing trailing aura that follows the native mouse pointer */}
       <motion.div
-        className="fixed left-0 top-0 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary"
-        style={{ x: dotX, y: dotY }}
-      />
-      <motion.div
-        className="fixed left-0 top-0 -translate-x-1/2 -translate-y-1/2 rounded-full border transition-[width,height,opacity,border-color] duration-200"
+        className="fixed left-0 top-0 -translate-x-1/2 -translate-y-1/2 rounded-full border pointer-events-none transition-[width,height,opacity,border-color,background-color] duration-200"
         style={{
-          x: ringX,
-          y: ringY,
-          width: active ? 52 : 30,
-          height: active ? 52 : 30,
-          borderColor: active ? 'var(--primary)' : 'rgba(255,255,255,0.4)',
-          opacity: active ? 0.9 : 0.5,
+          x: springX,
+          y: springY,
+          width: active ? 46 : 28,
+          height: active ? 46 : 28,
+          borderColor: active ? 'rgba(255, 45, 32, 0.75)' : 'rgba(255, 45, 32, 0.3)',
+          backgroundColor: active ? 'rgba(255, 45, 32, 0.08)' : 'transparent',
+          opacity: active ? 0.9 : 0.45,
         }}
       />
     </div>
