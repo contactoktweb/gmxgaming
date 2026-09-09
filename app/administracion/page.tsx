@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Settings, CheckSquare, Users, Trophy, ShieldCheck, Loader2, PlaySquare, Mic } from 'lucide-react'
+import { Settings, CheckSquare, Users, Trophy, ShieldCheck, Loader2, PlaySquare, Mic, Handshake } from 'lucide-react'
 import { AdminValidations } from '@/components/dashboard/admin-validations'
 import { AdminPlayers } from '@/components/dashboard/admin-players'
 import { AdminTournaments } from '@/components/dashboard/admin-tournaments'
@@ -10,6 +10,7 @@ import { AdminTeams } from '@/components/dashboard/admin-teams'
 import { AdminSettings } from '@/components/dashboard/admin-settings'
 import { AdminMedia } from '@/components/dashboard/admin-media'
 import { AdminCasters } from '@/components/dashboard/admin-casters'
+import { AdminSponsors } from '@/components/dashboard/admin-sponsors'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/sections/site-footer'
 import { CustomCursor } from '@/components/custom-cursor'
@@ -19,7 +20,7 @@ import { Preloader } from '@/components/preloader'
 import { useAuth } from '@/lib/auth-context'
 import { cn } from '@/lib/utils'
 
-type Tab = 'validaciones' | 'jugadores' | 'equipos' | 'torneos' | 'media' | 'casters' | 'ajustes'
+type Tab = 'validaciones' | 'jugadores' | 'equipos' | 'torneos' | 'media' | 'casters' | 'sponsors' | 'ajustes'
 
 export default function AdministracionPage() {
   const { user, isLoading } = useAuth()
@@ -149,6 +150,19 @@ export default function AdministracionPage() {
               </button>
 
               <button
+                onClick={() => setActiveTab('sponsors')}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-600 uppercase tracking-wider transition-colors whitespace-nowrap",
+                  activeTab === 'sponsors'
+                    ? "bg-primary text-white"
+                    : "text-muted-foreground hover:bg-white/5 hover:text-white"
+                )}
+              >
+                <Handshake className="h-5 w-5" />
+                Sponsors
+              </button>
+
+              <button
                 onClick={() => setActiveTab('ajustes')}
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-600 uppercase tracking-wider transition-colors whitespace-nowrap",
@@ -170,6 +184,7 @@ export default function AdministracionPage() {
             {activeTab === 'torneos' && <AdminTournaments />}
             {activeTab === 'media' && <AdminMedia />}
             {activeTab === 'casters' && <AdminCasters />}
+            {activeTab === 'sponsors' && <AdminSponsors />}
             {activeTab === 'ajustes' && <AdminSettings />}
           </div>
 

@@ -69,7 +69,7 @@ export default function TeamDetailsPage() {
             profiles!contracts_player_id_fkey (id, name, nickname, avatar_url, discord_handle)
           `)
           .eq('team_id', teamId)
-          .in('status', ['active', 'activo'])
+          .in('status', ['active', 'activo', 'pending_player_release', 'pending_manager_release'])
         
         if (rosterData) {
           setRoster(rosterData)

@@ -74,7 +74,7 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
       )
     `)
     .eq('player_id', player.id)
-    .eq('status', 'active')
+    .in('status', ['active', 'activo', 'pending_player_release', 'pending_manager_release'])
 
   const gameInfo = player.player_game_info?.[0]
 

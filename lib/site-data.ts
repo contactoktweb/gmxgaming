@@ -108,15 +108,22 @@ export const TEAMS = [
   },
 ]
 
-export const PARTNERS = [
-  'FED. MX ESPORTS',
-  'KINGS CLASH',
-  'HYPERPLAY',
-  'NEXUS LEAGUE',
-  'REDBYTE',
-  'ARENA PRO',
-  'VOLT GG',
-  'TITAN CUP',
+export interface PartnerSponsor {
+  id?: string
+  name: string
+  image_url?: string
+  url: string
+}
+
+export const PARTNERS: PartnerSponsor[] = [
+  { id: 'partner-1', name: 'FED. MX ESPORTS', image_url: '', url: 'https://femexesports.com/' },
+  { id: 'partner-2', name: 'KINGS CLASH', image_url: '', url: 'https://gmxgaming.com/' },
+  { id: 'partner-3', name: 'HYPERPLAY', image_url: '', url: 'https://hyperplay.xyz/' },
+  { id: 'partner-4', name: 'NEXUS LEAGUE', image_url: '', url: 'https://gmxgaming.com/' },
+  { id: 'partner-5', name: 'REDBYTE', image_url: '', url: 'https://gmxgaming.com/' },
+  { id: 'partner-6', name: 'ARENA PRO', image_url: '', url: 'https://gmxgaming.com/' },
+  { id: 'partner-7', name: 'VOLT GG', image_url: '', url: 'https://gmxgaming.com/' },
+  { id: 'partner-8', name: 'TITAN CUP', image_url: '', url: 'https://gmxgaming.com/' },
 ]
 
 export const TOURNAMENTS = [

@@ -49,6 +49,9 @@ export function ManagerPlayers() {
   
   // Modal de confirmación para dar de baja a un jugador
   const [terminatingContract, setTerminatingContract] = useState<ContractRequest | null>(null)
+  const [terminationJustification, setTerminationJustification] = useState('')
+  const [submittingTermination, setSubmittingTermination] = useState(false)
+  const [bajaValidationsMap, setBajaValidationsMap] = useState<Record<string, any>>({})
 
   // 1. Cargar equipos que administra el usuario
   useEffect(() => {
@@ -74,7 +77,7 @@ export function ManagerPlayers() {
     loadManagedTeams()
   }, [user])
 
-  // 2. Cargar contratos para el equipo seleccionado
+  // 2. Cargar contratos para el equipo seleccionado y logs de bajas
   useEffect(() => {
     async function loadTeamContracts() {
       if (!selectedTeamId) return
@@ -90,6 +93,21 @@ export function ManagerPlayers() {
 
       if (contractsData) {
         setContracts(contractsData as ContractRequest[])
+      }
+
+      const { data: bajaValidations } = await supabase
+        .from('validations')
+        .select('*')
+        .eq('type', 'baja_contrato')
+
+      if (bajaValidations) {
+        const map: Record<string, any> = {}
+        bajaValidations.forEach((v: any) => {
+          if (v.details?.contract_id) {
+            map[v.details.contract_id] = v
+          }
+        })
+        setBajaValidationsMap(map)
       }
     }
 
@@ -242,8 +260,139 @@ export function ManagerPlayers() {
     const contractId = terminatingContract.id
     const playerName = terminatingContract.profiles?.name || 'el jugador'
 
-    toast.loading('Finalizando contrato...', { id: 'contract-term' })
+    toast.loading('Enviando solicitud de baja...', { id: 'contract-term' })
 
+    try {
+      const { error } = await supabase
+        .from('contracts')
+        .update({
+          status: 'pending_player_release'
+        })
+        .eq('id', contractId)
+
+      if (!error) {
+        toast.success('Solicitud de Baja Enviada', {
+          id: 'contract-term',
+          description: `Se envió la solicitud a ${playerName}. El contrato finalizará una vez que el jugador la acepte.`
+        })
+        setContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'pending_player_release' } : c))
+        setTerminatingContract(null)
+      } else {
+        toast.error('Error al solicitar la baja: ' + error.message, { id: 'contract-term' })
+      }
+    } catch (err: any) {
+      console.error('Error al solicitar baja:', err)
+      toast.error('Error al solicitar baja: ' + (err?.message || 'Error inesperado'), { id: 'contract-term' })
+    }
+  }
+
+  // Baja administrativa inmediata para administradores
+  const handleAdminDirectTermination = async () => {
+    if (!terminatingContract) return
+    const trimmed = terminationJustification.trim()
+    if (!trimmed || trimmed.length < 5) {
+      toast.error('La justificación es obligatoria (mínimo 5 caracteres).')
+      return
+    }
+
+    setSubmittingTermination(true)
+    toast.loading('Aplicando baja administrativa inmediata...', { id: 'contract-term' })
+
+    try {
+      const contractId = terminatingContract.id
+      const playerName = terminatingContract.profiles?.name || 'el jugador'
+      const teamName = currentTeam?.name || 'el equipo'
+
+      const { error: contractError } = await supabase
+        .from('contracts')
+        .update({
+          status: 'completado',
+          conclusion_date: new Date().toISOString()
+        })
+        .eq('id', contractId)
+
+      if (contractError) throw contractError
+
+      const { error: validationError } = await supabase
+        .from('validations')
+        .insert({
+          type: 'baja_contrato',
+          target_name: `Baja Administrativa: ${playerName} (${teamName})`,
+          submitted_by: user?.name || user?.email || 'Administrador',
+          status: 'approved',
+          details: {
+            contract_id: contractId,
+            player_id: terminatingContract.player_id,
+            player_name: playerName,
+            team_id: terminatingContract.team_id,
+            team_name: teamName,
+            justification: trimmed,
+            admin_id: user?.id,
+            admin_name: user?.name || user?.email || 'Administrador',
+            conclusion_date: new Date().toISOString()
+          }
+        })
+
+      if (validationError) {
+        console.error('Error recording validation:', validationError)
+      }
+
+      toast.success('Baja Administrativa Aplicada', {
+        id: 'contract-term',
+        description: `Se dio de baja inmediatamente a ${playerName}. La justificación quedó registrada.`
+      })
+
+      setBajaValidationsMap(prev => ({
+        ...prev,
+        [contractId]: {
+          details: {
+            justification: trimmed,
+            admin_name: user?.name || user?.email || 'Administrador'
+          }
+        }
+      }))
+
+      setContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'completado', conclusion_date: new Date().toISOString() } : c))
+      setTerminatingContract(null)
+      setTerminationJustification('')
+    } catch (err: any) {
+      console.error('Error in direct termination:', err)
+      toast.error('Error al aplicar la baja: ' + (err?.message || 'Error inesperado'), { id: 'contract-term' })
+    } finally {
+      setSubmittingTermination(false)
+    }
+  }
+
+  // Cancelar la solicitud de baja enviada por el manager
+  const handleCancelReleaseRequest = async (contractId: string, playerName: string) => {
+    setProcessingId(contractId)
+    toast.loading('Cancelando solicitud de baja...', { id: 'contract-action' })
+    try {
+      const { error } = await supabase
+        .from('contracts')
+        .update({ status: 'active' })
+        .eq('id', contractId)
+
+      if (!error) {
+        toast.success('Solicitud Cancelada', {
+          id: 'contract-action',
+          description: `La solicitud de baja para ${playerName} fue cancelada. El contrato continúa activo.`
+        })
+        setContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'active' } : c))
+      } else {
+        toast.error('Error al cancelar solicitud: ' + error.message, { id: 'contract-action' })
+      }
+    } catch (err: any) {
+      toast.error('Error al procesar cancelación: ' + (err?.message || 'Error inesperado'), { id: 'contract-action' })
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
+  // Manager acepta la solicitud de baja pedida por el jugador
+  const handleApprovePlayerRelease = async (contractId: string, playerName: string) => {
+    setProcessingId(contractId)
+    toast.loading('Aceptando baja del jugador...', { id: 'contract-action' })
     try {
       const { error } = await supabase
         .from('contracts')
@@ -254,18 +403,44 @@ export function ManagerPlayers() {
         .eq('id', contractId)
 
       if (!error) {
-        toast.success('Contrato Finalizado', {
-          id: 'contract-term',
-          description: `Se dio de baja el contrato de ${playerName}.`
+        toast.success('Baja Aceptada', {
+          id: 'contract-action',
+          description: `Se aceptó la baja de ${playerName}. El contrato finalizó y el jugador es ahora agente libre.`
         })
-        setContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'completado' } : c))
-        setTerminatingContract(null)
+        setContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'completado', conclusion_date: new Date().toISOString() } : c))
       } else {
-        toast.error('Error al finalizar el contrato: ' + error.message, { id: 'contract-term' })
+        toast.error('Error al aceptar la baja: ' + error.message, { id: 'contract-action' })
       }
     } catch (err: any) {
-      console.error('Error al finalizar contrato:', err)
-      toast.error('Error al finalizar contrato: ' + (err?.message || 'Error inesperado'), { id: 'contract-term' })
+      toast.error('Error al procesar: ' + (err?.message || 'Error inesperado'), { id: 'contract-action' })
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
+  // Manager rechaza la solicitud de baja pedida por el jugador
+  const handleRejectPlayerRelease = async (contractId: string, playerName: string) => {
+    setProcessingId(contractId)
+    toast.loading('Rechazando baja...', { id: 'contract-action' })
+    try {
+      const { error } = await supabase
+        .from('contracts')
+        .update({ status: 'active' })
+        .eq('id', contractId)
+
+      if (!error) {
+        toast.success('Solicitud Rechazada', {
+          id: 'contract-action',
+          description: `Se rechazó la solicitud de baja de ${playerName}. El contrato se mantiene activo.`
+        })
+        setContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'active' } : c))
+      } else {
+        toast.error('Error al rechazar la baja: ' + error.message, { id: 'contract-action' })
+      }
+    } catch (err: any) {
+      toast.error('Error al procesar rechazo: ' + (err?.message || 'Error inesperado'), { id: 'contract-action' })
+    } finally {
+      setProcessingId(null)
     }
   }
 
@@ -292,7 +467,8 @@ export function ManagerPlayers() {
 
   const currentTeam = managedTeams.find(t => t.id === selectedTeamId) || managedTeams[0]
   const pendingRequests = contracts.filter(c => c.status === 'pending_manager' || c.status === 'pending' || c.status === 'pendiente')
-  const activeRoster = contracts.filter(c => c.status === 'active' || c.status === 'activo')
+  const pendingPlayerReleases = contracts.filter(c => c.status === 'pending_manager_release')
+  const activeRoster = contracts.filter(c => c.status === 'active' || c.status === 'activo' || c.status === 'pending_player_release' || c.status === 'pending_manager_release')
   const pastContracts = contracts.filter(c => c.status === 'rejected' || c.status === 'completado' || c.status === 'cancelado')
 
   return (
@@ -359,13 +535,19 @@ export function ManagerPlayers() {
         </div>
 
         {/* Métricas Rápidas del Equipo */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6">
           <div className="rounded-lg bg-background border border-border p-4">
-            <p className="text-xs font-600 uppercase tracking-wider text-muted-foreground">Solicitudes Pendientes</p>
+            <p className="text-xs font-600 uppercase tracking-wider text-muted-foreground">Solicitudes Entrada</p>
             <p className="font-display text-2xl sm:text-3xl font-700 text-amber-400 mt-1">{pendingRequests.length}</p>
           </div>
           <div className="rounded-lg bg-background border border-border p-4">
-            <p className="text-xs font-600 uppercase tracking-wider text-muted-foreground">Jugadores en Roster</p>
+            <p className="text-xs font-600 uppercase tracking-wider text-muted-foreground">Bajas Solicitadas</p>
+            <p className={cn("font-display text-2xl sm:text-3xl font-700 mt-1", pendingPlayerReleases.length > 0 ? "text-red-400" : "text-muted-foreground")}>
+              {pendingPlayerReleases.length}
+            </p>
+          </div>
+          <div className="rounded-lg bg-background border border-border p-4">
+            <p className="text-xs font-600 uppercase tracking-wider text-muted-foreground">Jugadores Roster</p>
             <p className="font-display text-2xl sm:text-3xl font-700 text-emerald-400 mt-1">{activeRoster.length}</p>
           </div>
           <div className="col-span-2 sm:col-span-1 rounded-lg bg-background border border-border p-4 flex items-center justify-between">
@@ -379,7 +561,102 @@ export function ManagerPlayers() {
         </div>
       </div>
 
-      {/* 2. Solicitudes de Contrato Pendientes */}
+      {/* 2. Solicitudes de Baja por Jugadores (Rescisión solicitada por el jugador) */}
+      {pendingPlayerReleases.length > 0 && (
+        <div className="rounded-xl border border-red-500/40 bg-surface p-6 sm:p-8 shadow-xl animate-in fade-in">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-display text-2xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
+              <UserX className="h-6 w-6 text-red-400" />
+              Solicitudes de Baja por Jugadores ({pendingPlayerReleases.length})
+            </h3>
+            <span className="px-3 py-1 rounded-full text-xs font-700 uppercase tracking-wider bg-red-500/10 text-red-400 border border-red-500/20 animate-pulse">
+              Rescisión Solicitada
+            </span>
+          </div>
+
+          <p className="text-xs text-muted-foreground mb-6">
+            Los siguientes jugadores han solicitado rescindir su contrato y darse de baja del equipo. Puedes aceptar para dejarlos como agentes libres o rechazar la solicitud para mantener su contrato activo.
+          </p>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            {pendingPlayerReleases.map(contract => {
+              const playerName = contract.profiles?.name || 'Jugador'
+              const playerNickname = contract.profiles?.nickname
+              const playerAvatar = contract.profiles?.avatar_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
+              const isProcessing = processingId === contract.id
+
+              return (
+                <div 
+                  key={contract.id} 
+                  className="rounded-xl bg-background border border-red-500/30 p-5 flex flex-col justify-between space-y-4 hover:border-red-500/60 transition-colors shadow-lg"
+                >
+                  <div className="flex items-start gap-4">
+                    <img 
+                      src={playerAvatar} 
+                      alt={playerName}
+                      className="w-14 h-14 rounded-xl object-cover border border-border bg-surface shrink-0" 
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-display font-700 text-white truncate text-base">{playerName}</h4>
+                        {playerNickname && (
+                          <span className="text-xs text-primary font-600">({playerNickname})</span>
+                        )}
+                      </div>
+
+                      {contract.profiles?.discord_handle && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Discord: <span className="text-white font-500">@{contract.profiles.discord_handle}</span>
+                        </p>
+                      )}
+
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {Array.isArray(contract.roles) ? (
+                          contract.roles.map((r: string, idx: number) => (
+                            <span key={idx} className="px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-[11px] font-600">
+                              {formatRoleTitle(r)}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-[11px] font-600">
+                            {formatRoleTitle(contract.roles || 'Jugador')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-border flex items-center justify-between gap-3 text-xs">
+                    <span className="text-red-400 font-500">
+                      Jugador solicita su baja
+                    </span>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleRejectPlayerRelease(contract.id, playerName)}
+                        disabled={isProcessing}
+                        className="px-3 py-1.5 rounded bg-surface hover:bg-white/10 text-muted-foreground hover:text-white border border-border font-600 uppercase text-[11px] tracking-wider transition-colors disabled:opacity-50"
+                      >
+                        Rechazar
+                      </button>
+                      <button
+                        onClick={() => handleApprovePlayerRelease(contract.id, playerName)}
+                        disabled={isProcessing}
+                        className="px-4 py-1.5 rounded bg-red-500/20 hover:bg-red-600 hover:text-white text-red-300 border border-red-500/30 font-600 uppercase text-[11px] tracking-wider transition-colors flex items-center gap-1 disabled:opacity-50"
+                      >
+                        <UserX className="w-3.5 h-3.5" />
+                        Aceptar Baja
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 3. Solicitudes de Contrato Pendientes */}
       <div className="rounded-xl border border-amber-500/30 bg-surface p-6 sm:p-8 shadow-xl">
         <div className="flex items-center justify-between mb-6">
           <h3 className="font-display text-2xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
@@ -476,7 +753,7 @@ export function ManagerPlayers() {
         )}
       </div>
 
-      {/* 3. Roster de Jugadores Activos */}
+      {/* 4. Roster de Jugadores Activos */}
       <div className="rounded-xl border border-border bg-surface p-6 sm:p-8 shadow-xl">
         <h3 className="font-display text-2xl font-700 uppercase tracking-tight text-white mb-6 flex items-center gap-2">
           <Users className="h-6 w-6 text-primary" />
@@ -493,44 +770,66 @@ export function ManagerPlayers() {
               const playerName = contract.profiles?.name || 'Jugador'
               const playerNickname = contract.profiles?.nickname
               const playerAvatar = contract.profiles?.avatar_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
+              const isPendingPlayerRelease = contract.status === 'pending_player_release'
+              const isPendingManagerRelease = contract.status === 'pending_manager_release'
 
               return (
-                <div key={contract.id} className="rounded-xl bg-background border border-border p-5 flex flex-col justify-between hover:border-primary/50 transition-colors shadow-md">
-                  <div className="flex items-start gap-4 mb-4">
-                    <img 
-                      src={playerAvatar} 
-                      alt={playerName}
-                      className="w-14 h-14 rounded-xl object-cover border border-border bg-surface shrink-0" 
-                    />
-                    <div className="min-w-0 flex-1">
-                      <h4 className="font-display font-700 text-white truncate text-base">{playerName}</h4>
-                      {playerNickname && (
-                        <p className="text-xs text-primary font-600 font-display">IGN: {playerNickname}</p>
-                      )}
-                      {contract.profiles?.discord_handle && (
-                        <p className="text-xs text-muted-foreground">Discord: @{contract.profiles.discord_handle}</p>
-                      )}
-                    </div>
-                  </div>
+                <div key={contract.id} className={cn(
+                  "rounded-xl bg-background border p-5 flex flex-col justify-between transition-colors shadow-md",
+                  isPendingPlayerRelease ? "border-amber-500/40" : isPendingManagerRelease ? "border-red-500/40" : "border-border hover:border-primary/50"
+                )}>
+                  <div>
+                    {/* Status Notice if in release progress */}
+                    {isPendingPlayerRelease && (
+                      <div className="mb-3 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300 font-600 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <span>Baja solicitada (Esperando al jugador)</span>
+                      </div>
+                    )}
 
-                  <div className="space-y-2 mb-4">
-                    <div className="flex flex-wrap gap-1">
-                      {Array.isArray(contract.roles) ? (
-                        contract.roles.map((r: string, idx: number) => (
-                          <span key={idx} className="px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-[11px] font-600">
-                            {formatRoleTitle(r)}
+                    {isPendingManagerRelease && (
+                      <div className="mb-3 px-2.5 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-[11px] text-red-300 font-600 flex items-center gap-1.5">
+                        <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                        <span>El jugador solicitó su rescisión</span>
+                      </div>
+                    )}
+
+                    <div className="flex items-start gap-4 mb-4">
+                      <img 
+                        src={playerAvatar} 
+                        alt={playerName}
+                        className="w-14 h-14 rounded-xl object-cover border border-border bg-surface shrink-0" 
+                      />
+                      <div className="min-w-0 flex-1">
+                        <h4 className="font-display font-700 text-white truncate text-base">{playerName}</h4>
+                        {playerNickname && (
+                          <p className="text-xs text-primary font-600 font-display">IGN: {playerNickname}</p>
+                        )}
+                        {contract.profiles?.discord_handle && (
+                          <p className="text-xs text-muted-foreground">Discord: @{contract.profiles.discord_handle}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 mb-4">
+                      <div className="flex flex-wrap gap-1">
+                        {Array.isArray(contract.roles) ? (
+                          contract.roles.map((r: string, idx: number) => (
+                            <span key={idx} className="px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-[11px] font-600">
+                              {formatRoleTitle(r)}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-[11px] font-600">
+                            {formatRoleTitle(contract.roles || 'Jugador')}
                           </span>
-                        ))
-                      ) : (
-                        <span className="px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-[11px] font-600">
-                          {formatRoleTitle(contract.roles || 'Jugador')}
-                        </span>
-                      )}
-                    </div>
+                        )}
+                      </div>
 
-                    <div className="text-xs text-muted-foreground pt-2 border-t border-border flex justify-between">
-                      <span>Vencimiento:</span>
-                      <strong className="text-white">{contract.end_date ? new Date(contract.end_date).toLocaleDateString() : 'Indefinido'}</strong>
+                      <div className="text-xs text-muted-foreground pt-2 border-t border-border flex justify-between">
+                        <span>Vencimiento:</span>
+                        <strong className="text-white">{contract.end_date ? new Date(contract.end_date).toLocaleDateString() : 'Indefinido'}</strong>
+                      </div>
                     </div>
                   </div>
 
@@ -543,13 +842,42 @@ export function ManagerPlayers() {
                         Ver Perfil
                       </Link>
                     )}
-                    <button
-                      onClick={() => setTerminatingContract(contract)}
-                      className="px-3 py-1.5 rounded bg-red-500/10 hover:bg-red-500 hover:text-white text-red-400 border border-red-500/20 font-600 uppercase text-[10px] tracking-wider transition-colors flex items-center gap-1 ml-auto"
-                    >
-                      <UserX className="w-3 h-3" />
-                      Dar de Baja
-                    </button>
+
+                    {isPendingPlayerRelease ? (
+                      <button
+                        onClick={() => handleCancelReleaseRequest(contract.id, playerName)}
+                        disabled={processingId === contract.id}
+                        className="px-2.5 py-1.5 rounded bg-amber-500/10 hover:bg-amber-500 hover:text-black text-amber-300 border border-amber-500/20 font-600 uppercase text-[10px] tracking-wider transition-colors flex items-center gap-1 ml-auto"
+                      >
+                        <X className="w-3 h-3" />
+                        Cancelar Solicitud
+                      </button>
+                    ) : isPendingManagerRelease ? (
+                      <div className="flex items-center gap-1.5 ml-auto">
+                        <button
+                          onClick={() => handleRejectPlayerRelease(contract.id, playerName)}
+                          disabled={processingId === contract.id}
+                          className="px-2.5 py-1 rounded bg-surface hover:bg-white/10 text-muted-foreground hover:text-white border border-border font-600 uppercase text-[10px] tracking-wider transition-colors"
+                        >
+                          Rechazar
+                        </button>
+                        <button
+                          onClick={() => handleApprovePlayerRelease(contract.id, playerName)}
+                          disabled={processingId === contract.id}
+                          className="px-2.5 py-1 rounded bg-red-500/20 hover:bg-red-600 hover:text-white text-red-300 border border-red-500/30 font-600 uppercase text-[10px] tracking-wider transition-colors"
+                        >
+                          Aceptar Baja
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setTerminatingContract(contract)}
+                        className="px-3 py-1.5 rounded bg-red-500/10 hover:bg-red-500 hover:text-white text-red-400 border border-red-500/20 font-600 uppercase text-[10px] tracking-wider transition-colors flex items-center gap-1 ml-auto"
+                      >
+                        <UserX className="w-3 h-3" />
+                        Dar de Baja
+                      </button>
+                    )}
                   </div>
                 </div>
               )
@@ -558,71 +886,143 @@ export function ManagerPlayers() {
         )}
       </div>
 
-      {/* 4. Historial de Contratos (Rechazados / Completados) */}
+      {/* 5. Historial de Contratos (Rechazados / Completados / Bajas) */}
       {pastContracts.length > 0 && (
         <div className="rounded-xl border border-border bg-surface p-6 sm:p-8 shadow-xl">
           <h3 className="font-display text-xl font-700 uppercase tracking-tight text-muted-foreground mb-4">
             Historial de Contratos Pasados ({pastContracts.length})
           </h3>
           <div className="divide-y divide-border rounded-lg border border-border bg-background">
-            {pastContracts.map(c => (
-              <div key={c.id} className="p-4 flex items-center justify-between gap-4 text-xs">
-                <div className="flex items-center gap-3">
-                  <img 
-                    src={c.profiles?.avatar_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
-                    alt={c.profiles?.name}
-                    className="w-8 h-8 rounded-lg object-cover grayscale opacity-70" 
-                  />
-                  <div>
-                    <span className="font-600 text-white">{c.profiles?.name}</span>
-                    <span className="text-muted-foreground ml-2">({formatRolesList(c.roles)})</span>
+            {pastContracts.map(c => {
+              const bajaLog = bajaValidationsMap[c.id]
+              return (
+                <div key={c.id} className="p-4 space-y-2 text-xs">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <img 
+                        src={c.profiles?.avatar_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
+                        alt={c.profiles?.name}
+                        className="w-8 h-8 rounded-lg object-cover grayscale opacity-70" 
+                      />
+                      <div>
+                        <span className="font-600 text-white">{c.profiles?.name}</span>
+                        <span className="text-muted-foreground ml-2">({formatRolesList(c.roles)})</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className={cn(
+                        "px-2 py-0.5 rounded font-600 uppercase tracking-wider text-[10px]",
+                        c.status === 'rejected' ? 'bg-red-500/10 text-red-400' : 'bg-white/5 text-muted-foreground'
+                      )}>
+                        {c.status === 'rejected' ? 'RECHAZADO' : 'FINALIZADO'}
+                      </span>
+                    </div>
                   </div>
+
+                  {bajaLog?.details?.justification && (
+                    <div className="rounded bg-amber-500/10 border border-amber-500/20 p-2.5 text-xs text-amber-200">
+                      <div className="flex items-center justify-between font-semibold text-[11px] uppercase tracking-wider text-amber-400 mb-1">
+                        <span>Motivo de Baja Administrativa</span>
+                        {bajaLog.details.admin_name && <span>Por: {bajaLog.details.admin_name}</span>}
+                      </div>
+                      <p className="italic">"{bajaLog.details.justification}"</p>
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center gap-4">
-                  <span className={cn(
-                    "px-2 py-0.5 rounded font-600 uppercase tracking-wider text-[10px]",
-                    c.status === 'rejected' ? 'bg-red-500/10 text-red-400' : 'bg-white/5 text-muted-foreground'
-                  )}>
-                    {c.status === 'rejected' ? 'RECHAZADO' : 'FINALIZADO'}
-                  </span>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
 
-      {/* Modal de Confirmación para Dar de Baja Contrato */}
+      {/* Modal para Dar de Baja Contrato (Admin inmediato con justificación obligatoria o Manager con solicitud) */}
       {terminatingContract && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setTerminatingContract(null)} />
-          <div className="relative w-full max-w-md rounded-xl border border-border bg-surface p-6 sm:p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+          <div 
+            className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
+            onClick={() => !submittingTermination && setTerminatingContract(null)} 
+          />
+          <div className="relative w-full max-w-lg rounded-xl border border-red-500/30 bg-surface p-6 sm:p-8 shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-500/10 text-red-500 mb-4 border border-red-500/20">
               <UserX className="h-7 w-7" />
             </div>
             
             <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white text-center mb-2">
-              ¿Dar de baja a este jugador?
+              {user?.role === 'admin' ? 'Baja Administrativa Inmediata' : '¿Solicitar baja a este jugador?'}
             </h3>
             
-            <p className="text-sm text-muted-foreground text-center mb-6">
-              Estás a punto de rescindir el contrato de <strong className="text-white">{terminatingContract.profiles?.name}</strong> en <strong className="text-white">{currentTeam.name}</strong>. El jugador dejará de pertenecer al roster oficial.
+            <p className="text-sm text-muted-foreground text-center mb-4">
+              Estás a punto de dar de baja el contrato de <strong className="text-white">{terminatingContract.profiles?.name}</strong> en <strong className="text-white">{currentTeam.name}</strong>.
             </p>
 
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setTerminatingContract(null)}
-                className="flex-1 py-2.5 rounded-md border border-border text-sm font-600 text-white hover:bg-white/5 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleTerminateContract}
-                className="flex-1 py-2.5 rounded-md bg-red-600 hover:bg-red-700 text-sm font-600 text-white uppercase tracking-wider transition-colors"
-              >
-                Confirmar Baja
-              </button>
-            </div>
+            {user?.role === 'admin' ? (
+              <div className="space-y-4 text-sm text-muted-foreground mb-6">
+                <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-200/90 leading-relaxed">
+                  ℹ️ <strong className="text-amber-300">Modo Administrador:</strong> Esta baja se ejecutará <strong>automáticamente e inmediatamente</strong>. El registro del contrato se mantendrá intacto en el historial. Es <strong>obligatorio</strong> ingresar la justificación.
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-white mb-1.5">
+                    Motivo / Justificación obligatoria <span className="text-red-400">*</span>
+                  </label>
+                  <textarea
+                    value={terminationJustification}
+                    onChange={(e) => setTerminationJustification(e.target.value)}
+                    placeholder="Escribe obligatoriamente el motivo de la baja administrativa (mínimo 5 caracteres)..."
+                    rows={4}
+                    className="w-full rounded-lg border border-border bg-background p-3 text-sm text-white placeholder:text-muted-foreground/60 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 transition-colors"
+                  />
+                  <div className="flex justify-between items-center mt-1 text-[11px] text-muted-foreground">
+                    <span>Mínimo 5 caracteres</span>
+                    <span className={terminationJustification.trim().length >= 5 ? 'text-emerald-400' : 'text-amber-400'}>
+                      {terminationJustification.trim().length} caracteres
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 justify-end pt-2">
+                  <button
+                    type="button"
+                    disabled={submittingTermination}
+                    onClick={() => {
+                      setTerminatingContract(null)
+                      setTerminationJustification('')
+                    }}
+                    className="flex-1 py-2.5 rounded-md border border-border text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-white hover:bg-white/5 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={submittingTermination || terminationJustification.trim().length < 5}
+                    onClick={handleAdminDirectTermination}
+                    className="flex-1 py-2.5 rounded-md bg-red-600 hover:bg-red-500 text-xs font-semibold uppercase tracking-wider text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {submittingTermination ? 'Procesando...' : 'Confirmar Baja Inmediata'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <p className="text-xs text-muted-foreground text-center mb-6">
+                  Se notificará al jugador para que acepte la baja y quede desvinculado como agente libre.
+                </p>
+                <div className="flex gap-3 justify-end">
+                  <button
+                    onClick={() => setTerminatingContract(null)}
+                    className="flex-1 py-2.5 rounded-md border border-border text-sm font-600 text-white hover:bg-white/5 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleTerminateContract}
+                    className="flex-1 py-2.5 rounded-md bg-red-600 hover:bg-red-700 text-sm font-600 text-white uppercase tracking-wider transition-colors"
+                  >
+                    Enviar Solicitud
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

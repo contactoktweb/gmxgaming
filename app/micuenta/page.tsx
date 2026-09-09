@@ -25,6 +25,7 @@ export default function MiCuentaPage() {
   const [ready, setReady] = useState(false)
   const [isManager, setIsManager] = useState(false)
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0)
+  const [playerPendingReleaseCount, setPlayerPendingReleaseCount] = useState(0)
   
   const router = useRouter()
   const supabase = createClient()
@@ -39,6 +40,15 @@ export default function MiCuentaPage() {
     async function checkManagerStatus() {
       if (!user) return
       
+      // Check if user has contracts with pending release from team
+      const { count: playerReleaseCount } = await supabase
+        .from('contracts')
+        .select('id', { count: 'exact', head: true })
+        .eq('player_id', user.id)
+        .eq('status', 'pending_player_release')
+
+      setPlayerPendingReleaseCount(playerReleaseCount || 0)
+
       const { data: teams } = await supabase
         .from('teams')
         .select('id')
@@ -52,10 +62,12 @@ export default function MiCuentaPage() {
           .from('contracts')
           .select('id', { count: 'exact', head: true })
           .in('team_id', teamIds)
-          .in('status', ['pending_manager', 'pending', 'pendiente'])
+          .in('status', ['pending_manager', 'pending', 'pendiente', 'pending_manager_release'])
         
         if (count) {
           setPendingRequestsCount(count)
+        } else {
+          setPendingRequestsCount(0)
         }
       } else {
         setIsManager(false)
@@ -121,14 +133,21 @@ export default function MiCuentaPage() {
               <button
                 onClick={() => setActiveTab('equipos')}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-600 uppercase tracking-wider transition-colors whitespace-nowrap",
+                  "flex items-center justify-between gap-3 rounded-lg px-4 py-3 text-sm font-600 uppercase tracking-wider transition-colors whitespace-nowrap",
                   activeTab === 'equipos'
                     ? "bg-primary text-white"
                     : "text-muted-foreground hover:bg-white/5 hover:text-white"
                 )}
               >
-                <ShieldCheck className="h-5 w-5" />
-                Equipos
+                <div className="flex items-center gap-3">
+                  <ShieldCheck className="h-5 w-5" />
+                  Equipos
+                </div>
+                {playerPendingReleaseCount > 0 && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-700 bg-amber-500 text-black animate-pulse shadow-sm" title="Tienes una solicitud de baja pendiente de responder">
+                    {playerPendingReleaseCount}
+                  </span>
+                )}
               </button>
 
               {/* Jugadores (Solo para líderes/managers de equipo) */}
@@ -149,7 +168,7 @@ export default function MiCuentaPage() {
                   {pendingRequestsCount > 0 && (
                     <div 
                       className="group/badge relative flex items-center"
-                      title={`${pendingRequestsCount} solicitud${pendingRequestsCount > 1 ? 'es' : ''} de contrato pendiente${pendingRequestsCount > 1 ? 's' : ''} por revisar`}
+                      title={`${pendingRequestsCount} solicitud${pendingRequestsCount > 1 ? 'es' : ''} pendiente${pendingRequestsCount > 1 ? 's' : ''} por revisar`}
                     >
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-700 bg-amber-500 text-black animate-pulse shadow-sm">
                         {pendingRequestsCount}
@@ -161,8 +180,8 @@ export default function MiCuentaPage() {
                         </span>
                         <p className="text-[11px] text-muted-foreground leading-snug">
                           {pendingRequestsCount === 1 
-                            ? 'Tienes 1 solicitud de contrato enviada por un jugador esperando tu aprobación.'
-                            : `Tienes ${pendingRequestsCount} solicitudes de contratos enviadas por jugadores esperando tu aprobación.`}
+                            ? 'Tienes 1 solicitud de contrato o baja esperando tu aprobación.'
+                            : `Tienes ${pendingRequestsCount} solicitudes de contratos o bajas esperando tu aprobación.`}
                         </p>
                         <div className="absolute top-full right-3 -mt-px border-4 border-transparent border-t-surface"></div>
                       </div>
@@ -175,14 +194,21 @@ export default function MiCuentaPage() {
               <button
                 onClick={() => setActiveTab('contratos')}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-600 uppercase tracking-wider transition-colors whitespace-nowrap",
+                  "flex items-center justify-between gap-3 rounded-lg px-4 py-3 text-sm font-600 uppercase tracking-wider transition-colors whitespace-nowrap",
                   activeTab === 'contratos'
                     ? "bg-primary text-white"
                     : "text-muted-foreground hover:bg-white/5 hover:text-white"
                 )}
               >
-                <ScrollText className="h-5 w-5" />
-                Contratos
+                <div className="flex items-center gap-3">
+                  <ScrollText className="h-5 w-5" />
+                  Contratos
+                </div>
+                {playerPendingReleaseCount > 0 && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-700 bg-amber-500 text-black animate-pulse shadow-sm" title="Tienes una solicitud de baja pendiente de responder">
+                    {playerPendingReleaseCount}
+                  </span>
+                )}
               </button>
             </nav>
           </aside>

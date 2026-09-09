@@ -160,7 +160,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
           })
         } else if (contractsData && contractsData.length > 0) {
           const active = contractsData.find((c: any) => 
-            c.status === 'active' || c.status === 'activo' || c.status === 'pending_manager' || c.status === 'pendiente'
+            c.status === 'active' || c.status === 'activo' || c.status === 'pending_manager' || c.status === 'pendiente' || c.status === 'pending_player_release' || c.status === 'pending_manager_release'
           ) || contractsData[0]
 
           if (active && active.teams) {
@@ -176,7 +176,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
         // Determine active contract
         if (contractsData && contractsData.length > 0) {
           const active = contractsData.find((c: any) => 
-            c.status === 'active' || c.status === 'activo' || c.status === 'pending_manager' || c.status === 'pendiente'
+            c.status === 'active' || c.status === 'activo' || c.status === 'pending_manager' || c.status === 'pendiente' || c.status === 'pending_player_release' || c.status === 'pending_manager_release'
           ) || contractsData[0]
 
           setActiveContract(active)
@@ -868,10 +868,17 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                 <span className={cn(
                   "px-2.5 py-1 rounded-full text-[10px] font-700 uppercase tracking-wider border",
                   (activeContract?.status === 'active' || activeContract?.status === 'activo') ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                  activeContract?.status === 'pending_player_release' ? "bg-red-500/10 text-red-400 border-red-500/20" :
+                  activeContract?.status === 'pending_manager_release' ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
                   activeContract ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
                   "bg-white/5 text-muted-foreground border-border"
                 )}>
-                  {activeContract ? ((activeContract.status === 'active' || activeContract.status === 'activo') ? "Activo" : "Pendiente") : "Sin Contratos"}
+                  {activeContract ? (
+                    (activeContract.status === 'active' || activeContract.status === 'activo') ? "Activo" :
+                    activeContract.status === 'pending_player_release' ? "Baja Solicitada" :
+                    activeContract.status === 'pending_manager_release' ? "Baja en Trámite" :
+                    "Pendiente"
+                  ) : "Sin Contratos"}
                 </span>
               </div>
 

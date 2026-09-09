@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { User, Mail, Gamepad2, Shield, Eye, X, Phone, Calendar, Filter, Ban, CheckCircle2, Edit, Download, Save, ZoomIn, Star, ChevronDown } from 'lucide-react'
+import { User, Mail, Gamepad2, Shield, Eye, X, Phone, Calendar, Filter, Ban, CheckCircle2, Edit, Download, Save, ZoomIn, Star, ChevronDown, UserX, AlertCircle, FileText } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
+import { useAuth } from '@/lib/auth-context'
 import { GmxButton } from '@/components/gmx-button'
 import { toast } from 'sonner'
-import { cn, formatNickname, formatPersonName } from '@/lib/utils'
+import { cn, formatNickname, formatPersonName, formatRoleTitle } from '@/lib/utils'
 
 const FIELD_LABELS: Record<string, string> = {
   name: 'Nombre Completo',
@@ -64,7 +65,22 @@ function getFieldLabel(key: string): string {
     .trim()
 }
 
-interface Player {
+export interface PlayerContractItem {
+  id: string
+  team_id: string
+  teamName: string
+  teamLogo?: string
+  status: string
+  roles: any
+  team_gender_category?: string
+  start_date: string | null
+  end_date: string | null
+  conclusion_date: string | null
+  justification?: string | null
+  adminName?: string | null
+}
+
+export interface Player {
   id: string
   name: string
   email: string
@@ -77,13 +93,28 @@ interface Player {
   created_at: string
   is_featured: boolean
   rawDetails: any
+  activeContract?: PlayerContractItem | null
+  pastContracts?: PlayerContractItem[]
 }
 
 export function AdminPlayers() {
+  const { user } = useAuth()
   const [players, setPlayers] = useState<Player[]>([])
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null)
+  const [modalTab, setModalTab] = useState<'profile' | 'contracts'>('profile')
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
+
+  // Contract termination state
+  const [terminatingContract, setTerminatingContract] = useState<{
+    contractId: string
+    playerId: string
+    playerName: string
+    teamId: string
+    teamName: string
+  } | null>(null)
+  const [terminationJustification, setTerminationJustification] = useState('')
+  const [submittingTermination, setSubmittingTermination] = useState(false)
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('')
@@ -108,15 +139,19 @@ export function AdminPlayers() {
       const { data: playersData, error } = await supabase
         .from('profiles')
         .select(`
-          id,
-          name,
-          avatar_url,
-          country,
-          created_at,
-          player_status,
-          discord_handle,
-          is_featured,
-          contracts(teams(name), status)
+          *,
+          contracts(
+            id,
+            team_id,
+            roles,
+            team_gender_category,
+            start_date,
+            end_date,
+            conclusion_date,
+            status,
+            created_at,
+            teams(id, name, logo_url)
+          )
         `)
         .eq('is_player', true)
         .order('created_at', { ascending: false })
@@ -126,14 +161,30 @@ export function AdminPlayers() {
         toast.error("Error al cargar jugadores: " + error.message)
       }
 
+      // Fetch baja_contrato validations for audit trail & justification
+      const { data: bajaValidations } = await supabase
+        .from('validations')
+        .select('*')
+        .eq('type', 'baja_contrato')
+
+      const valMap: Record<string, any> = {}
+      if (bajaValidations) {
+        bajaValidations.forEach((v: any) => {
+          const cId = v.details?.contract_id
+          if (cId) valMap[cId] = v
+        })
+      }
+
       if (playersData) {
-        const formattedPlayers = playersData.map((p: any) => {
-          const activeContract = p.contracts?.find((c: any) => c.status === 'active')
-          let team = activeContract?.teams?.name || 'Ninguno'
+        const formattedPlayers: Player[] = playersData.map((p: any) => {
+          const allContracts = p.contracts || []
+          const activeContractRaw = allContracts.find((c: any) => c.status === 'active' || c.status === 'activo')
+          
+          let team = activeContractRaw?.teams?.name || 'Ninguno'
           let contractTimeLeft = 'No aplica'
 
-          if (p.player_status === 'active' && activeContract?.end_date) {
-             const end = new Date(activeContract.end_date)
+          if (p.player_status === 'active' && activeContractRaw?.end_date) {
+             const end = new Date(activeContractRaw.end_date)
              const now = new Date()
              const diffTime = end.getTime() - now.getTime()
              if (diffTime > 0) {
@@ -147,6 +198,39 @@ export function AdminPlayers() {
              contractTimeLeft = 'No aplica'
           }
 
+          const activeContract: PlayerContractItem | null = activeContractRaw ? {
+            id: activeContractRaw.id,
+            team_id: activeContractRaw.team_id,
+            teamName: activeContractRaw.teams?.name || 'Equipo',
+            teamLogo: activeContractRaw.teams?.logo_url || '',
+            status: activeContractRaw.status,
+            roles: activeContractRaw.roles,
+            team_gender_category: activeContractRaw.team_gender_category,
+            start_date: activeContractRaw.start_date,
+            end_date: activeContractRaw.end_date,
+            conclusion_date: activeContractRaw.conclusion_date
+          } : null
+
+          const pastContracts: PlayerContractItem[] = allContracts
+            .filter((c: any) => c.status === 'completado' || c.status === 'cancelado' || c.status === 'rejected')
+            .map((c: any) => {
+              const v = valMap[c.id]
+              return {
+                id: c.id,
+                team_id: c.team_id,
+                teamName: c.teams?.name || 'Equipo',
+                teamLogo: c.teams?.logo_url || '',
+                status: c.status,
+                roles: c.roles,
+                team_gender_category: c.team_gender_category,
+                start_date: c.start_date,
+                end_date: c.end_date,
+                conclusion_date: c.conclusion_date,
+                justification: v?.details?.justification || null,
+                adminName: v?.details?.admin_name || v?.submitted_by || null
+              }
+            })
+
           return {
             id: p.id,
             name: p.name,
@@ -159,7 +243,9 @@ export function AdminPlayers() {
             country: p.country,
             created_at: p.created_at,
             is_featured: p.is_featured || false,
-            rawDetails: p
+            rawDetails: p,
+            activeContract,
+            pastContracts
           }
         })
         setPlayers(formattedPlayers)
@@ -176,13 +262,13 @@ export function AdminPlayers() {
   }, [])
 
   useEffect(() => {
-    if (selectedPlayer || actionModal) {
+    if (selectedPlayer || actionModal || terminatingContract) {
       window.__lenis?.stop()
     } else {
       window.__lenis?.start()
     }
     return () => { window.__lenis?.start() }
-  }, [selectedPlayer, actionModal])
+  }, [selectedPlayer, actionModal, terminatingContract])
 
   const handleUpdateStatus = async () => {
     if (!actionModal) return
@@ -224,6 +310,106 @@ export function AdminPlayers() {
       setSelectedPlayer(null)
     } else {
       alert('Error guardando los datos.')
+    }
+  }
+
+  const handleAdminTerminateContract = async () => {
+    if (!terminatingContract) return
+    const trimmed = terminationJustification.trim()
+    if (!trimmed || trimmed.length < 5) {
+      toast.error('La justificación es obligatoria (mínimo 5 caracteres).')
+      return
+    }
+
+    setSubmittingTermination(true)
+    toast.loading('Aplicando baja administrativa inmediata...', { id: 'admin-term' })
+
+    try {
+      // 1. Actualizar contrato a completado inmediatamente
+      const { error: contractError } = await supabase
+        .from('contracts')
+        .update({
+          status: 'completado',
+          conclusion_date: new Date().toISOString()
+        })
+        .eq('id', terminatingContract.contractId)
+
+      if (contractError) throw contractError
+
+      // 2. Registrar en validations con la justificación obligatoria
+      const { error: validationError } = await supabase
+        .from('validations')
+        .insert({
+          type: 'baja_contrato',
+          target_name: `Baja Administrativa: ${terminatingContract.playerName} (${terminatingContract.teamName})`,
+          submitted_by: user?.name || user?.email || 'Administrador',
+          status: 'approved',
+          details: {
+            contract_id: terminatingContract.contractId,
+            player_id: terminatingContract.playerId,
+            player_name: terminatingContract.playerName,
+            team_id: terminatingContract.teamId,
+            team_name: terminatingContract.teamName,
+            justification: trimmed,
+            admin_id: user?.id,
+            admin_name: user?.name || user?.email || 'Administrador',
+            conclusion_date: new Date().toISOString()
+          }
+        })
+
+      if (validationError) {
+        console.error('Error logging termination validation:', validationError)
+      }
+
+      toast.success('Baja Administrativa Realizada', {
+        id: 'admin-term',
+        description: `Se dio de baja inmediatamente el contrato de ${terminatingContract.playerName}. La justificación quedó registrada.`
+      })
+
+      const newPastItem: PlayerContractItem = {
+        id: terminatingContract.contractId,
+        team_id: terminatingContract.teamId,
+        teamName: terminatingContract.teamName,
+        status: 'completado',
+        roles: selectedPlayer?.activeContract?.roles || [],
+        team_gender_category: selectedPlayer?.activeContract?.team_gender_category,
+        start_date: selectedPlayer?.activeContract?.start_date || null,
+        end_date: selectedPlayer?.activeContract?.end_date || null,
+        conclusion_date: new Date().toISOString(),
+        justification: trimmed,
+        adminName: user?.name || user?.email || 'Administrador'
+      }
+
+      setPlayers(prev => prev.map(p => {
+        if (p.id === terminatingContract.playerId) {
+          return {
+            ...p,
+            team: 'Ninguno',
+            contractTimeLeft: 'No aplica',
+            activeContract: null,
+            pastContracts: [newPastItem, ...(p.pastContracts || [])]
+          }
+        }
+        return p
+      }))
+
+      if (selectedPlayer && selectedPlayer.id === terminatingContract.playerId) {
+        setSelectedPlayer({
+          ...selectedPlayer,
+          team: 'Ninguno',
+          contractTimeLeft: 'No aplica',
+          activeContract: null,
+          pastContracts: [newPastItem, ...(selectedPlayer.pastContracts || [])]
+        })
+      }
+
+      setTerminatingContract(null)
+      setTerminationJustification('')
+    } catch (err: any) {
+      console.error('Error in admin contract termination:', err)
+      toast.error('Error al dar de baja el contrato: ' + (err?.message || 'Error inesperado'), { id: 'admin-term' })
+    } finally {
+      setSubmittingTermination(false)
     }
   }
 
@@ -445,6 +631,7 @@ export function AdminPlayers() {
                       onClick={() => {
                         setSelectedPlayer(player)
                         setEditingDetails(player.rawDetails)
+                        setModalTab('profile')
                       }}
                       title="Ver Detalles Completos"
                       className="flex-1 flex h-8 items-center justify-center gap-1 rounded bg-surface border border-border text-xs font-500 text-white hover:bg-white/5 transition-colors"
@@ -479,9 +666,11 @@ export function AdminPlayers() {
               <div>
                 <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
                   <User className="w-5 h-5 text-primary" />
-                  Editar Jugador
+                  Jugador: {selectedPlayer.name}
                 </h3>
-                <p className="text-sm text-muted-foreground mt-1">{selectedPlayer.name}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {selectedPlayer.email} {selectedPlayer.rawDetails?.nickname ? `• IGN: ${selectedPlayer.rawDetails.nickname}` : ''}
+                </p>
               </div>
               <button 
                 onClick={() => setSelectedPlayer(null)}
@@ -491,100 +680,366 @@ export function AdminPlayers() {
               </button>
             </div>
             
+            {/* Pestañas de Navegación del Modal */}
+            <div className="flex border-b border-border bg-background/50 px-6 pt-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setModalTab('profile')}
+                className={cn(
+                  "px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 -mb-px flex items-center gap-2",
+                  modalTab === 'profile'
+                    ? "border-primary text-primary bg-primary/5"
+                    : "border-transparent text-muted-foreground hover:text-white"
+                )}
+              >
+                <User className="w-4 h-4" />
+                Datos de Perfil
+              </button>
+              <button
+                type="button"
+                onClick={() => setModalTab('contracts')}
+                className={cn(
+                  "px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 -mb-px flex items-center gap-2",
+                  modalTab === 'contracts'
+                    ? "border-primary text-primary bg-primary/5"
+                    : "border-transparent text-muted-foreground hover:text-white"
+                )}
+              >
+                <FileText className="w-4 h-4" />
+                Contratos y Bajas
+                {selectedPlayer.activeContract && (
+                  <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-500/20 text-emerald-400 font-semibold">
+                    1 Activo
+                  </span>
+                )}
+              </button>
+            </div>
+
             {/* Body con Scroll */}
             <div data-lenis-prevent data-modal-scrollbody className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6">
-              <div className="grid sm:grid-cols-2 gap-6">
-                {Object.entries(editingDetails)
-                  .filter(([key, value]) => {
-                    const lower = key.toLowerCase()
-                    if (EXCLUDED_FIELDS.has(lower)) return false
-                    if (value === null || value === undefined || value === '') return false
-                    return true
-                  })
-                  .map(([key, value]) => {
-                    const isImage = typeof value === 'string' && (value.startsWith('http') || value.startsWith('data:image')) && !value.endsWith('.pdf');
-                    const isBoolean = typeof value === 'boolean';
-                    const labelTitle = getFieldLabel(key);
-                    
-                    return (
-                      <div key={key} className={cn("space-y-2", isImage ? "col-span-full sm:col-span-1" : "")}>
-                        <label className="text-xs font-700 uppercase tracking-wider text-primary">
-                          {labelTitle}
-                        </label>
+              {modalTab === 'profile' ? (
+                <div className="grid sm:grid-cols-2 gap-6">
+                  {Object.entries(editingDetails)
+                    .filter(([key, value]) => {
+                      const lower = key.toLowerCase()
+                      if (EXCLUDED_FIELDS.has(lower)) return false
+                      if (value === null || value === undefined || value === '') return false
+                      return true
+                    })
+                    .map(([key, value]) => {
+                      const isImage = typeof value === 'string' && (value.startsWith('http') || value.startsWith('data:image')) && !value.endsWith('.pdf');
+                      const isBoolean = typeof value === 'boolean';
+                      const labelTitle = getFieldLabel(key);
+                      
+                      return (
+                        <div key={key} className={cn("space-y-2", isImage ? "col-span-full sm:col-span-1" : "")}>
+                          <label className="text-xs font-700 uppercase tracking-wider text-primary">
+                            {labelTitle}
+                          </label>
 
-                        {isImage ? (
-                          <div className="rounded-xl border border-border bg-background p-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                            <div className="relative w-20 h-20 shrink-0 rounded-xl overflow-hidden border-2 border-border bg-surface shadow-md">
-                              <img src={value as string} alt={labelTitle} className="w-full h-full object-cover" />
+                          {isImage ? (
+                            <div className="rounded-xl border border-border bg-background p-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                              <div className="relative w-20 h-20 shrink-0 rounded-xl overflow-hidden border-2 border-border bg-surface shadow-md">
+                                <img src={value as string} alt={labelTitle} className="w-full h-full object-cover" />
+                              </div>
+                              <button 
+                                type="button"
+                                onClick={() => setLightboxImage({ src: value as string, label: labelTitle })}
+                                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface border border-border text-white hover:border-primary hover:text-primary text-xs font-600 uppercase tracking-wider transition-colors shadow-sm"
+                              >
+                                <ZoomIn className="w-4 h-4 text-primary" />
+                                Agrandar Imagen
+                              </button>
                             </div>
-                            <button 
-                              type="button"
-                              onClick={() => setLightboxImage({ src: value as string, label: labelTitle })}
-                              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface border border-border text-white hover:border-primary hover:text-primary text-xs font-600 uppercase tracking-wider transition-colors shadow-sm"
-                            >
-                              <ZoomIn className="w-4 h-4 text-primary" />
-                              Agrandar Imagen
-                            </button>
-                          </div>
-                        ) : isBoolean ? (
-                          <div className="relative">
-                            <select
-                              className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-2.5 pr-10 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer"
-                              value={value ? 'true' : 'false'}
-                              onChange={(e) => setEditingDetails({ ...editingDetails, [key]: e.target.value === 'true' })}
-                            >
-                              <option value="true">Sí</option>
-                              <option value="false">No</option>
-                            </select>
-                            <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          </div>
-                        ) : key === 'player_status' || key === 'status' ? (
-                          <div className="relative">
-                            <select
-                              className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-2.5 pr-10 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer font-500"
-                              value={value as string || 'pending'}
-                              onChange={(e) => setEditingDetails({ ...editingDetails, [key]: e.target.value })}
-                            >
-                              <option value="active">Activo</option>
-                              <option value="inactive">Inactivo</option>
-                              <option value="banned">Baneado</option>
-                              <option value="pending">Pendiente</option>
-                              <option value="rejected">Rechazado</option>
-                            </select>
-                            <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          </div>
-                        ) : (
-                          <input
-                            type="text"
-                            value={value as string || ''}
-                            onChange={(e) => {
-                              let val = e.target.value
-                              if (key === 'name') val = formatPersonName(val)
-                              if (key === 'nickname' || key === 'game_nickname') val = formatNickname(val)
-                              setEditingDetails({ ...editingDetails, [key]: val })
-                            }}
-                            className={cn(
-                              "w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary",
-                              (key === 'name' || key === 'nickname' || key === 'game_nickname') && "uppercase"
+                          ) : isBoolean ? (
+                            <div className="relative">
+                              <select
+                                className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-2.5 pr-10 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer"
+                                value={value ? 'true' : 'false'}
+                                onChange={(e) => setEditingDetails({ ...editingDetails, [key]: e.target.value === 'true' })}
+                              >
+                                <option value="true">Sí</option>
+                                <option value="false">No</option>
+                              </select>
+                              <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            </div>
+                          ) : key === 'player_status' || key === 'status' ? (
+                            <div className="relative">
+                              <select
+                                className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-2.5 pr-10 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer font-500"
+                                value={value as string || 'pending'}
+                                onChange={(e) => setEditingDetails({ ...editingDetails, [key]: e.target.value })}
+                              >
+                                <option value="active">Activo</option>
+                                <option value="inactive">Inactivo</option>
+                                <option value="banned">Baneado</option>
+                                <option value="pending">Pendiente</option>
+                                <option value="rejected">Rechazado</option>
+                              </select>
+                              <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            </div>
+                          ) : (
+                            <input
+                              type="text"
+                              value={value as string || ''}
+                              onChange={(e) => {
+                                let val = e.target.value
+                                if (key === 'name') val = formatPersonName(val)
+                                if (key === 'nickname' || key === 'game_nickname') val = formatNickname(val)
+                                setEditingDetails({ ...editingDetails, [key]: val })
+                              }}
+                              className={cn(
+                                "w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary",
+                                (key === 'name' || key === 'nickname' || key === 'game_nickname') && "uppercase"
+                              )}
+                            />
+                          )}
+                        </div>
+                      )
+                    })}
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Contrato Activo */}
+                  <div>
+                    <h4 className="text-xs font-700 uppercase tracking-wider text-primary mb-3">
+                      Contrato Activo
+                    </h4>
+                    {selectedPlayer.activeContract ? (
+                      <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            {selectedPlayer.activeContract.teamLogo ? (
+                              <img 
+                                src={selectedPlayer.activeContract.teamLogo} 
+                                alt={selectedPlayer.activeContract.teamName} 
+                                className="w-12 h-12 rounded-lg object-cover border border-border bg-background"
+                              />
+                            ) : (
+                              <div className="w-12 h-12 rounded-lg bg-surface border border-border flex items-center justify-center text-primary font-bold">
+                                {selectedPlayer.activeContract.teamName.slice(0, 2).toUpperCase()}
+                              </div>
                             )}
-                          />
-                        )}
+                            <div>
+                              <h5 className="font-bold text-white text-base">
+                                {selectedPlayer.activeContract.teamName}
+                              </h5>
+                              <span className="text-xs text-muted-foreground">
+                                {selectedPlayer.activeContract.team_gender_category === 'female' ? 'División Femenil' : 'División Varonil / Mixta'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTerminatingContract({
+                                contractId: selectedPlayer.activeContract!.id,
+                                playerId: selectedPlayer.id,
+                                playerName: selectedPlayer.name,
+                                teamId: selectedPlayer.activeContract!.team_id,
+                                teamName: selectedPlayer.activeContract!.teamName
+                              })
+                              setTerminationJustification('')
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider text-white bg-red-600 hover:bg-red-500 transition-colors shadow-sm"
+                            title="Dar de baja contrato administrativamente"
+                          >
+                            <UserX className="w-4 h-4" />
+                            <span>Dar de Baja Contrato</span>
+                          </button>
+                        </div>
+
+                        <div className="grid sm:grid-cols-2 gap-3 pt-3 border-t border-border/60 text-xs">
+                          <div>
+                            <span className="text-muted-foreground block text-[11px]">Roles asignados:</span>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {Array.isArray(selectedPlayer.activeContract.roles) && selectedPlayer.activeContract.roles.length > 0 ? (
+                                selectedPlayer.activeContract.roles.map((r: any, rIdx: number) => (
+                                  <span key={rIdx} className="rounded bg-primary/10 border border-primary/20 px-2 py-0.5 text-xs text-primary font-medium">
+                                    {formatRoleTitle(r)}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground block text-[11px]">Vencimiento:</span>
+                            <span className="text-white font-medium mt-1 block">
+                              {selectedPlayer.activeContract.end_date ? new Date(selectedPlayer.activeContract.end_date).toLocaleDateString() : 'Indefinido'}
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                    )
-                  })}
-              </div>
+                    ) : (
+                      <div className="text-center py-6 border border-dashed border-border rounded-lg bg-background/50">
+                        <p className="text-muted-foreground text-xs">El jugador no cuenta con un contrato activo actualmente.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Historial de Contratos Pasados y Bajas */}
+                  <div className="border-t border-border pt-6">
+                    <h4 className="text-xs font-700 uppercase tracking-wider text-muted-foreground mb-3 flex items-center justify-between">
+                      <span>Historial de Contratos y Bajas</span>
+                      <span className="text-xs font-normal">
+                        {selectedPlayer.pastContracts?.length || 0} en registro
+                      </span>
+                    </h4>
+
+                    {(!selectedPlayer.pastContracts || selectedPlayer.pastContracts.length === 0) ? (
+                      <div className="text-center py-6 border border-dashed border-border rounded-lg bg-background/50">
+                        <p className="text-muted-foreground text-xs">No hay registro de contratos anteriores finalizados o dados de baja.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {selectedPlayer.pastContracts.map((past, pIdx) => (
+                          <div key={pIdx} className="rounded-lg border border-border bg-background p-3.5 space-y-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="font-semibold text-white text-sm">{past.teamName}</span>
+                              <div className="flex items-center gap-2">
+                                <span className={cn(
+                                  "px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider",
+                                  past.status === 'rejected' ? 'bg-red-500/10 text-red-400' : 'bg-white/5 text-muted-foreground'
+                                )}>
+                                  {past.status === 'rejected' ? 'Rechazado' : 'Concluido / Baja'}
+                                </span>
+                                {past.conclusion_date && (
+                                  <span className="text-[11px] text-muted-foreground">
+                                    {new Date(past.conclusion_date).toLocaleDateString()}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {past.justification ? (
+                              <div className="rounded bg-amber-500/10 border border-amber-500/20 p-2.5 text-xs text-amber-200">
+                                <div className="flex items-center justify-between font-semibold text-[11px] uppercase tracking-wider text-amber-400 mb-1">
+                                  <span>Justificación Administrativa</span>
+                                  {past.adminName && <span>Por: {past.adminName}</span>}
+                                </div>
+                                <p className="italic">"{past.justification}"</p>
+                              </div>
+                            ) : (
+                              <p className="text-[11px] text-muted-foreground italic">
+                                Concluido por expiración o acuerdo mutuo sin baja administrativa forzada.
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Footer Fijo */}
             <div className="flex shrink-0 items-center justify-end border-t border-border p-6 bg-surface z-10">
-              <GmxButton
-                variant="secondary"
-                onClick={handleSaveDetails}
-                className="gap-2 px-6"
-              >
-                <Save className="w-4 h-4" />
-                GUARDAR CAMBIOS
-              </GmxButton>
+              {modalTab === 'profile' ? (
+                <GmxButton
+                  variant="secondary"
+                  onClick={handleSaveDetails}
+                  className="gap-2 px-6"
+                >
+                  <Save className="w-4 h-4" />
+                  GUARDAR CAMBIOS
+                </GmxButton>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setSelectedPlayer(null)}
+                  className="px-6 py-2.5 rounded-lg border border-border text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/5 transition-colors"
+                >
+                  Cerrar
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Baja de Contrato Administrativa con Justificación Obligatoria */}
+      {terminatingContract && (
+        <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
+            onClick={() => !submittingTermination && setTerminatingContract(null)} 
+          />
+          <div className="relative w-full max-w-lg rounded-xl border border-red-500/30 bg-surface p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 text-red-400 mb-4 pb-3 border-b border-border">
+              <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                <UserX className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-display text-xl font-bold uppercase tracking-tight text-white">
+                  Baja Administrativa de Contrato
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Acción directa de administrador • Ejecución automática
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4 text-sm text-muted-foreground">
+              <div className="rounded-lg border border-border bg-background/80 p-3 text-xs space-y-1">
+                <div className="text-white">
+                  <span className="text-muted-foreground">Jugador:</span>{' '}
+                  <span className="font-semibold text-primary">{terminatingContract.playerName}</span>
+                </div>
+                <div className="text-white">
+                  <span className="text-muted-foreground">Equipo:</span>{' '}
+                  <span className="font-semibold">{terminatingContract.teamName}</span>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-200/90 leading-relaxed">
+                ℹ️ <strong className="text-amber-300">Aviso:</strong> Como administrador, esta baja se aplicará <strong>automáticamente e inmediatamente</strong> sin requerir confirmación del manager o del jugador. <strong>El registro del contrato se mantendrá intacto en el historial</strong> junto con el motivo ingresado.
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-white mb-1.5">
+                  Motivo / Justificación de la Baja <span className="text-red-400">* (Obligatorio)</span>
+                </label>
+                <textarea
+                  value={terminationJustification}
+                  onChange={(e) => setTerminationJustification(e.target.value)}
+                  placeholder="Escribe obligatoriamente el motivo de la baja administrativa (mínimo 5 caracteres)..."
+                  rows={4}
+                  className="w-full rounded-lg border border-border bg-background p-3 text-sm text-white placeholder:text-muted-foreground/60 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 transition-colors"
+                />
+                <div className="flex justify-between items-center mt-1 text-[11px] text-muted-foreground">
+                  <span>Mínimo 5 caracteres</span>
+                  <span className={terminationJustification.trim().length >= 5 ? 'text-emerald-400' : 'text-amber-400'}>
+                    {terminationJustification.trim().length} caracteres
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={submittingTermination}
+                  onClick={() => {
+                    setTerminatingContract(null)
+                    setTerminationJustification('')
+                  }}
+                  className="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-white rounded-lg border border-border hover:bg-white/5 transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={submittingTermination || terminationJustification.trim().length < 5}
+                  onClick={handleAdminTerminateContract}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white bg-red-600 hover:bg-red-500 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-red-600/20"
+                >
+                  <UserX className="w-4 h-4" />
+                  {submittingTermination ? 'Aplicando Baja...' : 'Confirmar Baja Inmediata'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

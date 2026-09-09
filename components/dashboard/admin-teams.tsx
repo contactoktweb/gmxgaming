@@ -1,17 +1,33 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ShieldCheck, Users, MapPin, ExternalLink, Eye, Trash2, X, AlertCircle, Check, ImageIcon, FileText, Download, Save, Upload, ZoomIn, ChevronDown } from 'lucide-react'
+import { ShieldCheck, Users, MapPin, ExternalLink, Eye, Trash2, X, AlertCircle, Check, ImageIcon, FileText, Download, Save, Upload, ZoomIn, ChevronDown, UserX } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
-import { cn, formatLocation } from '@/lib/utils'
+import { useAuth } from '@/lib/auth-context'
+import { cn, formatLocation, formatRoleTitle } from '@/lib/utils'
 import { GmxButton } from '@/components/gmx-button'
 import { toast } from 'sonner'
 
 interface PlayerRoster {
+  contractId: string
+  playerId: string
   nickname: string
   name: string
   country: string
   discord: string
+  status: string
+  roles: any
+}
+
+interface PastContractRoster {
+  contractId: string
+  playerId: string
+  nickname: string
+  name: string
+  roles: any
+  conclusionDate: string | null
+  justification?: string | null
+  adminName?: string | null
 }
 
 interface Team {
@@ -25,15 +41,28 @@ interface Team {
   points: number
   foundation_date: string
   roster: PlayerRoster[]
+  pastContracts: PastContractRoster[]
   rawDetails: any
 }
 
 export function AdminTeams() {
+  const { user } = useAuth()
   const [teams, setTeams] = useState<Team[]>([])
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
   const [confirmAction, setConfirmAction] = useState<{ id: string, name: string } | null>(null)
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
+
+  // Contract termination state
+  const [terminatingContract, setTerminatingContract] = useState<{
+    contractId: string
+    playerId: string
+    playerName: string
+    teamId: string
+    teamName: string
+  } | null>(null)
+  const [terminationJustification, setTerminationJustification] = useState('')
+  const [submittingTermination, setSubmittingTermination] = useState(false)
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('')
@@ -45,24 +74,72 @@ export function AdminTeams() {
   useEffect(() => {
     async function fetchTeams() {
       setLoading(true)
+
+      // Cargar registros de bajas de contrato previas de administradores
+      const { data: validationsData } = await supabase
+        .from('validations')
+        .select('*')
+        .eq('type', 'baja_contrato')
+
+      const terminationsMap = new Map<string, any>()
+      if (validationsData) {
+        validationsData.forEach((v: any) => {
+          if (v.details?.contract_id) {
+            terminationsMap.set(v.details.contract_id, v)
+          }
+        })
+      }
+
       const { data } = await supabase
         .from('teams')
         .select(`
           *,
           manager:profiles!teams_manager_id_fkey(name, discord_handle),
-          contracts(status, profiles!contracts_player_id_fkey(name, nickname, discord_handle))
+          contracts(
+            id,
+            player_id,
+            status,
+            roles,
+            conclusion_date,
+            profiles!contracts_player_id_fkey(id, name, nickname, discord_handle, country)
+          )
         `)
         .order('created_at', { ascending: false })
       
       if (data) {
         const formattedTeams = data.map((t: any) => {
-          const activeContracts = t.contracts?.filter((c: any) => c.status === 'active') || []
-          const roster = activeContracts.map((c: any) => ({
+          const activeContracts = t.contracts?.filter((c: any) => 
+            c.status === 'active' || c.status === 'activo' || c.status === 'pending_player_release' || c.status === 'pending_manager_release'
+          ) || []
+
+          const roster: PlayerRoster[] = activeContracts.map((c: any) => ({
+            contractId: c.id,
+            playerId: c.player_id,
             name: c.profiles?.name || 'N/A',
             nickname: c.profiles?.nickname || c.profiles?.name || 'N/A',
             country: c.profiles?.country || 'N/A',
-            discord: c.profiles?.discord_handle || 'N/A'
+            discord: c.profiles?.discord_handle || 'N/A',
+            status: c.status,
+            roles: c.roles
           }))
+
+          const pastCon = t.contracts?.filter((c: any) => 
+            c.status === 'completado' || c.status === 'completed' || c.status === 'cancelado' || c.status === 'rejected'
+          ) || []
+
+          const pastContracts: PastContractRoster[] = pastCon.map((c: any) => {
+            const terminationLog = terminationsMap.get(c.id)
+            return {
+              contractId: c.id,
+              playerId: c.player_id,
+              name: c.profiles?.name || 'N/A',
+              nickname: c.profiles?.nickname || c.profiles?.name || 'N/A',
+              roles: c.roles,
+              conclusionDate: c.conclusion_date,
+              justification: terminationLog?.details?.justification || null,
+              adminName: terminationLog?.details?.admin_name || terminationLog?.submitted_by || null
+            }
+          })
 
           return {
             id: t.id,
@@ -75,6 +152,7 @@ export function AdminTeams() {
             points: 0,
             foundation_date: new Date(t.created_at).toLocaleDateString(),
             roster,
+            pastContracts,
             rawDetails: t
           }
         })
@@ -86,13 +164,108 @@ export function AdminTeams() {
   }, [])
 
   useEffect(() => {
-    if (selectedTeam || confirmAction) {
+    if (selectedTeam || confirmAction || terminatingContract) {
       window.__lenis?.stop()
     } else {
       window.__lenis?.start()
     }
     return () => { window.__lenis?.start() }
-  }, [selectedTeam, confirmAction])
+  }, [selectedTeam, confirmAction, terminatingContract])
+
+  const handleAdminTerminateContract = async () => {
+    if (!terminatingContract) return
+    const trimmed = terminationJustification.trim()
+    if (!trimmed || trimmed.length < 5) {
+      toast.error('La justificación es obligatoria (mínimo 5 caracteres).')
+      return
+    }
+
+    setSubmittingTermination(true)
+    toast.loading('Aplicando baja administrativa inmediata...', { id: 'admin-term' })
+
+    try {
+      // 1. Actualizar contrato a completado inmediatamente
+      const { error: contractError } = await supabase
+        .from('contracts')
+        .update({
+          status: 'completado',
+          conclusion_date: new Date().toISOString()
+        })
+        .eq('id', terminatingContract.contractId)
+
+      if (contractError) throw contractError
+
+      // 2. Registrar en validations con la justificación obligatoria
+      const { error: validationError } = await supabase
+        .from('validations')
+        .insert({
+          type: 'baja_contrato',
+          target_name: `Baja Administrativa: ${terminatingContract.playerName} (${terminatingContract.teamName})`,
+          submitted_by: user?.name || user?.email || 'Administrador',
+          status: 'approved',
+          details: {
+            contract_id: terminatingContract.contractId,
+            player_id: terminatingContract.playerId,
+            player_name: terminatingContract.playerName,
+            team_id: terminatingContract.teamId,
+            team_name: terminatingContract.teamName,
+            justification: trimmed,
+            admin_id: user?.id,
+            admin_name: user?.name || user?.email || 'Administrador',
+            conclusion_date: new Date().toISOString()
+          }
+        })
+
+      if (validationError) {
+        console.error('Error logging termination validation:', validationError)
+      }
+
+      toast.success('Baja Administrativa Realizada', {
+        id: 'admin-term',
+        description: `Se dio de baja inmediatamente a ${terminatingContract.playerName}. La justificación quedó registrada.`
+      })
+
+      // Actualizar estado local
+      const movedPlayer = selectedTeam?.roster.find(p => p.contractId === terminatingContract.contractId)
+      const newPastItem: PastContractRoster = {
+        contractId: terminatingContract.contractId,
+        playerId: terminatingContract.playerId,
+        name: terminatingContract.playerName,
+        nickname: movedPlayer?.nickname || terminatingContract.playerName,
+        roles: movedPlayer?.roles || [],
+        conclusionDate: new Date().toISOString(),
+        justification: trimmed,
+        adminName: user?.name || user?.email || 'Administrador'
+      }
+
+      setTeams(prev => prev.map(t => {
+        if (t.id === terminatingContract.teamId) {
+          return {
+            ...t,
+            roster: t.roster.filter(p => p.contractId !== terminatingContract.contractId),
+            pastContracts: [newPastItem, ...(t.pastContracts || [])]
+          }
+        }
+        return t
+      }))
+
+      if (selectedTeam && selectedTeam.id === terminatingContract.teamId) {
+        setSelectedTeam({
+          ...selectedTeam,
+          roster: selectedTeam.roster.filter(p => p.contractId !== terminatingContract.contractId),
+          pastContracts: [newPastItem, ...(selectedTeam.pastContracts || [])]
+        })
+      }
+
+      setTerminatingContract(null)
+      setTerminationJustification('')
+    } catch (err: any) {
+      console.error('Error in admin contract termination:', err)
+      toast.error('Error al dar de baja el contrato: ' + (err?.message || 'Error inesperado'), { id: 'admin-term' })
+    } finally {
+      setSubmittingTermination(false)
+    }
+  }
 
   const handleDelete = async () => {
     if (confirmAction) {
@@ -387,7 +560,12 @@ export function AdminTeams() {
               </div>
 
               <div className="mt-8 border-t border-border pt-8">
-                <h4 className="font-display text-xl font-700 uppercase tracking-tight text-white mb-4">Roster Actual</h4>
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-display text-xl font-700 uppercase tracking-tight text-white">Roster Actual</h4>
+                  <span className="text-xs text-muted-foreground">
+                    {selectedTeam.roster.length} {selectedTeam.roster.length === 1 ? 'jugador activo' : 'jugadores activos'}
+                  </span>
+                </div>
                 
                 {selectedTeam.roster.length === 0 ? (
                   <div className="text-center py-8 border border-dashed border-border rounded-lg bg-background/50">
@@ -398,25 +576,204 @@ export function AdminTeams() {
                     <table className="w-full text-left text-sm">
                       <thead className="bg-background">
                         <tr>
-                          <th className="px-4 py-3 font-600 text-muted-foreground">NICKNAME</th>
-                          <th className="px-4 py-3 font-600 text-muted-foreground">PAÍS</th>
-                          <th className="px-4 py-3 font-600 text-muted-foreground">DISCORD</th>
+                          <th className="px-4 py-3 font-600 text-muted-foreground text-xs uppercase tracking-wider">JUGADOR</th>
+                          <th className="px-4 py-3 font-600 text-muted-foreground text-xs uppercase tracking-wider">ROLES</th>
+                          <th className="px-4 py-3 font-600 text-muted-foreground text-xs uppercase tracking-wider">PAÍS</th>
+                          <th className="px-4 py-3 font-600 text-muted-foreground text-xs uppercase tracking-wider">DISCORD</th>
+                          <th className="px-4 py-3 font-600 text-muted-foreground text-xs uppercase tracking-wider text-right">ACCIÓN</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border bg-surface">
                         {selectedTeam.roster.map((p, idx) => (
                           <tr key={idx} className="transition-colors hover:bg-white/5">
-                            <td className="px-4 py-3 font-500 text-white">{p.nickname}</td>
-                            <td className="px-4 py-3 text-muted-foreground flex items-center gap-2">
-                              <span className="text-[10px]">🌐</span> {formatLocation(p.country)}
+                            <td className="px-4 py-3">
+                              <div className="font-bold text-white tracking-wide">{p.nickname}</div>
+                              {p.name && p.name !== p.nickname && (
+                                <div className="text-xs text-muted-foreground">{p.name}</div>
+                              )}
                             </td>
-                            <td className="px-4 py-3 text-primary">{p.discord}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex flex-wrap gap-1">
+                                {Array.isArray(p.roles) && p.roles.length > 0 ? (
+                                  p.roles.map((r: any, rIdx: number) => (
+                                    <span key={rIdx} className="rounded bg-primary/10 border border-primary/20 px-1.5 py-0.5 text-[11px] font-medium text-primary">
+                                      {formatRoleTitle(r)}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">-</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-muted-foreground">
+                              <span className="inline-flex items-center gap-1.5 text-xs">
+                                <span>🌐</span> {formatLocation(p.country)}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-primary text-xs">{p.discord}</td>
+                            <td className="px-4 py-3 text-right">
+                              <button
+                                onClick={() => {
+                                  setTerminatingContract({
+                                    contractId: p.contractId,
+                                    playerId: p.playerId,
+                                    playerName: p.nickname || p.name,
+                                    teamId: selectedTeam.id,
+                                    teamName: selectedTeam.name
+                                  })
+                                  setTerminationJustification('')
+                                }}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold text-red-400 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-colors"
+                                title="Dar de baja contrato administrativamente"
+                              >
+                                <UserX className="w-3.5 h-3.5" />
+                                <span>Dar de Baja</span>
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                 )}
+              </div>
+
+              {/* Historial de Contratos Pasados y Bajas */}
+              <div className="mt-8 border-t border-border pt-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-display text-xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
+                    <span>Historial de Bajas y Contratos Pasados</span>
+                  </h4>
+                  <span className="text-xs text-muted-foreground">
+                    {selectedTeam.pastContracts?.length || 0} en registro
+                  </span>
+                </div>
+
+                {(!selectedTeam.pastContracts || selectedTeam.pastContracts.length === 0) ? (
+                  <div className="text-center py-6 border border-dashed border-border rounded-lg bg-background/50">
+                    <p className="text-muted-foreground text-xs">No hay registro de contratos anteriores o dados de baja en este equipo.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                    {selectedTeam.pastContracts.map((past, pIdx) => (
+                      <div key={pIdx} className="rounded-lg border border-border/80 bg-background/60 p-3.5 flex flex-col gap-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-sm text-white">{past.nickname || past.name}</span>
+                            <div className="flex gap-1">
+                              {Array.isArray(past.roles) && past.roles.map((r: any, rIdx: number) => (
+                                <span key={rIdx} className="rounded bg-white/5 border border-white/10 px-1.5 py-0.2 text-[10px] text-muted-foreground">
+                                  {formatRoleTitle(r)}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">
+                            {past.conclusionDate ? `Baja / Conclusión: ${new Date(past.conclusionDate).toLocaleDateString()}` : 'Contrato Concluido'}
+                          </div>
+                        </div>
+
+                        {past.justification ? (
+                          <div className="mt-1 rounded bg-amber-500/10 border border-amber-500/20 p-2.5 text-xs text-amber-300/90">
+                            <div className="flex items-center justify-between font-semibold text-[11px] uppercase tracking-wider text-amber-400 mb-1">
+                              <span>Justificación Administrativa</span>
+                              {past.adminName && <span>Por: {past.adminName}</span>}
+                            </div>
+                            <p className="italic">"{past.justification}"</p>
+                          </div>
+                        ) : (
+                          <div className="text-[11px] text-muted-foreground italic">
+                            Concluido por finalización de plazo o acuerdo mutuo.
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Baja de Contrato Administrativa con Justificación Obligatoria */}
+      {terminatingContract && (
+        <div className="fixed inset-0 z-[1020] flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
+            onClick={() => !submittingTermination && setTerminatingContract(null)} 
+          />
+          <div className="relative w-full max-w-lg rounded-xl border border-red-500/30 bg-surface p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 text-red-400 mb-4 pb-3 border-b border-border">
+              <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                <UserX className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-display text-xl font-bold uppercase tracking-tight text-white">
+                  Baja Administrativa de Contrato
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Acción directa de administrador • Ejecución automática
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4 text-sm text-muted-foreground">
+              <div className="rounded-lg border border-border bg-background/80 p-3 text-xs space-y-1">
+                <div className="text-white">
+                  <span className="text-muted-foreground">Jugador:</span>{' '}
+                  <span className="font-semibold text-primary">{terminatingContract.playerName}</span>
+                </div>
+                <div className="text-white">
+                  <span className="text-muted-foreground">Equipo:</span>{' '}
+                  <span className="font-semibold">{terminatingContract.teamName}</span>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-200/90 leading-relaxed">
+                ℹ️ <strong className="text-amber-300">Aviso:</strong> Como administrador, esta baja se aplicará <strong>automáticamente e inmediatamente</strong> sin requerir confirmación del jugador o del manager. <strong>El registro del contrato se mantendrá intacto en el historial</strong> junto con el motivo ingresado.
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-white mb-1.5">
+                  Motivo / Justificación de la Baja <span className="text-red-400">* (Obligatorio)</span>
+                </label>
+                <textarea
+                  value={terminationJustification}
+                  onChange={(e) => setTerminationJustification(e.target.value)}
+                  placeholder="Escribe obligatoriamente el motivo de la baja administrativa (mínimo 5 caracteres)..."
+                  rows={4}
+                  className="w-full rounded-lg border border-border bg-background p-3 text-sm text-white placeholder:text-muted-foreground/60 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 transition-colors"
+                />
+                <div className="flex justify-between items-center mt-1 text-[11px] text-muted-foreground">
+                  <span>Mínimo 5 caracteres</span>
+                  <span className={terminationJustification.trim().length >= 5 ? 'text-emerald-400' : 'text-amber-400'}>
+                    {terminationJustification.trim().length} caracteres
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={submittingTermination}
+                  onClick={() => {
+                    setTerminatingContract(null)
+                    setTerminationJustification('')
+                  }}
+                  className="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-white rounded-lg border border-border hover:bg-white/5 transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={submittingTermination || terminationJustification.trim().length < 5}
+                  onClick={handleAdminTerminateContract}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white bg-red-600 hover:bg-red-500 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-red-600/20"
+                >
+                  <UserX className="w-4 h-4" />
+                  {submittingTermination ? 'Aplicando Baja...' : 'Confirmar Baja Inmediata'}
+                </button>
               </div>
             </div>
           </div>
