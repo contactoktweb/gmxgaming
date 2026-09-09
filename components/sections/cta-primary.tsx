@@ -4,8 +4,11 @@ import { motion } from 'motion/react'
 import { SplitText } from '@/components/split-text'
 import { Reveal } from '@/components/anim'
 import { GmxButton } from '@/components/gmx-button'
+import { useAuth } from '@/lib/auth-context'
 
 export function CtaPrimary() {
+  const { user } = useAuth()
+
   return (
     <section className="relative overflow-hidden">
       <div className="absolute inset-0 -z-20">
@@ -28,7 +31,11 @@ export function CtaPrimary() {
             className="mt-4 font-display text-4xl font-700 uppercase leading-[0.95] tracking-tight text-white sm:text-5xl lg:text-6xl xl:text-7xl"
           />
           <Reveal direction="up" delay={0.2} className="mt-9">
-            <GmxButton href="/crear-cuenta">CREA TU USUARIO</GmxButton>
+            {user ? (
+              <GmxButton href="/micuenta">IR A TU PERFIL</GmxButton>
+            ) : (
+              <GmxButton href="/crear-cuenta">CREA TU USUARIO</GmxButton>
+            )}
           </Reveal>
         </div>
 

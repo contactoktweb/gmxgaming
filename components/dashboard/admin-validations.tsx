@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Check, X, UserCheck, ShieldCheck, ScrollText, Eye, FileText, Image as ImageIcon, AlertCircle, Maximize2, ZoomIn, Search, Trash2, Save, Edit3, UserCog } from 'lucide-react'
+import { Check, X, UserCheck, ShieldCheck, ScrollText, Eye, FileText, Image as ImageIcon, AlertCircle, Maximize2, ZoomIn, Search, Trash2, Save, Edit3, UserCog, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { GmxButton } from '@/components/gmx-button'
 import { createClient } from '@/utils/supabase/client'
@@ -197,6 +197,25 @@ export function AdminValidations() {
   const [activeTab, setActiveTab] = useState<ValidationType>('all')
   const [searchQuery, setSearchQuery] = useState('')
 
+  // Pagination state (default: 5 per page)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(5)
+
+  const handleTabChange = (tab: ValidationType) => {
+    setActiveTab(tab)
+    setCurrentPage(1)
+  }
+
+  const handleSearchChange = (query: string) => {
+    setSearchQuery(query)
+    setCurrentPage(1)
+  }
+
+  const handleItemsPerPageChange = (count: number) => {
+    setItemsPerPage(count)
+    setCurrentPage(1)
+  }
+
   // Modals state
   const [selectedRequest, setSelectedRequest] = useState<PendingRequest | null>(null)
   const [confirmAction, setConfirmAction] = useState<{ id: string, action: 'approved' | 'rejected' | 'deleted', name: string } | null>(null)
@@ -237,11 +256,13 @@ export function AdminValidations() {
 
     const formattedRequests: PendingRequest[] = []
     const processedIds = new Set<string>()
+    const processedEntityIds = new Set<string>()
 
     // Add profile modifications
     if (pendingModifications) {
       pendingModifications.forEach(m => {
         processedIds.add(m.id)
+        processedEntityIds.add(m.id)
         formattedRequests.push({
           id: m.id,
           type: 'modificacion',
@@ -256,23 +277,38 @@ export function AdminValidations() {
 
     if (dbValidations) {
       dbValidations.forEach(v => {
-        if (!processedIds.has(v.id)) {
-          formattedRequests.push({
-            id: v.id,
-            type: v.type as any,
-            target_name: v.target_name,
-            created_at: v.created_at,
-            status: v.status,
-            submitted_by: v.submitted_by,
-            details: v.details || {}
-          })
+        const entityId = v.details?.user_id || v.details?.team_id || v.details?.id
+        // Si ya procesamos una validación más reciente para esta misma entidad, evitamos duplicados
+        if (entityId && processedEntityIds.has(entityId)) {
+          return
         }
+        if (processedIds.has(v.id)) {
+          return
+        }
+
+        processedIds.add(v.id)
+        if (entityId) {
+          processedEntityIds.add(entityId)
+          processedIds.add(entityId)
+        }
+
+        formattedRequests.push({
+          id: v.id,
+          type: v.type as any,
+          target_name: v.target_name,
+          created_at: v.created_at,
+          status: v.status,
+          submitted_by: v.submitted_by,
+          details: v.details || {}
+        })
       })
     }
 
     if (pendingPlayers) {
       pendingPlayers.forEach(p => {
-        if (!processedIds.has(p.id)) {
+        if (!processedIds.has(p.id) && !processedEntityIds.has(p.id)) {
+          processedIds.add(p.id)
+          processedEntityIds.add(p.id)
           formattedRequests.push({
             id: p.id,
             type: 'jugador',
@@ -288,7 +324,9 @@ export function AdminValidations() {
 
     if (pendingTeams) {
       pendingTeams.forEach(t => {
-        if (!processedIds.has(t.id)) {
+        if (!processedIds.has(t.id) && !processedEntityIds.has(t.id)) {
+          processedIds.add(t.id)
+          processedEntityIds.add(t.id)
           formattedRequests.push({
             id: t.id,
             type: 'equipo',
@@ -353,33 +391,101 @@ export function AdminValidations() {
         return
       }
 
+      // Evitar volver a aprobar una solicitud que ya se encuentra activa o aprobada
+      if (isApproved && (requestToUpdate?.status === 'active' || requestToUpdate?.status === 'approved')) {
+        toast.info('Esta solicitud ya se encuentra aprobada y activa.')
+        setConfirmAction(null)
+        return
+      }
+
+      // Evitar volver a rechazar una solicitud que ya fue rechazada
+      if (!isApproved && requestToUpdate?.status === 'rejected') {
+        toast.info('Esta solicitud ya se encuentra rechazada.')
+        setConfirmAction(null)
+        return
+      }
+
       if (requestToUpdate) {
         if (requestToUpdate.type === 'jugador') {
-          await supabase.from('profiles').update({ player_status: newStatus }).eq('id', confirmAction.id)
-          await supabase.from('validations').insert({
-            type: 'jugador',
-            target_name: requestToUpdate.target_name,
-            submitted_by: requestToUpdate.submitted_by || requestToUpdate.target_name,
-            status: newStatus,
-            details: {
-              ...requestToUpdate.details,
-              rejection_reason: isApproved ? null : reason,
-              user_id: confirmAction.id
+          const targetUserId = requestToUpdate.details?.user_id || requestToUpdate.details?.id || confirmAction.id
+          await supabase.from('profiles').update({ player_status: newStatus }).eq('id', targetUserId)
+          
+          // Actualizar en tabla validations si existe el registro con este ID
+          const { data: valExists } = await supabase.from('validations').select('id').eq('id', confirmAction.id).limit(1)
+          if (valExists && valExists.length > 0) {
+            await supabase.from('validations').update({
+              status: newStatus,
+              details: {
+                ...requestToUpdate.details,
+                rejection_reason: isApproved ? null : reason,
+                user_id: targetUserId
+              }
+            }).eq('id', confirmAction.id)
+          } else {
+            // Verificar si hay alguna validación previa para este user_id
+            const { data: userVal } = await supabase.from('validations').select('id').eq('details->>user_id', targetUserId).limit(1)
+            if (userVal && userVal.length > 0) {
+              await supabase.from('validations').update({
+                status: newStatus,
+                details: {
+                  ...requestToUpdate.details,
+                  rejection_reason: isApproved ? null : reason,
+                  user_id: targetUserId
+                }
+              }).eq('id', userVal[0].id)
+            } else {
+              await supabase.from('validations').insert({
+                type: 'jugador',
+                target_name: requestToUpdate.target_name,
+                submitted_by: requestToUpdate.submitted_by || requestToUpdate.target_name,
+                status: newStatus,
+                details: {
+                  ...requestToUpdate.details,
+                  rejection_reason: isApproved ? null : reason,
+                  user_id: targetUserId
+                }
+              })
             }
-          })
+          }
         } else if (requestToUpdate.type === 'equipo') {
-          await supabase.from('teams').update({ status: newStatus }).eq('id', confirmAction.id)
-          await supabase.from('validations').insert({
-            type: 'equipo',
-            target_name: requestToUpdate.target_name,
-            submitted_by: requestToUpdate.submitted_by || requestToUpdate.target_name,
-            status: newStatus,
-            details: {
-              ...requestToUpdate.details,
-              rejection_reason: isApproved ? null : reason,
-              team_id: confirmAction.id
+          const targetTeamId = requestToUpdate.details?.team_id || requestToUpdate.details?.id || confirmAction.id
+          await supabase.from('teams').update({ status: newStatus }).eq('id', targetTeamId)
+          
+          const { data: valExists } = await supabase.from('validations').select('id').eq('id', confirmAction.id).limit(1)
+          if (valExists && valExists.length > 0) {
+            await supabase.from('validations').update({
+              status: newStatus,
+              details: {
+                ...requestToUpdate.details,
+                rejection_reason: isApproved ? null : reason,
+                team_id: targetTeamId
+              }
+            }).eq('id', confirmAction.id)
+          } else {
+            const { data: teamVal } = await supabase.from('validations').select('id').eq('details->>team_id', targetTeamId).limit(1)
+            if (teamVal && teamVal.length > 0) {
+              await supabase.from('validations').update({
+                status: newStatus,
+                details: {
+                  ...requestToUpdate.details,
+                  rejection_reason: isApproved ? null : reason,
+                  team_id: targetTeamId
+                }
+              }).eq('id', teamVal[0].id)
+            } else {
+              await supabase.from('validations').insert({
+                type: 'equipo',
+                target_name: requestToUpdate.target_name,
+                submitted_by: requestToUpdate.submitted_by || requestToUpdate.target_name,
+                status: newStatus,
+                details: {
+                  ...requestToUpdate.details,
+                  rejection_reason: isApproved ? null : reason,
+                  team_id: targetTeamId
+                }
+              })
             }
-          })
+          }
         } else if (requestToUpdate.type === 'modificacion') {
           const details = requestToUpdate.details || {}
           const isTeamMod = Boolean(details.team_id)
@@ -595,6 +701,14 @@ export function AdminValidations() {
     return true
   })
 
+  // Pagination calculations (loads 5 by 5 by default)
+  const totalItems = filteredRequests.length
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage))
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages)
+  const startIndex = (safeCurrentPage - 1) * itemsPerPage
+  const endIndex = Math.min(startIndex + itemsPerPage, totalItems)
+  const paginatedRequests = filteredRequests.slice(startIndex, endIndex)
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
@@ -611,7 +725,7 @@ export function AdminValidations() {
               type="text"
               placeholder="Buscar validación..."
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+              onChange={e => handleSearchChange(e.target.value)}
               className="w-full rounded-md border border-border bg-background py-2 pl-9 pr-4 text-sm text-white placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
@@ -621,7 +735,7 @@ export function AdminValidations() {
           {['all', 'jugador', 'equipo', 'modificacion'].map(tab => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab as ValidationType)}
+              onClick={() => handleTabChange(tab as ValidationType)}
               className={cn(
                 "px-4 py-2 rounded-md font-display text-sm font-600 uppercase tracking-wider transition-colors",
                 activeTab === tab 
@@ -643,7 +757,8 @@ export function AdminValidations() {
             <p className="text-muted-foreground">No hay solicitudes que coincidan con los filtros.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+            <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="bg-background">
                 <tr>
@@ -655,7 +770,7 @@ export function AdminValidations() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filteredRequests.map(req => (
+                {paginatedRequests.map(req => (
                   <tr key={req.id} className="transition-colors hover:bg-white/5">
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2 uppercase font-500 text-xs">
@@ -693,30 +808,47 @@ export function AdminValidations() {
                           <Eye className="h-4 w-4" />
                         </button>
                         
-                        <button
-                          onClick={() => setConfirmAction({ id: req.id, action: 'approved', name: req.target_name })}
-                          title="Aprobar / Activar"
-                          className={cn(
-                            "flex h-8 w-8 items-center justify-center rounded border transition-colors",
-                            (req.status === 'active' || req.status === 'approved')
-                              ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-400"
-                              : "border-emerald-500/20 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white"
-                          )}
-                        >
-                          <Check className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => setConfirmAction({ id: req.id, action: 'rejected', name: req.target_name })}
-                          title="Rechazar"
-                          className={cn(
-                            "flex h-8 w-8 items-center justify-center rounded border transition-colors",
-                            req.status === 'rejected'
-                              ? "border-red-500/50 bg-red-500/20 text-red-400"
-                              : "border-red-500/20 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white"
-                          )}
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
+                        {(() => {
+                          const isApproved = req.status === 'active' || req.status === 'approved'
+                          const isRejected = req.status === 'rejected'
+
+                          return (
+                            <>
+                              <button
+                                disabled={isApproved}
+                                onClick={() => {
+                                  if (isApproved) return
+                                  setConfirmAction({ id: req.id, action: 'approved', name: req.target_name })
+                                }}
+                                title={isApproved ? "Esta solicitud ya fue aprobada y se encuentra activa" : "Aprobar / Activar"}
+                                className={cn(
+                                  "flex h-8 w-8 items-center justify-center rounded border transition-colors",
+                                  isApproved
+                                    ? "border-emerald-500/20 bg-emerald-500/5 text-emerald-500/30 cursor-not-allowed opacity-40"
+                                    : "border-emerald-500/20 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white"
+                                )}
+                              >
+                                <Check className="h-4 w-4" />
+                              </button>
+                              <button
+                                disabled={isRejected}
+                                onClick={() => {
+                                  if (isRejected) return
+                                  setConfirmAction({ id: req.id, action: 'rejected', name: req.target_name })
+                                }}
+                                title={isRejected ? "Esta solicitud ya fue rechazada" : "Rechazar"}
+                                className={cn(
+                                  "flex h-8 w-8 items-center justify-center rounded border transition-colors",
+                                  isRejected
+                                    ? "border-red-500/20 bg-red-500/5 text-red-500/30 cursor-not-allowed opacity-40"
+                                    : "border-red-500/20 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white"
+                                )}
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </>
+                          )
+                        })()}
 
                         <button
                           onClick={() => setConfirmAction({ id: req.id, action: 'deleted', name: req.target_name })}
@@ -732,6 +864,127 @@ export function AdminValidations() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Controls */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-border pt-5 mt-4 text-xs">
+            {/* Left: Info & Items per page selector */}
+            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 sm:gap-4 text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <span className="font-500">Mostrar:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
+                  aria-label="Cantidad por página"
+                  className="rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer transition-colors"
+                >
+                  <option value={5}>5 por página</option>
+                  <option value={10}>10 por página</option>
+                  <option value={20}>20 por página</option>
+                  <option value={50}>50 por página</option>
+                </select>
+              </div>
+
+              <span className="text-border hidden sm:inline">|</span>
+
+              <span>
+                Mostrando <strong className="text-white font-600">{totalItems === 0 ? 0 : startIndex + 1}</strong> - <strong className="text-white font-600">{endIndex}</strong> de <strong className="text-white font-600">{totalItems}</strong> solicitudes
+              </span>
+            </div>
+
+            {/* Right: Page navigation */}
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setCurrentPage(1)}
+                disabled={safeCurrentPage === 1}
+                title="Primera página"
+                aria-label="Primera página"
+                className="flex h-8 w-8 items-center justify-center rounded border border-border bg-background text-muted-foreground transition-colors hover:border-primary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:text-muted-foreground"
+              >
+                <ChevronsLeft className="h-4 w-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={safeCurrentPage === 1}
+                title="Página anterior"
+                aria-label="Página anterior"
+                className="flex h-8 w-8 items-center justify-center rounded border border-border bg-background text-muted-foreground transition-colors hover:border-primary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:text-muted-foreground"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+
+              {/* Page Number Buttons */}
+              <div className="flex items-center gap-1 mx-1">
+                {(() => {
+                  const pages: (number | string)[] = []
+                  const delta = 1
+
+                  for (let i = 1; i <= totalPages; i++) {
+                    if (
+                      i === 1 ||
+                      i === totalPages ||
+                      (i >= safeCurrentPage - delta && i <= safeCurrentPage + delta)
+                    ) {
+                      pages.push(i)
+                    } else if (pages[pages.length - 1] !== '...') {
+                      pages.push('...')
+                    }
+                  }
+
+                  return pages.map((p, idx) => {
+                    if (p === '...') {
+                      return (
+                        <span key={`ellipsis-${idx}`} className="px-1 text-muted-foreground select-none">
+                          ...
+                        </span>
+                      )
+                    }
+                    const isCurrent = p === safeCurrentPage
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setCurrentPage(Number(p))}
+                        className={cn(
+                          "flex h-8 min-w-[32px] px-2 items-center justify-center rounded text-xs font-600 transition-colors",
+                          isCurrent
+                            ? "bg-primary text-white font-700 shadow-sm"
+                            : "border border-border bg-background text-muted-foreground hover:border-primary hover:text-white"
+                        )}
+                      >
+                        {p}
+                      </button>
+                    )
+                  })
+                })()}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={safeCurrentPage === totalPages}
+                title="Página siguiente"
+                aria-label="Página siguiente"
+                className="flex h-8 w-8 items-center justify-center rounded border border-border bg-background text-muted-foreground transition-colors hover:border-primary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:text-muted-foreground"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={safeCurrentPage === totalPages}
+                title="Última página"
+                aria-label="Última página"
+                className="flex h-8 w-8 items-center justify-center rounded border border-border bg-background text-muted-foreground transition-colors hover:border-primary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:text-muted-foreground"
+              >
+                <ChevronsRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+          </>
         )}
       </div>
 
@@ -1062,27 +1315,31 @@ export function AdminValidations() {
               <div className="flex gap-3">
                 <GmxButton 
                   variant="secondary"
+                  disabled={selectedRequest.status === 'rejected'}
                   onClick={() => {
+                    if (selectedRequest.status === 'rejected') return
                     setConfirmAction({ id: selectedRequest.id, action: 'rejected', name: selectedRequest.target_name })
                     setSelectedRequest(null)
                   }}
                   className={cn(
                     "border-red-500/20 text-red-500 hover:border-red-500 hover:text-white hover:bg-red-500/20",
-                    selectedRequest.status === 'rejected' && "border-red-500/50 bg-red-500/10"
+                    selectedRequest.status === 'rejected' && "border-red-500/20 bg-red-500/5 text-red-500/30 cursor-not-allowed opacity-40 pointer-events-none"
                   )}
                 >
-                  {selectedRequest.status === 'rejected' ? '✓ RECHAZADO' : 'RECHAZAR'}
+                  {selectedRequest.status === 'rejected' ? '✓ YA RECHAZADO' : 'RECHAZAR'}
                 </GmxButton>
                 <GmxButton 
+                  disabled={selectedRequest.status === 'active' || selectedRequest.status === 'approved'}
                   onClick={() => {
+                    if (selectedRequest.status === 'active' || selectedRequest.status === 'approved') return
                     setConfirmAction({ id: selectedRequest.id, action: 'approved', name: selectedRequest.target_name })
                     setSelectedRequest(null)
                   }}
                   className={cn(
-                    (selectedRequest.status === 'active' || selectedRequest.status === 'approved') && "bg-emerald-600/80"
+                    (selectedRequest.status === 'active' || selectedRequest.status === 'approved') && "bg-emerald-950/20 border-emerald-500/20 text-emerald-400/40 cursor-not-allowed opacity-40 pointer-events-none"
                   )}
                 >
-                  {(selectedRequest.status === 'active' || selectedRequest.status === 'approved') ? '✓ APROBADO' : 'APROBAR SOLICITUD'}
+                  {(selectedRequest.status === 'active' || selectedRequest.status === 'approved') ? '✓ YA APROBADO' : 'APROBAR SOLICITUD'}
                 </GmxButton>
               </div>
             </div>

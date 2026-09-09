@@ -6,6 +6,7 @@ import { Play, X } from 'lucide-react'
 import { SplitText } from '@/components/split-text'
 import { Reveal } from '@/components/anim'
 import { GmxButton } from '@/components/gmx-button'
+import { useAuth } from '@/lib/auth-context'
 
 // Configurable: replace with the official GMX Gaming video embed URL.
 const VIDEO_URL = 'https://www.youtube.com/embed/dQw4w9WgXcQ'
@@ -13,6 +14,7 @@ const VIDEO_URL = 'https://www.youtube.com/embed/dQw4w9WgXcQ'
 export function VideoExperience() {
   const ref = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
+  const { user } = useAuth()
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end start'] })
   const y = useTransform(scrollYProgress, [0, 1], ['-10%', '10%'])
 
@@ -39,7 +41,11 @@ export function VideoExperience() {
               className="mt-4 font-display text-4xl font-700 uppercase leading-[0.95] tracking-tight text-white sm:text-5xl lg:text-6xl"
             />
             <Reveal direction="up" delay={0.2} className="mt-8 flex justify-center lg:justify-start">
-              <GmxButton href="#registro">ÚNETE A GMX</GmxButton>
+              {user ? (
+                <GmxButton href="/micuenta">IR A TU PERFIL</GmxButton>
+              ) : (
+                <GmxButton href="#registro">ÚNETE A GMX</GmxButton>
+              )}
             </Reveal>
           </div>
 

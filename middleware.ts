@@ -35,7 +35,7 @@ export async function middleware(request: NextRequest) {
 
   // Proteger rutas de /registro (Altas) y /micuenta
   const isRestricted = request.nextUrl.pathname.startsWith('/registro') || request.nextUrl.pathname.startsWith('/micuenta')
-  const isAuthRoute = request.nextUrl.pathname.startsWith('/login')
+  const isAuthRoute = request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/crear-cuenta')
 
   // Si no hay usuario y trata de entrar a rutas restringidas
   if (isRestricted && !user) {

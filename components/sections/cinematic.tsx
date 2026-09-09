@@ -5,9 +5,11 @@ import { motion, useScroll, useTransform } from 'motion/react'
 import { SplitText } from '@/components/split-text'
 import { Reveal } from '@/components/anim'
 import { GmxButton } from '@/components/gmx-button'
+import { useAuth } from '@/lib/auth-context'
 
 export function Cinematic() {
   const ref = useRef<HTMLDivElement>(null)
+  const { user } = useAuth()
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end start'] })
   const y = useTransform(scrollYProgress, [0, 1], ['-12%', '12%'])
 
@@ -34,7 +36,11 @@ export function Cinematic() {
             className="mt-5 font-display text-4xl font-700 uppercase leading-[0.95] tracking-tight text-white sm:text-5xl lg:text-6xl"
           />
           <Reveal direction="up" delay={0.2} className="mt-8">
-            <GmxButton href="#registro">REGÍSTRATE AHORA</GmxButton>
+            {user ? (
+              <GmxButton href="/micuenta">IR A TU PERFIL</GmxButton>
+            ) : (
+              <GmxButton href="#registro">REGÍSTRATE AHORA</GmxButton>
+            )}
           </Reveal>
         </div>
 

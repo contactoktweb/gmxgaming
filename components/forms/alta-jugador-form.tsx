@@ -39,6 +39,7 @@ function FormContent() {
 
   const [countries, setCountries] = useState<string[]>(DEFAULT_COUNTRIES)
   const [games, setGames] = useState<string[]>(['Mobile Legends'])
+  const [selectedGame, setSelectedGame] = useState<string>('Mobile Legends')
   const [loadingConfig, setLoadingConfig] = useState(true)
 
   // Nickname validation
@@ -74,7 +75,14 @@ function FormContent() {
           setCountries(countryConfig.value as string[])
         }
         if (gameConfig && Array.isArray(gameConfig.value) && gameConfig.value.length > 0) {
-          setGames(gameConfig.value as string[])
+          const loadedGames = gameConfig.value
+            .map((g: any) => (typeof g === 'string' ? g : g?.name))
+            .filter(Boolean) as string[]
+
+          if (loadedGames.length > 0) {
+            setGames(loadedGames)
+            setSelectedGame(loadedGames[0])
+          }
         }
       }
       setLoadingConfig(false)
@@ -222,7 +230,7 @@ function FormContent() {
     if (formData.get('item_meta[697]')) {
       const gamePayload = {
         profile_id: user?.id,
-        game: 'Mobile Legends',
+        game: (formData.get('selected_game') as string) || selectedGame || 'Mobile Legends',
         game_id: formData.get('item_meta[697]'),
         server: formData.get('item_meta[784]'),
         game_nickname: nickname,
@@ -549,38 +557,61 @@ function FormContent() {
         </div>
 
         <div className="grid gap-6 sm:grid-cols-3">
-          {games.includes('Mobile Legends') && (
-            <>
-              <div className="space-y-2">
-                <label htmlFor="field_uupyg" className="text-sm font-500 text-white">
-                  ID Mobile Legends <span className="text-primary">*</span>
-                </label>
-                <input
-                  type="text"
-                  id="field_uupyg"
-                  name="item_meta[697]"
-                  required
-                  className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                />
+          {/* Si hay más de 1 juego habilitado en configuración, permitir seleccionar */}
+          {games.length > 1 && (
+            <div className="space-y-2">
+              <label htmlFor="field_selected_game" className="text-sm font-500 text-white">
+                Juego Principal <span className="text-primary">*</span>
+              </label>
+              <div className="relative">
+                <select
+                  id="field_selected_game"
+                  name="selected_game"
+                  value={selectedGame}
+                  onChange={(e) => setSelectedGame(e.target.value)}
+                  className="w-full appearance-none rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  {games.map(g => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-muted-foreground">
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
               </div>
-
-              <div className="space-y-2">
-                <label htmlFor="field_p8548" className="text-sm font-500 text-white">
-                  Server Mobile Legends <span className="text-primary">*</span>
-                </label>
-                <input
-                  type="text"
-                  id="field_p8548"
-                  name="item_meta[784]"
-                  required
-                  maxLength={5}
-                  className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-            </>
+            </div>
           )}
 
-          {/* Ocultado temporalmente - Lógica futura para otros juegos dinamicos */}
+          <div className="space-y-2">
+            <label htmlFor="field_uupyg" className="text-sm font-500 text-white">
+              ID {selectedGame || 'Mobile Legends'} <span className="text-primary">*</span>
+            </label>
+            <input
+              type="text"
+              id="field_uupyg"
+              name="item_meta[697]"
+              required
+              placeholder="Ej. 12345678"
+              className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="field_p8548" className="text-sm font-500 text-white">
+              Server {selectedGame || 'Mobile Legends'} <span className="text-primary">*</span>
+            </label>
+            <input
+              type="text"
+              id="field_p8548"
+              name="item_meta[784]"
+              required
+              maxLength={10}
+              placeholder="Ej. 1234"
+              className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
         </div>
       </div>
 

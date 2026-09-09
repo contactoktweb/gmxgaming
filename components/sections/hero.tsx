@@ -3,6 +3,7 @@
 import { useRef } from 'react'
 import { motion, useScroll, useTransform } from 'motion/react'
 import { GmxButton } from '@/components/gmx-button'
+import { useAuth } from '@/lib/auth-context'
 
 const TICKER_ITEMS = [
   'LIGAS', 'TORNEOS', 'EVENTOS', 'MOBILE LEGENDS', 'HONOR OF KINGS', 'ESPORTS'
@@ -31,6 +32,7 @@ const titleCharVariants = {
 
 export function Hero({ ready }: { ready: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const { user } = useAuth()
   
   const { scrollYProgress } = useScroll({
     target: containerRef,
@@ -158,7 +160,15 @@ export function Hero({ ready }: { ready: boolean }) {
           </motion.p>
 
           <motion.div variants={fadeUpVariants} className="mt-10 flex flex-col items-start gap-4 sm:flex-row sm:items-center lg:mt-12">
-            <GmxButton href="/crear-cuenta" className="w-full sm:w-auto">CREA TU USUARIO</GmxButton>
+            {user ? (
+              <GmxButton href="/micuenta" className="w-full sm:w-auto">
+                IR A TU PERFIL
+              </GmxButton>
+            ) : (
+              <GmxButton href="/crear-cuenta" className="w-full sm:w-auto">
+                CREA TU USUARIO
+              </GmxButton>
+            )}
             <GmxButton href="#torneos" variant="secondary" className="w-full sm:w-auto border-white/20 hover:border-white">
               EXPLORA LOS TORNEOS
             </GmxButton>

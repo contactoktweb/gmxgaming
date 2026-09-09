@@ -4,42 +4,55 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { SplitText } from '@/components/split-text'
 import { Reveal } from '@/components/anim'
+import { useAuth } from '@/lib/auth-context'
 
 function NewsletterForm() {
   const [email, setEmail] = useState('')
   const router = useRouter()
+  const { user } = useAuth()
 
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault()
-        if (email) {
+        if (user) {
+          router.push('/micuenta')
+        } else if (email) {
           router.push(`/crear-cuenta?email=${encodeURIComponent(email)}`)
         }
       }}
       className="flex flex-col gap-4"
     >
       <div className="flex flex-col gap-3 sm:flex-row">
-        <input
-          type="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Correo electrónico"
-          aria-label="Correo electrónico"
-          className="w-full border border-white/20 bg-deep/60 px-4 py-4 text-sm text-white placeholder:text-faint outline-none backdrop-blur-sm transition-colors focus:border-primary"
-        />
+        {user ? (
+          <div className="flex w-full items-center border border-white/20 bg-deep/60 px-4 py-4 text-sm text-white backdrop-blur-sm">
+            <span className="text-muted-foreground">Sesión activa como:</span>
+            <span className="ml-2 font-600 text-primary">{user.name || user.email}</span>
+          </div>
+        ) : (
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Correo electrónico"
+            aria-label="Correo electrónico"
+            className="w-full border border-white/20 bg-deep/60 px-4 py-4 text-sm text-white placeholder:text-faint outline-none backdrop-blur-sm transition-colors focus:border-primary"
+          />
+        )}
         <button
           type="submit"
           data-cursor
           className="group relative shrink-0 overflow-hidden bg-primary px-7 py-4 font-display text-[13px] font-600 uppercase tracking-[0.18em] text-white clip-corner sm:text-sm"
         >
           <span className="absolute inset-0 origin-left scale-x-0 bg-primary-dark transition-transform duration-300 ease-out group-hover:scale-x-100" />
-          <span className="relative z-10">CREA TU USUARIO</span>
+          <span className="relative z-10">{user ? 'IR A TU PERFIL' : 'CREA TU USUARIO'}</span>
         </button>
       </div>
       <p className="text-xs text-muted-foreground">
-        Únete a la comunidad y recibe novedades de torneos y eventos.
+        {user
+          ? 'Ya formas parte de la comunidad. Visita tu perfil para gestionar tus equipos, estadísticas y contratos.'
+          : 'Únete a la comunidad y recibe novedades de torneos y eventos.'}
       </p>
     </form>
   )

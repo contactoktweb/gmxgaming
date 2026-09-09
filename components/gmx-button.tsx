@@ -11,6 +11,7 @@ type Props = {
   className?: string
   arrow?: boolean
   onClick?: () => void
+  disabled?: boolean
 }
 
 export function GmxButton({
@@ -20,6 +21,7 @@ export function GmxButton({
   className,
   arrow = true,
   onClick,
+  disabled = false,
 }: Props) {
   const base =
     'group relative inline-flex items-center justify-center gap-2 overflow-hidden px-7 py-4 font-display text-[13px] font-600 uppercase tracking-[0.18em] transition-colors duration-300 clip-corner sm:text-sm'
@@ -30,7 +32,13 @@ export function GmxButton({
       : 'border border-white/25 bg-transparent text-white hover:text-white'
 
   return (
-    <a href={href} onClick={onClick} className={cn(base, styles, className)} data-cursor>
+    <a
+      href={disabled ? undefined : href}
+      onClick={disabled ? (e) => e.preventDefault() : onClick}
+      aria-disabled={disabled}
+      className={cn(base, styles, disabled && 'cursor-not-allowed opacity-50 pointer-events-none', className)}
+      data-cursor={disabled ? undefined : ''}
+    >
       {/* Fill sweep */}
       <span
         className={cn(
