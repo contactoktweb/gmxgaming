@@ -7,6 +7,7 @@ import { Loader2, Eye, EyeOff } from 'lucide-react'
 import { GmxButton } from '@/components/gmx-button'
 import { useAuth } from '@/lib/auth-context'
 import { createClient } from '@/utils/supabase/client'
+import { translateAuthError } from '@/lib/utils'
 
 function LoginFormContent() {
   const [email, setEmail] = useState('')
@@ -23,11 +24,7 @@ function LoginFormContent() {
   useEffect(() => {
     const errorParam = searchParams.get('error')
     if (errorParam) {
-      if (errorParam === 'auth_callback_failed') {
-        setError('No se pudo completar el inicio de sesión con Google. Por favor intenta de nuevo.')
-      } else {
-        setError(decodeURIComponent(errorParam))
-      }
+      setError(translateAuthError(decodeURIComponent(errorParam)))
     }
   }, [searchParams])
 
@@ -48,7 +45,7 @@ function LoginFormContent() {
       })
       if (error) throw error
     } catch (err: any) {
-      setError(err.message || 'Error al iniciar sesión con Google')
+      setError(translateAuthError(err) || 'Error al iniciar sesión con Google')
       setIsGoogleLoading(false)
     }
   }
@@ -63,11 +60,7 @@ function LoginFormContent() {
     if (success) {
       router.push('/micuenta')
     } else {
-      if (loginError?.includes('Email not confirmed')) {
-        setError('Debes confirmar tu correo electrónico antes de iniciar sesión. Revisa tu bandeja de entrada.')
-      } else {
-        setError(loginError || 'Credenciales inválidas. Por favor intenta de nuevo.')
-      }
+      setError(translateAuthError(loginError) || 'Correo o contraseña incorrectos. Por favor intenta de nuevo.')
       setIsLoading(false)
     }
   }
@@ -132,9 +125,11 @@ function LoginFormContent() {
       </div>
 
       {error && (
-        <p className="text-sm text-red-500 font-500 text-center pt-2">
-          {error}
-        </p>
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3.5 text-center">
+          <p className="text-sm font-500 text-red-400 leading-relaxed">
+            {error}
+          </p>
+        </div>
       )}
 
       <div className="pt-4 text-center space-y-4">

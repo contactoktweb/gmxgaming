@@ -50,7 +50,7 @@ export function AdminTeams() {
         .select(`
           *,
           manager:profiles!teams_manager_id_fkey(name, discord_handle),
-          contracts(status, profiles!contracts_player_id_fkey(name, nickname, discord_handle, country:closest_airport))
+          contracts(status, profiles!contracts_player_id_fkey(name, nickname, discord_handle))
         `)
         .order('created_at', { ascending: false })
       

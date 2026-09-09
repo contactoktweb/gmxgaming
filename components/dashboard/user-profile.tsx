@@ -24,7 +24,7 @@ import {
   Globe,
   Share2
 } from 'lucide-react'
-import { cn, formatRoleTitle, formatRolesList, formatLocation } from '@/lib/utils'
+import { cn, formatRoleTitle, formatRolesList } from '@/lib/utils'
 import { GmxButton } from '@/components/gmx-button'
 import { useAuth } from '@/lib/auth-context'
 import { createClient } from '@/utils/supabase/client'
@@ -46,6 +46,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
   const [showPlayerModal, setShowPlayerModal] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const playerFileInputRef = useRef<HTMLInputElement>(null)
   const [fotoFile, setFotoFile] = useState<File | null>(null)
   const [playerFotoFile, setPlayerFotoFile] = useState<File | null>(null)
   const supabase = createClient()
@@ -61,7 +62,6 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
     name: '',
     nickname: '',
     discord_handle: '',
-    closest_airport: '',
     bio: '',
     profilePhoto: null as string | null,
     game: 'Mobile Legends',
@@ -229,7 +229,6 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
       name: pendingDetails?.name || profileData?.name || name || '',
       nickname: pendingDetails?.nickname || pendingDetails?.game_nickname || profileData?.nickname || profileData?.game_nickname || '',
       discord_handle: pendingDetails?.discord_handle || profileData?.discord_handle || '',
-      closest_airport: pendingDetails?.closest_airport || profileData?.closest_airport || '',
       bio: pendingDetails?.bio || profileData?.bio || bio || '',
       profilePhoto: pendingDetails?.avatar_url || profileData?.avatar_url || profilePhoto || null,
       game: pendingDetails?.game || gameInfo.game || 'Mobile Legends',
@@ -391,7 +390,6 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
         nickname: playerEditForm.nickname.trim(),
         game_nickname: playerEditForm.nickname.trim(),
         discord_handle: playerEditForm.discord_handle.trim(),
-        closest_airport: playerEditForm.closest_airport.trim(),
         bio: playerEditForm.bio.trim(),
         avatar_url: avatarUrl,
         game: playerEditForm.game,
@@ -411,7 +409,6 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
         original_nickname: profileData.nickname || profileData.game_nickname || '',
         original_game_nickname: profileData.game_nickname || profileData.nickname || '',
         original_discord_handle: profileData.discord_handle || '',
-        original_closest_airport: profileData.closest_airport || '',
         original_bio: profileData.bio || '',
         original_avatar: profileData.avatar_url || profilePhoto || '',
         original_game: gameInfo.game || 'Mobile Legends',
@@ -1043,10 +1040,6 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                   <p className="text-xs font-500 text-muted-foreground uppercase tracking-widest mb-1">Discord</p>
                   <p className="text-sm text-white font-600">{profileData.discord_handle || 'N/A'}</p>
                 </div>
-                <div>
-                  <p className="text-xs font-500 text-muted-foreground uppercase tracking-widest mb-1">Ubicación / País</p>
-                  <p className="text-sm text-white font-600">{formatLocation(profileData.closest_airport)}</p>
-                </div>
 
                 {profileData.player_game_info && profileData.player_game_info.length > 0 && (
                   <div className="border-t border-border pt-4 space-y-3">
@@ -1194,7 +1187,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                     />
                   </div>
 
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 sm:col-span-2">
                     <label className="text-xs font-600 uppercase tracking-wider text-white block">
                       Usuario de Discord
                     </label>
@@ -1203,19 +1196,6 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                       value={playerEditForm.discord_handle}
                       onChange={(e) => setPlayerEditForm(prev => ({ ...prev, discord_handle: e.target.value }))}
                       placeholder="usuario#0000 o @usuario"
-                      className="w-full rounded-md border border-border bg-background px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-600 uppercase tracking-wider text-white block">
-                      País / Aeropuerto más cercano
-                    </label>
-                    <input 
-                      type="text" 
-                      value={playerEditForm.closest_airport}
-                      onChange={(e) => setPlayerEditForm(prev => ({ ...prev, closest_airport: e.target.value }))}
-                      placeholder="Ej: México (MEX), Colombia (BOG)"
                       className="w-full rounded-md border border-border bg-background px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
                     />
                   </div>

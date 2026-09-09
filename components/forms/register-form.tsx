@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Loader2, Eye, EyeOff, Mail } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { createClient } from '@/utils/supabase/client'
+import { translateAuthError } from '@/lib/utils'
 
 function RegisterFormContent() {
   const [email, setEmail] = useState('')
@@ -25,11 +26,7 @@ function RegisterFormContent() {
   useEffect(() => {
     const errorParam = searchParams.get('error')
     if (errorParam) {
-      if (errorParam === 'auth_callback_failed') {
-        setError('No se pudo completar el registro con Google. Por favor intenta de nuevo.')
-      } else {
-        setError(decodeURIComponent(errorParam))
-      }
+      setError(translateAuthError(decodeURIComponent(errorParam)))
     }
   }, [searchParams])
 
@@ -50,7 +47,7 @@ function RegisterFormContent() {
       })
       if (error) throw error
     } catch (err: any) {
-      setError(err.message || 'Error al iniciar sesión con Google')
+      setError(translateAuthError(err) || 'Error al iniciar sesión con Google')
       setIsGoogleLoading(false)
     }
   }
@@ -79,7 +76,7 @@ function RegisterFormContent() {
         router.push('/micuenta')
       }
     } else {
-      setError(result.error || 'Error al crear la cuenta. Por favor intenta de nuevo.')
+      setError(translateAuthError(result.error) || 'Error al crear la cuenta. Por favor intenta de nuevo.')
       setIsLoading(false)
     }
   }
@@ -165,9 +162,11 @@ function RegisterFormContent() {
       </div>
 
       {error && (
-        <p className="text-sm text-red-500 font-500 text-center pt-2">
-          {error}
-        </p>
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3.5 text-center">
+          <p className="text-sm font-500 text-red-400 leading-relaxed">
+            {error}
+          </p>
+        </div>
       )}
 
       {emailNotConfirmed && (

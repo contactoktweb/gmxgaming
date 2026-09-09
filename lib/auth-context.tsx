@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
+import { translateAuthError } from '@/lib/utils'
 
 export type Role = 'admin' | 'jugador' | 'user'
 
@@ -161,7 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       setIsLoading(false)
-      return { success: false, error: error.message }
+      return { success: false, error: translateAuthError(error.message) }
     }
 
     return { success: true }
@@ -181,7 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       setIsLoading(false)
-      return { success: false, error: error.message }
+      return { success: false, error: translateAuthError(error.message) }
     }
 
     // Si Supabase ya devolvió sesión (email confirmations OFF), usar directamente

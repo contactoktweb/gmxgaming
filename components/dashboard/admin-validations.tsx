@@ -14,7 +14,6 @@ const FIELD_LABELS: Record<string, string> = {
   game_nickname: 'Nombre en Juego (IGN)',
   discord_handle: 'Usuario de Discord',
   avatar_url: 'Foto de Perfil',
-  closest_airport: 'País / Aeropuerto',
   country: 'País de Residencia',
   bio: 'Biografía / Descripción',
   description: 'Descripción',
@@ -133,7 +132,6 @@ function getModificationDiffs(details: any): DiffField[] {
     checkField('nickname', 'original_nickname', 'Nickname / IGN', 'text')
     checkField('game_nickname', 'original_game_nickname', 'Nombre en Juego (IGN)', 'text')
     checkField('discord_handle', 'original_discord_handle', 'Usuario de Discord', 'text')
-    checkField('closest_airport', 'original_closest_airport', 'País / Aeropuerto', 'text')
     checkField('country', 'original_country', 'País de Residencia', 'text')
     checkField('avatar_url', 'original_avatar', 'Foto de Perfil / Avatar', 'image')
     checkField('bio', 'original_bio', 'Biografía / Trayectoria', 'longtext')
@@ -154,7 +152,7 @@ function getModificationDiffs(details: any): DiffField[] {
   // Se excluyen los campos ya procesados explícitamente para evitar duplicados
   const ALREADY_HANDLED_KEYS = new Set([
     'name', 'tag', 'country', 'logo_url', 'avatar_url', 'bio', 'description',
-    'nickname', 'game_nickname', 'discord_handle', 'closest_airport',
+    'nickname', 'game_nickname', 'discord_handle',
     'game', 'game_id', 'server', 'country_account',
     'social_ig', 'social_tiktok', 'social_yt', 'social_twitch', 'social_kick', 'social_x', 'social_fb',
     // Variantes que se derivan de original_ pero son alias de los anteriores
@@ -527,7 +525,6 @@ export function AdminValidations() {
               if (details.nickname !== undefined) updates.nickname = details.nickname
               if (details.game_nickname !== undefined) updates.game_nickname = details.game_nickname
               if (details.discord_handle !== undefined) updates.discord_handle = details.discord_handle
-              if (details.closest_airport !== undefined) updates.closest_airport = details.closest_airport
               if (details.country !== undefined) updates.country = details.country
               if (details.avatar_url !== undefined) updates.avatar_url = details.avatar_url
               if (details.bio !== undefined) updates.bio = details.bio
@@ -586,7 +583,6 @@ export function AdminValidations() {
               if (details.original_nickname !== undefined) updates.nickname = details.original_nickname
               if (details.original_game_nickname !== undefined) updates.game_nickname = details.original_game_nickname
               if (details.original_discord_handle !== undefined) updates.discord_handle = details.original_discord_handle
-              if (details.original_closest_airport !== undefined) updates.closest_airport = details.original_closest_airport
               if (details.original_social_ig !== undefined) updates.social_ig = details.original_social_ig
               if (details.original_social_tiktok !== undefined) updates.social_tiktok = details.original_social_tiktok
               if (details.original_social_yt !== undefined) updates.social_yt = details.original_social_yt

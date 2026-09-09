@@ -12,7 +12,7 @@ import { SiteFooter } from '@/components/sections/site-footer'
 import { Reveal } from '@/components/anim'
 import { Users, Trophy, ShieldAlert, MapPin, CheckCircle2, User, Swords } from 'lucide-react'
 import Link from 'next/link'
-import { cn, formatRoleTitle, formatRolesList, formatLocation, getPlayerSlug, slugify } from '@/lib/utils'
+import { cn, formatRoleTitle, formatRolesList, getPlayerSlug, slugify } from '@/lib/utils'
 
 export default function TeamDetailsPage() {
   const params = useParams()
@@ -66,7 +66,7 @@ export default function TeamDetailsPage() {
           .select(`
             roles, 
             status,
-            profiles!contracts_player_id_fkey (id, name, nickname, avatar_url, country:closest_airport, discord_handle)
+            profiles!contracts_player_id_fkey (id, name, nickname, avatar_url, discord_handle)
           `)
           .eq('team_id', teamId)
           .in('status', ['active', 'activo'])
@@ -281,8 +281,6 @@ export default function TeamDetailsPage() {
                               <span className="text-[10px] font-600 text-primary uppercase tracking-widest">
                                 {formatRolesList(contract.roles)}
                               </span>
-                              <span className="w-1 h-1 rounded-full bg-border" />
-                              <span className="text-[10px] font-600 text-muted-foreground uppercase">{formatLocation(player.country)}</span>
                             </div>
                           </div>
                         </Link>

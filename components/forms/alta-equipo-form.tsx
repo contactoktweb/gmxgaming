@@ -99,6 +99,18 @@ export function AltaEquipoForm() {
     setTeamName(val)
   }
 
+  // Auto-scroll al inicio cuando el registro se completa con éxito
+  useEffect(() => {
+    if (formStatus === 'success') {
+      if (typeof window !== 'undefined') {
+        if (window.__lenis) {
+          window.__lenis.scrollTo(0, { immediate: false })
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      }
+    }
+  }, [formStatus])
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setFormStatus('loading')
@@ -202,6 +214,30 @@ export function AltaEquipoForm() {
     )
   }
 
+  if (formStatus === 'success') {
+    return (
+      <div className="mx-auto w-full max-w-2xl rounded-xl border border-border bg-surface p-8 sm:p-12 text-center shadow-2xl animate-in fade-in zoom-in-95 duration-500">
+        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500/10">
+          <CheckCircle2 className="h-10 w-10 text-emerald-500" />
+        </div>
+        <h2 className="font-display text-3xl font-700 uppercase tracking-tight text-white mb-3">
+          REGISTRO ENVIADO EXITOSAMENTE
+        </h2>
+        <p className="text-muted-foreground text-center max-w-md mx-auto mb-8 leading-relaxed">
+          Tu información ha sido recibida correctamente. Nuestro equipo revisará la solicitud de tu equipo y se pondrá en contacto contigo a través de Discord o correo electrónico.
+        </p>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <GmxButton href="/micuenta" className="w-full sm:w-auto px-8">
+            IR A MI CUENTA
+          </GmxButton>
+          <GmxButton href="/" variant="outline" className="w-full sm:w-auto px-8">
+            VOLVER AL INICIO
+          </GmxButton>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <form
       onSubmit={handleSubmit}
@@ -213,23 +249,6 @@ export function AltaEquipoForm() {
           <p className="mt-4 font-display text-lg font-600 uppercase tracking-widest text-white">
             ENVIANDO REGISTRO...
           </p>
-        </div>
-      )}
-
-      {formStatus === 'success' && (
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-surface animate-in fade-in duration-500">
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500/10 mb-6">
-            <CheckCircle2 className="h-10 w-10 text-emerald-500" />
-          </div>
-          <h2 className="font-display text-3xl font-700 uppercase tracking-tight text-white mb-2 text-center">
-            REGISTRO ENVIADO EXITOSAMENTE
-          </h2>
-          <p className="text-muted-foreground text-center max-w-md px-4 mb-8">
-            Tu información ha sido recibida correctamente. Nuestro equipo revisará la solicitud de tu equipo y se pondrá en contacto contigo a través de Discord o correo electrónico.
-          </p>
-          <GmxButton href="/micuenta" className="px-8">
-            IR A MI CUENTA
-          </GmxButton>
         </div>
       )}
 

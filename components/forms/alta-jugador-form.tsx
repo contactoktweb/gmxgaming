@@ -111,6 +111,18 @@ function FormContent() {
     validateNickname()
   }, [debouncedNickname])
 
+  // Auto-scroll al inicio cuando el registro se completa con éxito
+  useEffect(() => {
+    if (formStatus === 'success') {
+      if (typeof window !== 'undefined') {
+        if (window.__lenis) {
+          window.__lenis.scrollTo(0, { immediate: false })
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      }
+    }
+  }, [formStatus])
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (nicknameError) {
@@ -194,7 +206,6 @@ function FormContent() {
     if (urlFoto) corePayload.avatar_url = urlFoto
     if (urlIdentidad) corePayload.id_photo_url = urlIdentidad
     if (urlPasaporte) corePayload.passport_photo_url = urlPasaporte
-    if (formData.get('item_meta[781]')) corePayload.closest_airport = formData.get('item_meta[781]')
 
     // Fusionar con redes sociales
     const fullPayload = { ...corePayload, ...socialLinks }
@@ -269,6 +280,30 @@ function FormContent() {
     )
   }
 
+  if (formStatus === 'success') {
+    return (
+      <div className="mx-auto w-full max-w-2xl rounded-xl border border-border bg-surface p-8 sm:p-12 text-center shadow-2xl animate-in fade-in zoom-in-95 duration-500">
+        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500/10">
+          <CheckCircle2 className="h-10 w-10 text-emerald-500" />
+        </div>
+        <h2 className="font-display text-3xl font-700 uppercase tracking-tight text-white mb-3">
+          REGISTRO ENVIADO EXITOSAMENTE
+        </h2>
+        <p className="text-muted-foreground text-center max-w-md mx-auto mb-8 leading-relaxed">
+          Tu información ha sido recibida correctamente. Nuestro equipo revisará tu solicitud y se pondrá en contacto contigo a través de Discord o correo electrónico.
+        </p>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <GmxButton href="/micuenta" className="w-full sm:w-auto px-8">
+            IR A MI CUENTA
+          </GmxButton>
+          <GmxButton href="/" variant="outline" className="w-full sm:w-auto px-8">
+            VOLVER AL INICIO
+          </GmxButton>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <form
       onSubmit={handleSubmit}
@@ -280,23 +315,6 @@ function FormContent() {
           <p className="mt-4 font-display text-lg font-600 uppercase tracking-widest text-white">
             ENVIANDO REGISTRO...
           </p>
-        </div>
-      )}
-
-      {formStatus === 'success' && (
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-surface animate-in fade-in duration-500">
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500/10 mb-6">
-            <CheckCircle2 className="h-10 w-10 text-emerald-500" />
-          </div>
-          <h2 className="font-display text-3xl font-700 uppercase tracking-tight text-white mb-2">
-            REGISTRO ENVIADO EXITOSAMENTE
-          </h2>
-          <p className="text-muted-foreground text-center max-w-md px-4 mb-8">
-            Tu información ha sido recibida correctamente. Nuestro equipo revisará tu solicitud y se pondrá en contacto contigo a través de Discord o correo electrónico.
-          </p>
-          <GmxButton href="/micuenta" className="px-8">
-            IR A MI CUENTA
-          </GmxButton>
         </div>
       )}
 
@@ -615,54 +633,22 @@ function FormContent() {
         </div>
       </div>
 
-      {/* Section 4: PASAPORTE E INFORMACION DE VIAJE */}
+      {/* Section 4: PASAPORTE */}
       <div className="space-y-6 pt-6">
         <div className="border-b border-border pb-3">
           <h3 className="font-display text-xl font-600 uppercase tracking-widest text-primary">
-            PASAPORTE E INFORMACIÓN DE VIAJE
+            PASAPORTE
           </h3>
         </div>
 
-        <div className="grid gap-12 lg:grid-cols-2">
-          <div className="space-y-4">
-            <label className="text-sm font-500 text-white">
-              Pasaporte
-            </label>
-            <p className="text-xs text-muted-foreground">
-              Sube una imagen de tu pasaporte. Si no tienes uno, sube la cita generada.
-            </p>
-            <FileUpload name="item_meta[678]" onFileSelect={setPasaporteFile} />
-          </div>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="field_xbhly" className="text-sm font-500 text-white">
-                Aeropuerto más cercano <span className="text-primary">*</span>
-              </label>
-              <div className="relative">
-                {/* Simplified list for brevity */}
-                <select
-                  id="field_xbhly"
-                  name="item_meta[781]"
-                  defaultValue="MÉXICO - CIUDAD DE MEXICO - AEROPUERTO INTERNACIONAL DE LA CIUDAD DE MÉXICO, S.A. DE C.V. (AICM)"
-                  className="w-full appearance-none rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  <option value="MÉXICO - CIUDAD DE MEXICO - AEROPUERTO INTERNACIONAL DE LA CIUDAD DE MÉXICO, S.A. DE C.V. (AICM)">AICM (CDMX) - México</option>
-                  <option value="CANCÚN - QUINTANA ROO - AEROPUERTO DE CANCÚN, S.A. DE C.V.">Cancún - México</option>
-                  <option value="BOGOTÁ - EL DORADO">El Dorado (Bogotá) - Colombia</option>
-                  <option value="BUENOS AIRES - EZEIZA">Ezeiza (Buenos Aires) - Argentina</option>
-                  <option value="LIMA - JORGE CHÁVEZ">Jorge Chávez (Lima) - Perú</option>
-                  <option value="SANTIAGO - ARTURO MERINO BENÍTEZ">Arturo Merino Benítez (Santiago) - Chile</option>
-                  <option value="OTRO">Otro (Internacional / No Listado)</option>
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-muted-foreground">
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-              </div>
-            </div>
-          </div>
+        <div className="max-w-xl space-y-4">
+          <label className="text-sm font-500 text-white">
+            Pasaporte
+          </label>
+          <p className="text-xs text-muted-foreground">
+            Sube una imagen de tu pasaporte. Si no tienes uno, sube la cita generada.
+          </p>
+          <FileUpload name="item_meta[678]" onFileSelect={setPasaporteFile} />
         </div>
       </div>
 

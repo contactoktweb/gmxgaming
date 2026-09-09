@@ -13,7 +13,6 @@ const FIELD_LABELS: Record<string, string> = {
   game_nickname: 'Nombre en Juego (IGN)',
   discord_handle: 'Usuario de Discord',
   avatar_url: 'Foto de Perfil',
-  closest_airport: 'País / Aeropuerto',
   country: 'País de Residencia',
   bio: 'Biografía / Descripción',
   description: 'Descripción',
@@ -49,7 +48,8 @@ const EXCLUDED_FIELDS = new Set([
   'is_featured',
   'edit_requested',
   'can_edit_profile',
-  'contracts'
+  'contracts',
+  'closest_airport'
 ])
 
 function getFieldLabel(key: string): string {
@@ -111,7 +111,7 @@ export function AdminPlayers() {
           id,
           name,
           avatar_url,
-          country:closest_airport,
+          country,
           created_at,
           player_status,
           discord_handle,
