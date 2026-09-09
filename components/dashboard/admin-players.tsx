@@ -5,7 +5,7 @@ import { User, Mail, Gamepad2, Shield, Eye, X, Phone, Calendar, Filter, Ban, Che
 import { createClient } from '@/utils/supabase/client'
 import { GmxButton } from '@/components/gmx-button'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
+import { cn, formatNickname, formatPersonName } from '@/lib/utils'
 
 const FIELD_LABELS: Record<string, string> = {
   name: 'Nombre Completo',
@@ -213,9 +213,9 @@ export function AdminPlayers() {
   const handleSaveDetails = async () => {
     if (!selectedPlayer || !editingDetails) return
     const cleanDetails = { ...editingDetails }
-    delete cleanDetails.contracts
-    delete cleanDetails.created_at
-    delete cleanDetails.id
+    if (cleanDetails.name) cleanDetails.name = formatPersonName(cleanDetails.name).trim()
+    if (cleanDetails.nickname) cleanDetails.nickname = formatNickname(cleanDetails.nickname).trim()
+    if (cleanDetails.game_nickname) cleanDetails.game_nickname = formatNickname(cleanDetails.game_nickname).trim()
 
     const { error } = await supabase.from('profiles').update(cleanDetails).eq('id', selectedPlayer.id)
     if (!error) {
@@ -557,8 +557,16 @@ export function AdminPlayers() {
                           <input
                             type="text"
                             value={value as string || ''}
-                            onChange={(e) => setEditingDetails({ ...editingDetails, [key]: e.target.value })}
-                            className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                            onChange={(e) => {
+                              let val = e.target.value
+                              if (key === 'name') val = formatPersonName(val)
+                              if (key === 'nickname' || key === 'game_nickname') val = formatNickname(val)
+                              setEditingDetails({ ...editingDetails, [key]: val })
+                            }}
+                            className={cn(
+                              "w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary",
+                              (key === 'name' || key === 'nickname' || key === 'game_nickname') && "uppercase"
+                            )}
                           />
                         )}
                       </div>

@@ -30,8 +30,8 @@ export function formatRoleTitle(role: string): string {
     return `Línea: ${value}`
   }
 
-  if (/^LINEA\s*:\s*/i.test(trimmed)) {
-    const value = trimmed.replace(/^LINEA\s*:\s*/i, '').trim()
+  if (/^L[IÍ]NEA\s*:\s*/i.test(trimmed)) {
+    const value = trimmed.replace(/^L[IÍ]NEA\s*:\s*/i, '').trim()
     return `Línea: ${value}`
   }
 
@@ -41,9 +41,9 @@ export function formatRoleTitle(role: string): string {
     const value = rest.join(':').trim()
     const formattedKey = rawKey
       .replace(/_/g, ' ')
-      .toLowerCase()
-      .replace(/\b\w/g, char => char.toUpperCase())
       .trim()
+      .toLowerCase()
+      .replace(/(?:^|\s)\p{L}/gu, char => char.toUpperCase())
     return `${formattedKey}: ${value}`
   }
 
@@ -257,9 +257,51 @@ export function translateAuthError(error: any): string {
     return 'No tienes permisos suficientes para realizar esta acción.'
   }
 
-  // Si ya es un mensaje en español reconocible, mantenerlo
+// Si ya es un mensaje en español reconocible, mantenerlo
   return rawMessage
 }
 
 export const translateErrorMessage = translateAuthError
 
+/**
+ * Sanitiza y formatea un nickname competitivo / IGN:
+ * - Todo en mayúsculas (UPPERCASE)
+ * - Sin caracteres especiales (únicamente letras A-Z, números 0-9 y espacios)
+ * - Elimina acentos/tildes y cualquier símbolo
+ */
+export function formatNickname(value: string): string {
+  if (!value) return ''
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, '')
+}
+
+/**
+ * Sanitiza y formatea nombres y apellidos de personas:
+ * - Todo en mayúsculas (UPPERCASE)
+ * - Sin caracteres especiales ni números (únicamente letras A-Z, acentos válidos, Ñ y espacios)
+ */
+export function formatPersonName(value: string): string {
+  if (!value) return ''
+  return value
+    .toUpperCase()
+    .replace(/[^A-ZÁÉÍÓÚÜÑ ]/g, '')
+}
+
+/**
+ * Valida si un nickname cumple con las reglas (no vacío y sin caracteres especiales)
+ */
+export function isValidNickname(value: string): boolean {
+  if (!value || !value.trim()) return false
+  return /^[A-Z0-9 ]+$/.test(value.trim())
+}
+
+/**
+ * Valida si un nombre/apellido cumple con las reglas (no vacío, sin números ni caracteres especiales)
+ */
+export function isValidPersonName(value: string): boolean {
+  if (!value || !value.trim()) return false
+  return /^[A-ZÁÉÍÓÚÜÑ ]+$/i.test(value.trim())
+}

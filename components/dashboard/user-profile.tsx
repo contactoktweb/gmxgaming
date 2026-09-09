@@ -24,7 +24,7 @@ import {
   Globe,
   Share2
 } from 'lucide-react'
-import { cn, formatRoleTitle, formatRolesList } from '@/lib/utils'
+import { cn, formatRoleTitle, formatRolesList, formatNickname, formatPersonName } from '@/lib/utils'
 import { GmxButton } from '@/components/gmx-button'
 import { useAuth } from '@/lib/auth-context'
 import { createClient } from '@/utils/supabase/client'
@@ -38,7 +38,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
   const { user } = useAuth()
   const [profilePhoto, setProfilePhoto] = useState<string | null>(user?.avatar || null)
   const [name, setName] = useState(user?.name || 'Usuario')
-  const [bio, setBio] = useState('Cuéntanos un poco sobre ti...')
+  const [bio, setBio] = useState('')
 
   // Edit Modal State
   const [isEditing, setIsEditing] = useState(false)
@@ -190,6 +190,38 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
     }
 
     loadAllUserData()
+
+    // Suscripción en tiempo real para actualizar datos de perfil al instante tras aprobación
+    const channel = supabase
+      .channel(`user-profile-sync-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${user.id}`
+        },
+        () => {
+          loadAllUserData()
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'validations'
+        },
+        () => {
+          loadAllUserData()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [user])
 
   useEffect(() => {
@@ -309,20 +341,21 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
           }
         }
 
+        const formattedName = formatPersonName(editForm.name).trim()
+
         const { error } = await supabase.from('profiles').update({
-          name: editForm.name.trim(),
-          bio: editForm.bio.trim(),
+          name: formattedName,
           avatar_url: finalAvatarUrl
         }).eq('id', user.id)
 
         if (error) throw error
 
-        setName(editForm.name.trim())
+        setName(formattedName)
         setBio(editForm.bio.trim())
         if (finalAvatarUrl) setProfilePhoto(finalAvatarUrl)
         setProfileData((prev: any) => ({
           ...prev,
-          name: editForm.name.trim(),
+          name: formattedName,
           bio: editForm.bio.trim(),
           avatar_url: finalAvatarUrl
         }))
@@ -384,11 +417,14 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
         }
       }
 
+      const formattedPlayerName = formatPersonName(playerEditForm.name).trim()
+      const formattedPlayerNick = formatNickname(playerEditForm.nickname).trim()
+
       const payloadDetails = {
         user_id: user.id,
-        name: playerEditForm.name.trim(),
-        nickname: playerEditForm.nickname.trim(),
-        game_nickname: playerEditForm.nickname.trim(),
+        name: formattedPlayerName,
+        nickname: formattedPlayerNick,
+        game_nickname: formattedPlayerNick,
         discord_handle: playerEditForm.discord_handle.trim(),
         bio: playerEditForm.bio.trim(),
         avatar_url: avatarUrl,
@@ -405,23 +441,23 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
         social_fb: playerEditForm.social_fb.trim(),
 
         // Valores originales para comparación en el panel de administración
-        original_name: profileData.name || '',
-        original_nickname: profileData.nickname || profileData.game_nickname || '',
-        original_game_nickname: profileData.game_nickname || profileData.nickname || '',
-        original_discord_handle: profileData.discord_handle || '',
-        original_bio: profileData.bio || '',
-        original_avatar: profileData.avatar_url || profilePhoto || '',
-        original_game: gameInfo.game || 'Mobile Legends',
-        original_game_id: gameInfo.game_id || '',
-        original_server: gameInfo.server || '',
-        original_country_account: gameInfo.country_account || '',
-        original_social_ig: profileData.social_ig || '',
-        original_social_tiktok: profileData.social_tiktok || '',
-        original_social_yt: profileData.social_yt || '',
-        original_social_twitch: profileData.social_twitch || '',
-        original_social_kick: profileData.social_kick || '',
-        original_social_x: profileData.social_x || '',
-        original_social_fb: profileData.social_fb || ''
+        original_name: latestValidation?.details?.original_name || profileData?.name || name || user?.name || '',
+        original_nickname: latestValidation?.details?.original_nickname || profileData?.nickname || profileData?.game_nickname || '',
+        original_game_nickname: latestValidation?.details?.original_game_nickname || profileData?.game_nickname || profileData?.nickname || '',
+        original_discord_handle: latestValidation?.details?.original_discord_handle || profileData?.discord_handle || '',
+        original_bio: latestValidation?.details?.original_bio || profileData?.bio || bio || '',
+        original_avatar: latestValidation?.details?.original_avatar || profileData?.avatar_url || profilePhoto || '',
+        original_game: latestValidation?.details?.original_game || gameInfo.game || 'Mobile Legends',
+        original_game_id: latestValidation?.details?.original_game_id || gameInfo.game_id || '',
+        original_server: latestValidation?.details?.original_server || gameInfo.server || '',
+        original_country_account: latestValidation?.details?.original_country_account || gameInfo.country_account || '',
+        original_social_ig: latestValidation?.details?.original_social_ig || profileData?.social_ig || '',
+        original_social_tiktok: latestValidation?.details?.original_social_tiktok || profileData?.social_tiktok || '',
+        original_social_yt: latestValidation?.details?.original_social_yt || profileData?.social_yt || '',
+        original_social_twitch: latestValidation?.details?.original_social_twitch || profileData?.social_twitch || '',
+        original_social_kick: latestValidation?.details?.original_social_kick || profileData?.social_kick || '',
+        original_social_x: latestValidation?.details?.original_social_x || profileData?.social_x || '',
+        original_social_fb: latestValidation?.details?.original_social_fb || profileData?.social_fb || ''
       }
 
       let valError = null
@@ -513,13 +549,33 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
             {/* Basic Info */}
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-3">
-                <h2 className="font-display text-2xl sm:text-3xl font-700 text-white tracking-tight">{name}</h2>
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <h2 className="font-display text-2xl sm:text-3xl font-700 text-white tracking-tight">
+                    {profileData?.nickname ? (
+                      <>
+                        <span className="text-white">{profileData.nickname}</span>
+                        {name && (
+                          <span className="text-sm sm:text-base font-500 text-muted-foreground font-sans ml-1.5 font-normal">
+                            ({name})
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      name
+                    )}
+                  </h2>
+                </div>
                 
-                {/* Personal Profile Badge */}
+                {/* Profile Badge */}
                 {user?.role === 'admin' ? (
                   <div className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-600 text-primary border border-primary/20 uppercase tracking-wider">
                     <ShieldCheck className="h-3.5 w-3.5" />
                     Administrador
+                  </div>
+                ) : isPlayerApproved ? (
+                  <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-600 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">
+                    <UserCheck className="h-3.5 w-3.5" />
+                    Jugador Verificado
                   </div>
                 ) : (
                   <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-600 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">
@@ -528,6 +584,11 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                   </div>
                 )}
               </div>
+              {profileData?.discord_handle && (
+                <p className="text-xs font-500 text-muted-foreground flex items-center gap-1.5">
+                  <span className="text-primary font-600">Discord:</span> {profileData.discord_handle}
+                </p>
+              )}
               <p className="text-muted-foreground text-sm max-w-2xl leading-relaxed">
                 {bio}
               </p>
@@ -950,10 +1011,11 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                   <input 
                     type="text" 
                     value={editForm.name}
-                    onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="Tu nombre completo"
-                    className="w-full rounded-md border border-border bg-background px-4 py-3 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+                    onChange={(e) => setEditForm(prev => ({ ...prev, name: formatPersonName(e.target.value) }))}
+                    placeholder="TU NOMBRE COMPLETO"
+                    className="w-full rounded-md border border-border bg-background px-4 py-3 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors uppercase"
                   />
+                  <p className="text-[11px] text-muted-foreground">Solo letras en mayúsculas, sin números ni caracteres especiales.</p>
                 </div>
                 
                 <div className="space-y-2">
@@ -1053,6 +1115,56 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                         <span className="text-muted-foreground block mb-1">Servidor</span>
                         <span className="text-white font-600">{profileData.player_game_info[0].server || 'N/A'}</span>
                       </div>
+                      {profileData.player_game_info[0].country_account && (
+                        <div className="rounded-lg bg-background p-3 border border-border col-span-2">
+                          <span className="text-muted-foreground block mb-1">País de la Cuenta</span>
+                          <span className="text-white font-600">{profileData.player_game_info[0].country_account}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Redes Sociales y Enlaces */}
+                {(profileData.social_ig || profileData.social_twitch || profileData.social_kick || profileData.social_yt || profileData.social_tiktok || profileData.social_x || profileData.social_fb) && (
+                  <div className="border-t border-border pt-4 space-y-2.5">
+                    <p className="text-xs font-600 uppercase tracking-widest text-primary">Redes Sociales Vinculadas</p>
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      {profileData.social_ig && (
+                        <a href={profileData.social_ig} target="_blank" rel="noreferrer" className="px-2.5 py-1 rounded bg-background border border-border text-white hover:text-primary transition-colors">
+                          Instagram
+                        </a>
+                      )}
+                      {profileData.social_twitch && (
+                        <a href={profileData.social_twitch} target="_blank" rel="noreferrer" className="px-2.5 py-1 rounded bg-background border border-border text-white hover:text-primary transition-colors">
+                          Twitch
+                        </a>
+                      )}
+                      {profileData.social_kick && (
+                        <a href={profileData.social_kick} target="_blank" rel="noreferrer" className="px-2.5 py-1 rounded bg-background border border-border text-white hover:text-primary transition-colors">
+                          Kick
+                        </a>
+                      )}
+                      {profileData.social_yt && (
+                        <a href={profileData.social_yt} target="_blank" rel="noreferrer" className="px-2.5 py-1 rounded bg-background border border-border text-white hover:text-primary transition-colors">
+                          YouTube
+                        </a>
+                      )}
+                      {profileData.social_tiktok && (
+                        <a href={profileData.social_tiktok} target="_blank" rel="noreferrer" className="px-2.5 py-1 rounded bg-background border border-border text-white hover:text-primary transition-colors">
+                          TikTok
+                        </a>
+                      )}
+                      {profileData.social_x && (
+                        <a href={profileData.social_x} target="_blank" rel="noreferrer" className="px-2.5 py-1 rounded bg-background border border-border text-white hover:text-primary transition-colors">
+                          X (Twitter)
+                        </a>
+                      )}
+                      {profileData.social_fb && (
+                        <a href={profileData.social_fb} target="_blank" rel="noreferrer" className="px-2.5 py-1 rounded bg-background border border-border text-white hover:text-primary transition-colors">
+                          Facebook
+                        </a>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1168,10 +1280,11 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                     <input 
                       type="text" 
                       value={playerEditForm.name}
-                      onChange={(e) => setPlayerEditForm(prev => ({ ...prev, name: e.target.value }))}
-                      placeholder="Tu nombre completo"
-                      className="w-full rounded-md border border-border bg-background px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+                      onChange={(e) => setPlayerEditForm(prev => ({ ...prev, name: formatPersonName(e.target.value) }))}
+                      placeholder="TU NOMBRE COMPLETO"
+                      className="w-full rounded-md border border-border bg-background px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors uppercase"
                     />
+                    <p className="text-[10px] text-muted-foreground">Solo letras en mayúsculas, sin caracteres especiales ni números.</p>
                   </div>
 
                   <div className="space-y-1.5">
@@ -1181,10 +1294,11 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                     <input 
                       type="text" 
                       value={playerEditForm.nickname}
-                      onChange={(e) => setPlayerEditForm(prev => ({ ...prev, nickname: e.target.value }))}
-                      placeholder="Tu apodo o tag competitivo"
-                      className="w-full rounded-md border border-border bg-background px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+                      onChange={(e) => setPlayerEditForm(prev => ({ ...prev, nickname: formatNickname(e.target.value) }))}
+                      placeholder="TU NICKNAME"
+                      className="w-full rounded-md border border-border bg-background px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors uppercase"
                     />
+                    <p className="text-[10px] text-muted-foreground">En mayúsculas, sin caracteres especiales.</p>
                   </div>
 
                   <div className="space-y-1.5 sm:col-span-2">

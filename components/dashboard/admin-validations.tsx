@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth-context'
 import { GmxButton } from '@/components/gmx-button'
 import { createClient } from '@/utils/supabase/client'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
+import { cn, formatNickname, formatPersonName } from '@/lib/utils'
 
 const FIELD_LABELS: Record<string, string> = {
   name: 'Nombre Completo',
@@ -95,25 +95,29 @@ function getModificationDiffs(details: any): DiffField[] {
     label: string,
     type: 'text' | 'image' | 'longtext' = 'text'
   ) => {
-    const newVal = details[key] !== undefined ? details[key] : null
-    const origVal = details[origKey] !== undefined ? details[origKey] : null
+    const rawNewVal = details[key] !== undefined && details[key] !== null ? details[key] : null
+    const rawOrigVal = details[origKey] !== undefined && details[origKey] !== null ? details[origKey] : null
 
-    // Si ambos son nulos o no existen, omitir
-    if (newVal === null && origVal === null) return
+    const cleanNew = String(rawNewVal || '').trim()
+    const cleanOrig = String(rawOrigVal || '').trim()
 
-    // Comprobar si cambió
-    const hasChanged = String(newVal || '').trim() !== String(origVal || '').trim()
-    
-    if (hasChanged && (newVal || origVal)) {
-      diffs.push({
-        label,
-        key,
-        type,
-        originalValue: origVal,
-        newValue: newVal,
-        hasChanged: true
-      })
-    }
+    // Si ambos están vacíos o no existen, no hubo cambio
+    if (!cleanNew && !cleanOrig) return
+
+    // Si el valor nuevo es idéntico al original, no hubo cambio
+    if (cleanNew === cleanOrig) return
+
+    // Caso especial para placeholder de biografía
+    if (key === 'bio' && cleanNew === 'Cuéntanos un poco sobre ti...' && !cleanOrig) return
+
+    diffs.push({
+      label,
+      key,
+      type,
+      originalValue: rawOrigVal ? String(rawOrigVal).trim() : null,
+      newValue: rawNewVal ? String(rawNewVal).trim() : null,
+      hasChanged: true
+    })
   }
 
   // 1. Campos de Modificación de Equipo
@@ -121,7 +125,8 @@ function getModificationDiffs(details: any): DiffField[] {
     checkField('name', 'original_name', 'Nombre del Equipo', 'text')
     checkField('tag', 'original_tag', 'Tag / Siglas del Equipo', 'text')
     checkField('country', 'original_country', 'País de Residencia / Sede', 'text')
-    checkField('logo_url', 'original_logo', 'Logo del Equipo', 'image')
+    const origLogoKey = details.original_logo !== undefined ? 'original_logo' : 'original_logo_url'
+    checkField('logo_url', origLogoKey, 'Logo del Equipo', 'image')
   }
 
   // 2. Campos de Modificación de Perfil de Usuario y Jugador Profesional
@@ -129,11 +134,15 @@ function getModificationDiffs(details: any): DiffField[] {
     if (!diffs.some(d => d.key === 'name')) {
       checkField('name', 'original_name', 'Nombre Real', 'text')
     }
+    // Nickname / IGN: solo mostrar uno si nickname y game_nickname son iguales para evitar duplicar el campo
     checkField('nickname', 'original_nickname', 'Nickname / IGN', 'text')
-    checkField('game_nickname', 'original_game_nickname', 'Nombre en Juego (IGN)', 'text')
+    if (!diffs.some(d => d.key === 'nickname')) {
+      checkField('game_nickname', 'original_game_nickname', 'Nombre en Juego (IGN)', 'text')
+    }
     checkField('discord_handle', 'original_discord_handle', 'Usuario de Discord', 'text')
     checkField('country', 'original_country', 'País de Residencia', 'text')
-    checkField('avatar_url', 'original_avatar', 'Foto de Perfil / Avatar', 'image')
+    const origAvatarKey = details.original_avatar !== undefined ? 'original_avatar' : 'original_avatar_url'
+    checkField('avatar_url', origAvatarKey, 'Foto de Perfil / Avatar', 'image')
     checkField('bio', 'original_bio', 'Biografía / Trayectoria', 'longtext')
     checkField('game', 'original_game', 'Juego Principal', 'text')
     checkField('game_id', 'original_game_id', 'ID de Juego / Cuenta', 'text')
@@ -149,20 +158,17 @@ function getModificationDiffs(details: any): DiffField[] {
   }
 
   // Fallback para otros campos que tengan original_
-  // Se excluyen los campos ya procesados explícitamente para evitar duplicados
   const ALREADY_HANDLED_KEYS = new Set([
     'name', 'tag', 'country', 'logo_url', 'avatar_url', 'bio', 'description',
     'nickname', 'game_nickname', 'discord_handle',
     'game', 'game_id', 'server', 'country_account',
     'social_ig', 'social_tiktok', 'social_yt', 'social_twitch', 'social_kick', 'social_x', 'social_fb',
-    // Variantes que se derivan de original_ pero son alias de los anteriores
     'avatar', 'logo', 'photo'
   ])
 
   Object.keys(details).forEach(key => {
     if (key.startsWith('original_')) {
       const mainKey = key.replace('original_', '')
-      // Omitir si ya fue procesado explícitamente o es alias de uno procesado
       if (ALREADY_HANDLED_KEYS.has(mainKey)) return
       if (diffs.some(d => d.key === mainKey)) return
 
@@ -254,30 +260,16 @@ export function AdminValidations() {
 
     const formattedRequests: PendingRequest[] = []
     const processedIds = new Set<string>()
-    const processedEntityIds = new Set<string>()
+    const processedEntityKeys = new Set<string>()
 
-    // Add profile modifications
-    if (pendingModifications) {
-      pendingModifications.forEach(m => {
-        processedIds.add(m.id)
-        processedEntityIds.add(m.id)
-        formattedRequests.push({
-          id: m.id,
-          type: 'modificacion',
-          target_name: `${m.name || m.nickname || 'Usuario'} (Cambio de Perfil)`,
-          created_at: m.created_at,
-          status: 'pending',
-          submitted_by: m.name || 'Usuario',
-          details: m
-        })
-      })
-    }
-
+    // 1. Procesar dbValidations primero (Fuente de la verdad con detalles y valores originales completos)
     if (dbValidations) {
       dbValidations.forEach(v => {
         const entityId = v.details?.user_id || v.details?.team_id || v.details?.id
-        // Si ya procesamos una validación más reciente para esta misma entidad, evitamos duplicados
-        if (entityId && processedEntityIds.has(entityId)) {
+        const entityKey = entityId ? `${v.type}_${entityId}` : null
+
+        // Evitar duplicar solicitudes del mismo tipo para la misma entidad (tomando la más reciente primero)
+        if (entityKey && processedEntityKeys.has(entityKey)) {
           return
         }
         if (processedIds.has(v.id)) {
@@ -285,8 +277,10 @@ export function AdminValidations() {
         }
 
         processedIds.add(v.id)
+        if (entityKey) {
+          processedEntityKeys.add(entityKey)
+        }
         if (entityId) {
-          processedEntityIds.add(entityId)
           processedIds.add(entityId)
         }
 
@@ -302,11 +296,33 @@ export function AdminValidations() {
       })
     }
 
+    // 2. Fallback para modificaciones en profiles que no tengan registro en validations
+    if (pendingModifications) {
+      pendingModifications.forEach(m => {
+        const entityKey = `modificacion_${m.id}`
+        if (!processedEntityKeys.has(entityKey) && !processedIds.has(m.id)) {
+          processedIds.add(m.id)
+          processedEntityKeys.add(entityKey)
+          formattedRequests.push({
+            id: m.id,
+            type: 'modificacion',
+            target_name: `${m.name || m.nickname || 'Usuario'} (Cambio de Perfil)`,
+            created_at: m.created_at,
+            status: 'pending',
+            submitted_by: m.name || 'Usuario',
+            details: m
+          })
+        }
+      })
+    }
+
+    // 3. Fallback para jugadores en profiles sin registro en validations
     if (pendingPlayers) {
       pendingPlayers.forEach(p => {
-        if (!processedIds.has(p.id) && !processedEntityIds.has(p.id)) {
+        const entityKey = `jugador_${p.id}`
+        if (!processedEntityKeys.has(entityKey) && !processedIds.has(p.id)) {
           processedIds.add(p.id)
-          processedEntityIds.add(p.id)
+          processedEntityKeys.add(entityKey)
           formattedRequests.push({
             id: p.id,
             type: 'jugador',
@@ -320,11 +336,13 @@ export function AdminValidations() {
       })
     }
 
+    // 4. Fallback para equipos sin registro en validations
     if (pendingTeams) {
       pendingTeams.forEach(t => {
-        if (!processedIds.has(t.id) && !processedEntityIds.has(t.id)) {
+        const entityKey = `equipo_${t.id}`
+        if (!processedEntityKeys.has(entityKey) && !processedIds.has(t.id)) {
           processedIds.add(t.id)
-          processedEntityIds.add(t.id)
+          processedEntityKeys.add(entityKey)
           formattedRequests.push({
             id: t.id,
             type: 'equipo',
@@ -338,7 +356,7 @@ export function AdminValidations() {
       })
     }
 
-    // Sort by date descending
+    // Ordenar por fecha descendente
     formattedRequests.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
     setRequests(formattedRequests)
@@ -521,13 +539,16 @@ export function AdminValidations() {
             const userId = details.user_id || confirmAction.id
             if (isApproved) {
               const updates: any = { edit_requested: false }
-              if (details.name !== undefined) updates.name = details.name
-              if (details.nickname !== undefined) updates.nickname = details.nickname
-              if (details.game_nickname !== undefined) updates.game_nickname = details.game_nickname
+              if (details.name !== undefined && details.name !== '') updates.name = formatPersonName(details.name).trim()
+              if (details.nickname !== undefined && details.nickname !== '') updates.nickname = formatNickname(details.nickname).trim()
+              if (details.game_nickname !== undefined && details.game_nickname !== '') {
+                updates.game_nickname = formatNickname(details.game_nickname).trim()
+              } else if (updates.nickname) {
+                updates.game_nickname = updates.nickname
+              }
               if (details.discord_handle !== undefined) updates.discord_handle = details.discord_handle
-              if (details.country !== undefined) updates.country = details.country
-              if (details.avatar_url !== undefined) updates.avatar_url = details.avatar_url
-              if (details.bio !== undefined) updates.bio = details.bio
+              if (details.avatar_url !== undefined && details.avatar_url !== '') updates.avatar_url = details.avatar_url
+              if (details.closest_airport !== undefined) updates.closest_airport = details.closest_airport
               if (details.social_ig !== undefined) updates.social_ig = details.social_ig
               if (details.social_tiktok !== undefined) updates.social_tiktok = details.social_tiktok
               if (details.social_yt !== undefined) updates.social_yt = details.social_yt
@@ -536,36 +557,48 @@ export function AdminValidations() {
               if (details.social_x !== undefined) updates.social_x = details.social_x
               if (details.social_fb !== undefined) updates.social_fb = details.social_fb
 
-              await supabase.from('profiles').update(updates).eq('id', userId)
+              const { error: profErr } = await supabase.from('profiles').update(updates).eq('id', userId)
+              if (profErr) {
+                console.error('Error updating profiles:', profErr)
+                toast.error('Error actualizando perfil: ' + profErr.message)
+                return
+              }
 
               // Actualizar datos de juego en player_game_info si fueron provistos
-              if (details.game_id !== undefined || details.server !== undefined || details.country_account !== undefined || details.game !== undefined) {
-                const gameUpdates: any = {}
-                if (details.game_id !== undefined) gameUpdates.game_id = details.game_id
-                if (details.server !== undefined) gameUpdates.server = details.server
-                if (details.country_account !== undefined) gameUpdates.country_account = details.country_account
-                if (details.game !== undefined) gameUpdates.game = details.game
-                if (details.game_nickname !== undefined || details.nickname !== undefined) {
-                  gameUpdates.game_nickname = details.game_nickname || details.nickname
-                }
+              try {
+                if (details.game_id !== undefined || details.server !== undefined || details.country_account !== undefined || details.game !== undefined || details.nickname !== undefined || details.game_nickname !== undefined) {
+                  const gameUpdates: any = {}
+                  if (details.game !== undefined && details.game !== '') gameUpdates.game = details.game
+                  if (details.game_id !== undefined) gameUpdates.game_id = details.game_id
+                  if (details.server !== undefined) gameUpdates.server = details.server
+                  if (details.country_account !== undefined) gameUpdates.country_account = details.country_account
+                  if (details.game_nickname !== undefined && details.game_nickname !== '') {
+                    gameUpdates.game_nickname = formatNickname(details.game_nickname).trim()
+                  } else if (details.nickname !== undefined && details.nickname !== '') {
+                    gameUpdates.game_nickname = formatNickname(details.nickname).trim()
+                  }
 
-                const { data: existingGameInfo } = await supabase
-                  .from('player_game_info')
-                  .select('id')
-                  .eq('profile_id', userId)
-                  .limit(1)
+                  const { data: existingGameInfo } = await supabase
+                    .from('player_game_info')
+                    .select('id')
+                    .eq('profile_id', userId)
+                    .limit(1)
 
-                if (existingGameInfo && existingGameInfo.length > 0) {
-                  await supabase.from('player_game_info').update(gameUpdates).eq('id', existingGameInfo[0].id)
-                } else {
-                  await supabase.from('player_game_info').insert({
-                    profile_id: userId,
-                    game: details.game || 'Mobile Legends',
-                    ...gameUpdates
-                  })
+                  if (existingGameInfo && existingGameInfo.length > 0) {
+                    await supabase.from('player_game_info').update(gameUpdates).eq('id', existingGameInfo[0].id)
+                  } else {
+                    await supabase.from('player_game_info').insert({
+                      profile_id: userId,
+                      game: details.game || 'Mobile Legends',
+                      ...gameUpdates
+                    })
+                  }
                 }
+              } catch (gameErr) {
+                console.warn('Advertencia actualizando player_game_info:', gameErr)
               }
               
+              // Actualizar en tabla validations
               await supabase.from('validations').update({
                 status: 'approved',
                 details: {
@@ -574,24 +607,19 @@ export function AdminValidations() {
                   user_id: userId
                 }
               }).eq('id', confirmAction.id)
+
+              // Actualizar también como respaldo por user_id
+              await supabase.from('validations').update({
+                status: 'approved',
+                details: {
+                  ...details,
+                  status: 'approved',
+                  user_id: userId
+                }
+              }).eq('type', 'modificacion').eq('status', 'pending').filter('details->>user_id', 'eq', userId)
             } else {
               // Revertir y registrar rechazo con motivo obligatorio
-              const updates: any = { edit_requested: false }
-              if (details.original_name !== undefined) updates.name = details.original_name
-              if (details.original_avatar !== undefined) updates.avatar_url = details.original_avatar
-              if (details.original_bio !== undefined) updates.bio = details.original_bio
-              if (details.original_nickname !== undefined) updates.nickname = details.original_nickname
-              if (details.original_game_nickname !== undefined) updates.game_nickname = details.original_game_nickname
-              if (details.original_discord_handle !== undefined) updates.discord_handle = details.original_discord_handle
-              if (details.original_social_ig !== undefined) updates.social_ig = details.original_social_ig
-              if (details.original_social_tiktok !== undefined) updates.social_tiktok = details.original_social_tiktok
-              if (details.original_social_yt !== undefined) updates.social_yt = details.original_social_yt
-              if (details.original_social_twitch !== undefined) updates.social_twitch = details.original_social_twitch
-              if (details.original_social_kick !== undefined) updates.social_kick = details.original_social_kick
-              if (details.original_social_x !== undefined) updates.social_x = details.original_social_x
-              if (details.original_social_fb !== undefined) updates.social_fb = details.original_social_fb
-
-              await supabase.from('profiles').update(updates).eq('id', userId)
+              await supabase.from('profiles').update({ edit_requested: false }).eq('id', userId)
 
               await supabase.from('validations').update({
                 status: 'rejected',
@@ -602,6 +630,16 @@ export function AdminValidations() {
                   user_id: userId
                 }
               }).eq('id', confirmAction.id)
+
+              await supabase.from('validations').update({
+                status: 'rejected',
+                details: {
+                  ...details,
+                  rejection_reason: reason,
+                  status: 'rejected',
+                  user_id: userId
+                }
+              }).eq('type', 'modificacion').eq('status', 'pending').filter('details->>user_id', 'eq', userId)
             }
           }
         }
@@ -631,7 +669,11 @@ export function AdminValidations() {
     if (!selectedRequest || !editingDetails) return
     
     // Remove nested relational data before saving to main table
-    const { player_game_info, profiles, teams, ...cleanDetails } = editingDetails;
+    const { player_game_info, profiles, teams, bio, country, ...cleanDetails } = editingDetails;
+
+    if (cleanDetails.name) cleanDetails.name = formatPersonName(cleanDetails.name).trim()
+    if (cleanDetails.nickname) cleanDetails.nickname = formatNickname(cleanDetails.nickname).trim()
+    if (cleanDetails.game_nickname) cleanDetails.game_nickname = formatNickname(cleanDetails.game_nickname).trim()
 
     let error = null;
     
@@ -643,8 +685,10 @@ export function AdminValidations() {
         const { error: err } = await supabase.from('teams').update(cleanDetails).eq('id', selectedRequest.id)
         error = err;
       } else if (selectedRequest.type === 'modificacion') {
-        const { error: err } = await supabase.from('profiles').update({ ...cleanDetails, edit_requested: false }).eq('id', selectedRequest.id)
+        const userId = selectedRequest.details?.user_id || selectedRequest.id
+        const { error: err } = await supabase.from('profiles').update({ ...cleanDetails, edit_requested: false }).eq('id', userId)
         error = err;
+        await supabase.from('validations').update({ details: editingDetails }).eq('id', selectedRequest.id)
       }
         
       if (!error) {

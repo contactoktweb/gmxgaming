@@ -6,7 +6,7 @@ import { Upload, Image as ImageIcon, FileText, Loader2, CheckCircle2, HelpCircle
 import { GmxButton } from '@/components/gmx-button'
 import { PhoneInput } from '@/components/forms/phone-input'
 import { FileUpload } from '@/components/forms/file-upload'
-import { cn } from '@/lib/utils'
+import { cn, formatNickname, formatPersonName } from '@/lib/utils'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
 import { useDebounce } from '@/hooks/use-debounce'
@@ -42,7 +42,9 @@ function FormContent() {
   const [selectedGame, setSelectedGame] = useState<string>('Mobile Legends')
   const [loadingConfig, setLoadingConfig] = useState(true)
 
-  // Nickname validation
+  // Nombre, Apellidos y Nickname (Mayúsculas y sin caracteres especiales)
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [nickname, setNickname] = useState('')
   const debouncedNickname = useDebounce(nickname, 500)
   const [nicknameError, setNicknameError] = useState('')
@@ -92,24 +94,32 @@ function FormContent() {
 
   useEffect(() => {
     async function validateNickname() {
-      if (!debouncedNickname) {
+      const cleanNick = debouncedNickname.trim().toUpperCase()
+      if (!cleanNick) {
         setNicknameError('')
         return
       }
-      // Assuming players table or profiles table has the uniqueness check
-      const { data } = await supabase.from('profiles')
-        .select('id')
-        .eq('game_nickname', debouncedNickname)
-        .single()
       
-      if (data) {
+      const { data: profileWithNick } = await supabase.from('profiles')
+        .select('id')
+        .or(`nickname.ilike.${cleanNick},game_nickname.ilike.${cleanNick}`)
+        .neq('id', user?.id || '')
+        .limit(1)
+      
+      const { data: gameWithNick } = await supabase.from('player_game_info')
+        .select('id, profile_id')
+        .ilike('game_nickname', cleanNick)
+        .neq('profile_id', user?.id || '')
+        .limit(1)
+
+      if ((profileWithNick && profileWithNick.length > 0) || (gameWithNick && gameWithNick.length > 0)) {
         setNicknameError('Este nickname ya está en uso por otro jugador.')
       } else {
         setNicknameError('')
       }
     }
     validateNickname()
-  }, [debouncedNickname])
+  }, [debouncedNickname, user?.id])
 
   // Auto-scroll al inicio cuando el registro se completa con éxito
   useEffect(() => {
@@ -178,10 +188,26 @@ function FormContent() {
       // Since it's prod, we should continue or show error. We'll proceed with whatever uploaded.
     }
     
+    const fullName = `${firstName.trim()} ${lastName.trim()}`.trim().toUpperCase()
+    const cleanNick = nickname.trim().toUpperCase()
+
+    if (!firstName.trim() || !lastName.trim()) {
+      alert('Por favor ingresa tu nombre y apellidos.')
+      setFormStatus('idle')
+      return
+    }
+
+    if (!cleanNick) {
+      alert('Por favor ingresa tu nickname.')
+      setFormStatus('idle')
+      return
+    }
+
     // Payload principal — campos garantizados que existen en la tabla profiles
     const corePayload: Record<string, any> = {
-      name: (formData.get('item_meta[674][first]') || '') + ' ' + (formData.get('item_meta[674][last]') || ''),
-      nickname: nickname,
+      name: fullName,
+      nickname: cleanNick,
+      game_nickname: cleanNick,
       discord_handle: formData.get('item_meta[684]') || null,
       is_player: true,
       player_status: 'pending',
@@ -244,7 +270,7 @@ function FormContent() {
         game: (formData.get('selected_game') as string) || selectedGame || 'Mobile Legends',
         game_id: formData.get('item_meta[697]'),
         server: formData.get('item_meta[784]'),
-        game_nickname: nickname,
+        game_nickname: cleanNick,
         country_account: formData.get('item_meta[722]')
       }
       const { error: gErr } = await supabase.from('player_game_info').insert(gamePayload)
@@ -346,8 +372,12 @@ function FormContent() {
               name="item_meta[674][first]"
               autoComplete="given-name"
               required
-              className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              value={firstName}
+              onChange={(e) => setFirstName(formatPersonName(e.target.value))}
+              placeholder="EJ. JUAN CARLOS"
+              className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary uppercase"
             />
+            <p className="text-[11px] text-muted-foreground">Solo letras en mayúsculas, sin números ni caracteres especiales.</p>
           </div>
 
           <div className="space-y-2">
@@ -360,26 +390,32 @@ function FormContent() {
               name="item_meta[674][last]"
               autoComplete="family-name"
               required
-              className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              value={lastName}
+              onChange={(e) => setLastName(formatPersonName(e.target.value))}
+              placeholder="EJ. PEREZ GOMEZ"
+              className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary uppercase"
             />
+            <p className="text-[11px] text-muted-foreground">Solo letras en mayúsculas, sin números ni caracteres especiales.</p>
           </div>
 
           <div className="space-y-2">
             <label htmlFor="field_hs7a9" className="text-sm font-500 text-white">
               Nickname <span className="text-primary">*</span>
-              <FieldTooltip text="Tu apodo único en la plataforma. No puede estar repetido." />
+              <FieldTooltip text="Tu apodo único en la plataforma. En mayúsculas y sin caracteres especiales." />
             </label>
             <input
               type="text"
               id="field_hs7a9"
               required
               value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
+              onChange={(e) => setNickname(formatNickname(e.target.value))}
+              placeholder="EJ. FAKER99"
               className={cn(
-                "w-full rounded-md border bg-background px-4 py-3 text-white transition-colors focus:outline-none focus:ring-1",
+                "w-full rounded-md border bg-background px-4 py-3 text-white transition-colors focus:outline-none focus:ring-1 uppercase",
                 nicknameError ? "border-red-500 focus:border-red-500 focus:ring-red-500" : "border-border focus:border-primary focus:ring-primary"
               )}
             />
+            <p className="text-[11px] text-muted-foreground">En mayúsculas, sin caracteres especiales.</p>
             {nicknameError && (
               <p className="text-xs text-red-500 mt-1">{nicknameError}</p>
             )}

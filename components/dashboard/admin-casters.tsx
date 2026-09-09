@@ -5,7 +5,7 @@ import { Plus, Trash2, Mic, Image as ImageIcon, ExternalLink, Camera, MessageCir
 import { createClient } from '@/utils/supabase/client'
 import { GmxButton } from '@/components/gmx-button'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
+import { cn, formatNickname, formatPersonName } from '@/lib/utils'
 
 interface Caster {
   id: string
@@ -108,9 +108,12 @@ export function AdminCasters() {
         finalPhotoUrl = publicUrlData.publicUrl
       }
 
+      const cleanName = formatPersonName(casterForm.name).trim()
+      const cleanNick = formatNickname(casterForm.nickname || casterForm.name).trim()
+
       const payload = {
-        name: casterForm.name.trim(),
-        nickname: (casterForm.nickname || casterForm.name).trim(),
+        name: cleanName,
+        nickname: cleanNick,
         photo_url: finalPhotoUrl || null,
         social_ig: casterForm.social_ig?.trim() || null,
         social_x: casterForm.social_x?.trim() || null,
@@ -278,9 +281,9 @@ export function AdminCasters() {
                 <input 
                   type="text" 
                   value={casterForm.name}
-                  onChange={e => setCasterForm({...casterForm, name: e.target.value})}
-                  className="w-full rounded-md border border-border bg-background px-4 py-2.5 text-sm text-white focus:border-primary focus:outline-none"
-                  placeholder="Ej: Carlos Mendoza o Nickname"
+                  onChange={e => setCasterForm({...casterForm, name: formatPersonName(e.target.value)})}
+                  className="w-full rounded-md border border-border bg-background px-4 py-2.5 text-sm text-white focus:border-primary focus:outline-none uppercase"
+                  placeholder="EJ: CARLOS MENDOZA"
                 />
               </div>
 
@@ -291,9 +294,9 @@ export function AdminCasters() {
                 <input 
                   type="text" 
                   value={casterForm.nickname}
-                  onChange={e => setCasterForm({...casterForm, nickname: e.target.value})}
-                  className="w-full rounded-md border border-border bg-background px-4 py-2.5 text-sm text-white focus:border-primary focus:outline-none"
-                  placeholder="Ej: CasterPro"
+                  onChange={e => setCasterForm({...casterForm, nickname: formatNickname(e.target.value)})}
+                  className="w-full rounded-md border border-border bg-background px-4 py-2.5 text-sm text-white focus:border-primary focus:outline-none uppercase"
+                  placeholder="EJ: CASTERPRO"
                 />
               </div>
 

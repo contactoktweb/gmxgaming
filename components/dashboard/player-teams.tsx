@@ -478,7 +478,7 @@ export function PlayerTeams() {
               <p className="text-muted-foreground mt-1 mb-4">{activeTeam.teams?.country}</p>
               
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-xs font-600 uppercase tracking-widest">
-                Contrato {activeTeam.status}
+                Contrato {activeTeam.status === 'active' || activeTeam.status === 'activo' ? 'Activo' : activeTeam.status === 'pending' || activeTeam.status === 'pendiente' || activeTeam.status === 'pending_manager' ? 'Pendiente' : 'Finalizado'}
               </div>
             </div>
             <Link 
@@ -523,7 +523,10 @@ export function PlayerTeams() {
                   </div>
                 </div>
                 <div className="text-xs font-600 uppercase tracking-widest text-muted-foreground">
-                  {contract.status}
+                  {contract.status === 'active' || contract.status === 'activo' ? 'Activo' :
+                   contract.status === 'pending' || contract.status === 'pendiente' || contract.status === 'pending_manager' ? 'Pendiente' :
+                   contract.status === 'cancelled' || contract.status === 'cancelado' || contract.status === 'rejected' ? 'Cancelado' :
+                   'Finalizado'}
                 </div>
               </div>
             ))}

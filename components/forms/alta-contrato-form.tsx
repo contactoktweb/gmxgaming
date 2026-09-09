@@ -30,6 +30,36 @@ export function AltaContratoForm() {
   const [infoNotice, setInfoNotice] = useState('')
   const [teams, setTeams] = useState<any[]>([])
   const [allowedDivision, setAllowedDivision] = useState<'all' | 'Varonil / Mixto' | 'Femenil'>('all')
+  const [contractEndDate, setContractEndDate] = useState('')
+  const [dateError, setDateError] = useState('')
+
+  // Fechas límite: fecha de hoy y fecha mínima permitida (mañana) en formato YYYY-MM-DD
+  const today = new Date()
+  const todayYear = today.getFullYear()
+  const todayMonth = String(today.getMonth() + 1).padStart(2, '0')
+  const todayDay = String(today.getDate()).padStart(2, '0')
+  const todayStr = `${todayYear}-${todayMonth}-${todayDay}`
+
+  const tomorrow = new Date(today)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  const minYear = tomorrow.getFullYear()
+  const minMonth = String(tomorrow.getMonth() + 1).padStart(2, '0')
+  const minDay = String(tomorrow.getDate()).padStart(2, '0')
+  const minDateStr = `${minYear}-${minMonth}-${minDay}`
+
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value
+    setContractEndDate(val)
+    if (val) {
+      if (val <= todayStr) {
+        setDateError('La fecha del contrato debe ser posterior al día de hoy.')
+      } else {
+        setDateError('')
+      }
+    } else {
+      setDateError('')
+    }
+  }
 
   useEffect(() => {
     async function init() {
@@ -199,7 +229,21 @@ export function AltaContratoForm() {
     const formData = new FormData(form)
 
     const teamId = formData.get('item_meta[879]') as string
-    
+    const rawEndDate = formData.get('item_meta[882]') as string
+
+    // Validar que la fecha sea mayor al día de hoy
+    if (!rawEndDate) {
+      setDateError('Por favor selecciona la fecha de duración del contrato.')
+      alert('Por favor selecciona la fecha de duración del contrato.')
+      return
+    }
+
+    if (rawEndDate <= todayStr) {
+      setDateError('La fecha del contrato debe ser posterior al día de hoy.')
+      alert('La duración del contrato debe ser una fecha posterior al día de hoy. No se permiten fechas anteriores ni el día actual.')
+      return
+    }
+
     // Validar que no sea el líder del equipo
     const selectedTeam = teams.find(t => t.id === teamId)
     if (selectedTeam && selectedTeam.manager_id === user?.id) {
@@ -362,8 +406,23 @@ export function AltaContratoForm() {
               id="field_bgj19"
               name="item_meta[882]"
               required
-              className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              min={minDateStr}
+              value={contractEndDate}
+              onChange={handleDateChange}
+              className={cn(
+                "w-full rounded-md border bg-background px-4 py-3 text-white transition-colors focus:outline-none focus:ring-1",
+                dateError ? "border-red-500 focus:border-red-500 focus:ring-red-500" : "border-border focus:border-primary focus:ring-primary"
+              )}
             />
+            {dateError ? (
+              <p className="text-xs text-red-500 font-500 mt-1">
+                {dateError}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground mt-1">
+                Solo se permiten fechas futuras posteriores al día de hoy.
+              </p>
+            )}
           </div>
 
           {/* Roles en el Equipo */}
@@ -454,7 +513,13 @@ export function AltaContratoForm() {
       <div className="pt-8 text-center sm:text-left border-t border-border mt-8">
         <button
           type="submit"
-          className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden bg-primary px-8 py-5 font-display text-[15px] font-600 uppercase tracking-[0.18em] text-white transition-colors duration-300 clip-corner hover:bg-primary-dark sm:w-auto mt-4 cursor-pointer"
+          disabled={Boolean(dateError || (contractEndDate && contractEndDate <= todayStr))}
+          className={cn(
+            "group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden px-8 py-5 font-display text-[15px] font-600 uppercase tracking-[0.18em] text-white transition-colors duration-300 clip-corner sm:w-auto mt-4",
+            dateError || (contractEndDate && contractEndDate <= todayStr)
+              ? "bg-white/10 text-white/40 cursor-not-allowed opacity-60"
+              : "bg-primary hover:bg-primary-dark cursor-pointer"
+          )}
         >
           <span className="relative z-10 flex items-center gap-2">
             ACEPTAR ACUERDO Y ENVIAR AL MANAGER

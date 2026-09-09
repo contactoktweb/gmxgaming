@@ -7,7 +7,8 @@ import { Trophy, Shield, Gamepad2, Users, Medal, ExternalLink, Camera, Tv } from
 import { cn, formatRoleTitle, getPlayerSlug, getTeamSlug, slugify } from '@/lib/utils'
 import { cookies } from 'next/headers'
 
-export const revalidate = 60
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export default async function PlayerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: paramSlug } = await params

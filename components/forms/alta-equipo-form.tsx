@@ -7,7 +7,7 @@ import { PhoneInput } from '@/components/forms/phone-input'
 import { FileUpload } from '@/components/forms/file-upload'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
-import { cn } from '@/lib/utils'
+import { cn, formatNickname, formatPersonName } from '@/lib/utils'
 
 function FieldTooltip({ text }: { text: string }) {
   return (
@@ -42,6 +42,11 @@ export function AltaEquipoForm() {
 
   // Validation state
   const [teamName, setTeamName] = useState('')
+  
+  // Manager info state (Mayúsculas y sin caracteres especiales)
+  const [managerFirstName, setManagerFirstName] = useState('')
+  const [managerLastName, setManagerLastName] = useState('')
+  const [managerNickname, setManagerNickname] = useState('')
   
   // Files
   const [logoFile, setLogoFile] = useState<File | null>(null)
@@ -166,12 +171,15 @@ export function AltaEquipoForm() {
     
     const { error: teamError } = await supabase.from('teams').insert(payload)
 
+    const fullName = `${managerFirstName.trim()} ${managerLastName.trim()}`.trim().toUpperCase()
+    const cleanNick = managerNickname.trim().toUpperCase()
+
     // Also update the manager's profile with their Discord and WhatsApp if they provided it
     if (user?.id) {
       await supabase.from('profiles').update({
         discord_handle: formData.get('item_meta[627]'),
-        name: formData.get('item_meta[625][first]') + ' ' + formData.get('item_meta[625][last]'),
-        nickname: formData.get('item_meta[626]')
+        name: fullName || ((formData.get('item_meta[625][first]') || '') + ' ' + (formData.get('item_meta[625][last]') || '')).trim().toUpperCase(),
+        nickname: cleanNick || (formData.get('item_meta[626]') as string || '').trim().toUpperCase()
       }).eq('id', user.id)
     }
 
@@ -472,8 +480,12 @@ export function AltaEquipoForm() {
               name="item_meta[625][first]"
               autoComplete="given-name"
               required
-              className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              value={managerFirstName}
+              onChange={(e) => setManagerFirstName(formatPersonName(e.target.value))}
+              placeholder="EJ. JUAN CARLOS"
+              className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary uppercase"
             />
+            <p className="text-[11px] text-muted-foreground">Solo letras en mayúsculas, sin números ni caracteres especiales.</p>
           </div>
 
           <div className="space-y-2">
@@ -486,22 +498,30 @@ export function AltaEquipoForm() {
               name="item_meta[625][last]"
               autoComplete="family-name"
               required
-              className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              value={managerLastName}
+              onChange={(e) => setManagerLastName(formatPersonName(e.target.value))}
+              placeholder="EJ. PEREZ GOMEZ"
+              className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary uppercase"
             />
+            <p className="text-[11px] text-muted-foreground">Solo letras en mayúsculas, sin números ni caracteres especiales.</p>
           </div>
 
           <div className="space-y-2">
             <label htmlFor="field_xi2ck2" className="text-sm font-500 text-white">
               Nickname <span className="text-primary">*</span>
-              <FieldTooltip text="Seudónimo o nombre en el juego del Manager." />
+              <FieldTooltip text="Seudónimo o nombre en el juego del Manager. En mayúsculas y sin caracteres especiales." />
             </label>
             <input
               type="text"
               id="field_xi2ck2"
               name="item_meta[626]"
               required
-              className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              value={managerNickname}
+              onChange={(e) => setManagerNickname(formatNickname(e.target.value))}
+              placeholder="EJ. MORDON99"
+              className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary uppercase"
             />
+            <p className="text-[11px] text-muted-foreground">En mayúsculas, sin caracteres especiales.</p>
           </div>
 
           <div className="space-y-2">
