@@ -70,6 +70,7 @@ export function AdminTeams() {
   const [filterStatus, setFilterStatus] = useState<string>('all')
 
   const [editingLogo, setEditingLogo] = useState<string>('')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     async function fetchTeams() {
@@ -298,8 +299,9 @@ export function AdminTeams() {
     }
   }
 
-  // Unique regions
+  // Unique regions — sorted alphabetically
   const uniqueRegions = Array.from(new Set(teams.map(t => t.region).filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }))
 
   // Filter and Sort
   const filteredAndSortedTeams = (() => {
@@ -326,57 +328,111 @@ export function AdminTeams() {
     return result
   })()
 
+  const downloadTeamsCSV = (list: Team[], baseName: string) => {
+    const date = new Date()
+    const dateStr = `${date.getFullYear()}${String(date.getMonth()+1).padStart(2,'0')}${String(date.getDate()).padStart(2,'0')}`
+    const headers = ['Nombre', 'Estado', 'País / Región', 'Manager', 'Discord Manager', 'Jugadores Activos', 'Fecha Creación', 'Logo URL']
+    const csvContent = [
+      headers.join(','),
+      ...list.map(t => {
+        const rosterNames = t.roster.map(p => p.nickname || p.name).join(' | ')
+        return [
+          `"${(t.name || '').replace(/"/g, '""')}"`,
+          `"${t.status}"`,
+          `"${(t.region || '').replace(/"/g, '""')}"`,
+          `"${(t.captain || '').replace(/"/g, '""')}"`,
+          `"${(t.managerDiscord || '').replace(/"/g, '""')}"`,
+          `"${rosterNames.replace(/"/g, '""')}"`,
+          `"${t.foundation_date}"`,
+          `"${t.logo || ''}"`,
+        ].join(',')
+      })
+    ].join('\n')
+    const bom = '\uFEFF'
+    const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.setAttribute('download', `${baseName}_${dateStr}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const exportAllTeamsCSV = () => {
+    if (filteredAndSortedTeams.length === 0) return alert('No hay equipos para exportar con los filtros actuales.')
+    const suffix = filterStatus !== 'all' ? `_estado_${filterStatus}` :
+                   filterRegion !== 'all' ? `_pais_${filterRegion}` : '_todos'
+    downloadTeamsCSV(filteredAndSortedTeams, `equipos${suffix}`)
+  }
+
+  const exportSelectedTeamsCSV = () => {
+    const toExport = teams.filter(t => selectedIds.has(t.id))
+    if (toExport.length === 0) return alert('Selecciona al menos un equipo para exportar.')
+    downloadTeamsCSV(toExport, 'equipos_seleccionados')
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="rounded-xl border border-border bg-surface p-6 sm:p-8">
         
         {/* Header & Filters */}
-        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 mb-8">
-          <div className="flex items-center gap-3">
-            <h2 className="font-display text-2xl font-700 uppercase tracking-tight text-white">
+        <div className="flex flex-col gap-4 mb-8">
+
+          {/* Fila 1: Título + Exportar */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <h2 className="font-display text-2xl font-700 uppercase tracking-tight text-white shrink-0">
               Equipos
             </h2>
             <span className="rounded-full bg-primary/20 px-3 py-1 text-xs font-600 text-primary">
               {filteredAndSortedTeams.length} Total
             </span>
+            <GmxButton onClick={exportAllTeamsCSV} className="h-9 px-3 gap-2 text-xs" variant="secondary">
+              <Download className="w-3.5 h-3.5" />
+              Exportar Todo ({filteredAndSortedTeams.length})
+            </GmxButton>
+            {selectedIds.size > 0 && (
+              <GmxButton onClick={exportSelectedTeamsCSV} className="h-9 px-3 gap-2 text-xs" variant="secondary">
+                <Download className="w-3.5 h-3.5" />
+                Selección ({selectedIds.size})
+              </GmxButton>
+            )}
           </div>
 
-          <div className="flex flex-col sm:flex-row flex-wrap items-center gap-3 w-full xl:w-auto">
-            <input 
-              type="text" 
-              placeholder="Buscar por nombre de equipo..." 
+          {/* Fila 2: Búsqueda + Filtros */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <input
+              type="text"
+              placeholder="Buscar por nombre de equipo..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full sm:w-64 rounded-md border border-border bg-background px-4 py-2 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              className="w-full sm:w-60 rounded-md border border-border bg-background px-4 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
             />
-            
-            <div className="flex flex-wrap sm:flex-nowrap gap-3 w-full sm:w-auto">
-              <div className="relative flex-1 sm:flex-none">
-                <select 
-                  value={filterStatus} 
-                  onChange={e => setFilterStatus(e.target.value)}
-                  className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-2.5 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer font-500"
-                >
-                  <option value="all">Todos los Estados</option>
-                  <option value="active">Activos</option>
-                  <option value="pending">En Revisión</option>
-                  <option value="inactive">Inactivos</option>
-                  <option value="banned">Baneados</option>
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              </div>
 
-              <div className="relative flex-1 sm:flex-none">
-                <select 
-                  value={filterRegion} 
-                  onChange={e => setFilterRegion(e.target.value)}
-                  className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-2.5 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer font-500"
-                >
-                  <option value="all">Todos los Países</option>
-                  {uniqueRegions.map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              </div>
+            <div className="relative">
+              <select
+                value={filterStatus}
+                onChange={e => setFilterStatus(e.target.value)}
+                className="appearance-none rounded-lg border border-border bg-background px-4 py-2.5 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer font-500"
+              >
+                <option value="all">Todos los Estados</option>
+                <option value="active">Activos</option>
+                <option value="pending">En Revisión</option>
+                <option value="inactive">Inactivos</option>
+                <option value="banned">Baneados</option>
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            </div>
+
+            <div className="relative">
+              <select
+                value={filterRegion}
+                onChange={e => setFilterRegion(e.target.value)}
+                className="appearance-none rounded-lg border border-border bg-background px-4 py-2.5 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer font-500"
+              >
+                <option value="all">Todos los Países</option>
+                {uniqueRegions.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             </div>
           </div>
         </div>

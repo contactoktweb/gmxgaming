@@ -618,7 +618,6 @@ export function AdminPlayers() {
             </div>
           </div>
         </div>
-      </div>
         
         {loading ? (
           <div className="flex justify-center items-center py-12">
