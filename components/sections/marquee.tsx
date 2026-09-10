@@ -17,8 +17,8 @@ function Row({
     <div
       className={
         variant === 'red'
-          ? 'flex overflow-hidden bg-primary py-5 text-white'
-          : 'flex overflow-hidden border-y border-border bg-deep py-5 text-white'
+          ? 'flex overflow-hidden bg-primary py-3.5 sm:py-4 text-white'
+          : 'flex overflow-hidden border-y border-border bg-deep py-3.5 sm:py-4 text-white'
       }
     >
       <div

@@ -21,7 +21,7 @@ export function Cinematic() {
       <div className="absolute inset-0 -z-10 bg-deep/80" />
       <div className="absolute inset-0 -z-10 bg-gradient-to-r from-deep/90 via-transparent to-deep/90" />
 
-      <div className="mx-auto grid max-w-[1400px] grid-cols-1 gap-16 px-5 py-28 lg:grid-cols-2 lg:gap-24 lg:px-10 lg:py-40">
+      <div className="mx-auto grid max-w-[1400px] grid-cols-1 gap-10 px-5 py-14 lg:grid-cols-2 lg:gap-16 lg:px-10 lg:py-20">
         {/* Left block */}
         <div className="lg:border-r lg:border-border lg:pr-16">
           <Reveal direction="fade">

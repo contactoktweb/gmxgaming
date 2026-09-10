@@ -19,15 +19,15 @@ export function VideoExperience() {
   const y = useTransform(scrollYProgress, [0, 1], ['-10%', '10%'])
 
   return (
-    <section className="bg-background px-5 py-16 lg:px-10 lg:py-24">
-      <div ref={ref} className="relative mx-auto flex min-h-[520px] max-w-[1400px] items-center overflow-hidden clip-corner">
+    <section className="bg-background px-5 py-8 lg:px-10 lg:py-12">
+      <div ref={ref} className="relative mx-auto flex min-h-[380px] max-w-[1400px] items-center overflow-hidden clip-corner lg:min-h-[420px]">
         <motion.div style={{ y }} className="absolute inset-0 -z-20 h-[122%] -top-[11%]">
           <img src="/images/video-bg.png" alt="" className="h-full w-full object-cover" />
         </motion.div>
         <div className="absolute inset-0 -z-10 bg-deep/70" />
         <div className="absolute inset-0 -z-10 bg-gradient-to-t from-deep via-transparent to-deep/50" />
 
-        <div className="relative flex w-full flex-col items-center gap-10 px-6 py-20 text-center lg:flex-row lg:justify-between lg:text-left">
+        <div className="relative flex w-full flex-col items-center gap-10 px-6 py-12 text-center lg:flex-row lg:justify-between lg:px-12 lg:py-14 lg:text-left">
           <div className="max-w-xl">
             <Reveal direction="fade">
               <span className="font-display text-xs font-600 uppercase tracking-[0.3em] text-primary sm:text-sm">

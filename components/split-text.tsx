@@ -4,7 +4,7 @@ import { motion, type Variants } from 'motion/react'
 import { type ElementType } from 'react'
 
 type Props = {
-  text: string
+  text?: string
   as?: ElementType
   className?: string
   variant?: 'title' | 'subtitle'
@@ -21,7 +21,7 @@ type Props = {
  * Animates per-character with a short stagger when it enters ~70-85% of viewport.
  */
 export function SplitText({
-  text,
+  text = '',
   as: Tag = 'span',
   className,
   variant = 'title',
@@ -48,7 +48,7 @@ export function SplitText({
     },
   }
 
-  const rows = lines ?? [text]
+  const rows = lines ?? (text ? [text] : [])
 
   const MotionTag = motion(Tag as ElementType)
 

@@ -17,17 +17,17 @@ const containerVariants = {
 
 const fadeUpVariants = {
   hidden: { opacity: 0, y: 30 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.22, 1, 0.36, 1] } },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.22, 1, 0.36, 1] as const } },
 }
 
 const titleLineVariants = {
   hidden: { y: '110%' },
-  visible: { y: '0%', transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] } }
+  visible: { y: '0%', transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] as const } }
 }
 
 const titleCharVariants = {
   hidden: { opacity: 0, x: -10 },
-  visible: { opacity: 1, x: 0, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] } }
+  visible: { opacity: 1, x: 0, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] as const } }
 }
 
 export function Hero({ ready }: { ready: boolean }) {

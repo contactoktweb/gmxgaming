@@ -54,16 +54,16 @@ export function Partners() {
   }
 
   return (
-    <section className="border-y border-border bg-deep py-14 overflow-hidden relative" aria-label="Nuestros Sponsors y Aliados">
-      <div className="mx-auto mb-8 max-w-[1400px] px-5 lg:px-10 text-center">
+    <section className="border-y border-border bg-deep py-8 overflow-hidden relative lg:py-10" aria-label="Nuestros Sponsors y Aliados">
+      <div className="mx-auto mb-5 max-w-[1400px] px-5 lg:px-10 text-center">
         <h2 className="font-display text-[11px] font-600 uppercase tracking-[0.4em] text-faint">
           Partners · Patrocinadores · Ligas · Federaciones
         </h2>
       </div>
 
       <div className="relative flex overflow-hidden group w-full">
-        {/* Contenedor infinito que se desplaza exactamente el 50% de su ancho total */}
-        <div className="flex w-max animate-marquee-left group-hover:[animation-play-state:paused] [animation-duration:35s]">
+        {/* Contenedor infinito que se desplaza exactamente el 50% de su ancho total hacia la derecha */}
+        <div className="flex w-max animate-marquee-right group-hover:[animation-play-state:paused] [animation-duration:35s]">
           {/* Pista 1 */}
           <div className="flex shrink-0 items-center gap-12 sm:gap-16 pr-12 sm:pr-16">
             {trackItems.map((sponsor, i) => (

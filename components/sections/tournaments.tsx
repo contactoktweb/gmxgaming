@@ -57,9 +57,9 @@ export function Tournaments() {
   const itemsToDisplay = tournamentsList.length > 0 ? tournamentsList : DEFAULT_TOURNAMENTS
 
   return (
-    <section id="torneos" className="relative bg-surface py-24 lg:py-32">
+    <section id="torneos" className="relative bg-surface py-12 lg:py-16">
       <div className="mx-auto max-w-[1400px] px-5 lg:px-10">
-        <div className="mb-14 flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 lg:mb-10">
           <div>
             <Reveal direction="fade">
               <div className="mb-5 flex items-center gap-3">

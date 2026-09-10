@@ -17,7 +17,7 @@ export function About() {
   const y2 = useTransform(scrollYProgress, [0, 1], [-40, 80])
 
   return (
-    <section id="registro" ref={ref} className="relative overflow-hidden bg-background py-24 lg:py-32">
+    <section id="registro" ref={ref} className="relative overflow-hidden bg-background py-12 lg:py-16">
       {/* Giant background word */}
       <span className="pointer-events-none absolute -left-4 top-8 select-none font-display text-[16vw] font-700 uppercase leading-[0.8] text-white/[0.03] lg:text-[12vw]">
         GMX

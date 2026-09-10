@@ -10,6 +10,7 @@ export type Role = 'admin' | 'jugador' | 'user'
 export interface User {
   id: string
   name: string
+  nickname?: string
   email: string
   role: Role
   avatar?: string
@@ -93,6 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser({
             id: authUser.id,
             name: activeProfile?.name || googleName,
+            nickname: activeProfile?.nickname || activeProfile?.game_nickname || '',
             email: authUser.email || '',
             role: activeProfile?.role === 'admin' ? 'admin' : 'jugador',
             avatar: activeProfile?.avatar_url || activeProfile?.avatar || googleAvatar || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg',

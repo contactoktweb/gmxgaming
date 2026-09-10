@@ -79,9 +79,9 @@ export function Players() {
   if (!loading && players.length === 0) return null
 
   return (
-    <section className="relative bg-background py-24 lg:py-32">
+    <section className="relative bg-background py-12 lg:py-16">
       <div className="mx-auto max-w-[1400px] px-5 lg:px-10">
-        <div className="mb-14 flex flex-col items-start justify-between gap-6 lg:flex-row lg:items-end">
+        <div className="mb-8 flex flex-col items-start justify-between gap-6 lg:mb-10 lg:flex-row lg:items-end">
           <div>
             <Reveal direction="fade">
               <div className="mb-5 flex items-center gap-3">

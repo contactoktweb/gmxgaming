@@ -17,7 +17,7 @@ export function CtaPrimary() {
       <div className="absolute inset-0 -z-10 bg-deep/75" />
       <div className="absolute inset-0 -z-10 bg-gradient-to-r from-deep via-deep/60 to-transparent" />
 
-      <div className="mx-auto grid max-w-[1400px] grid-cols-1 items-center gap-10 px-5 py-24 lg:grid-cols-[1.3fr_1fr] lg:px-10 lg:py-32">
+      <div className="mx-auto grid max-w-[1400px] grid-cols-1 items-center gap-10 px-5 py-12 lg:grid-cols-[1.3fr_1fr] lg:px-10 lg:py-16">
         <div>
           <Reveal direction="fade">
             <span className="font-display text-xs font-600 uppercase tracking-[0.3em] text-primary sm:text-sm">

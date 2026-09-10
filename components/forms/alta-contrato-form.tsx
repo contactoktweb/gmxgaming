@@ -377,7 +377,7 @@ export function AltaContratoForm() {
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-surface/95 backdrop-blur-sm animate-in fade-in duration-300">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
           <p className="mt-4 font-display text-lg font-600 uppercase tracking-widest text-white">
-            ENVIANDO ACUERDO...
+            REGISTRANDO CONTRATO...
           </p>
         </div>
       )}

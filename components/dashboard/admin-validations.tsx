@@ -124,9 +124,24 @@ function getModificationDiffs(details: any): DiffField[] {
   if (details.team_id !== undefined || details.tag !== undefined) {
     checkField('name', 'original_name', 'Nombre del Equipo', 'text')
     checkField('tag', 'original_tag', 'Tag / Siglas del Equipo', 'text')
+    checkField('hashtag', 'original_hashtag', 'Hashtag del Equipo', 'text')
     checkField('country', 'original_country', 'País de Residencia / Sede', 'text')
     const origLogoKey = details.original_logo !== undefined ? 'original_logo' : 'original_logo_url'
     checkField('logo_url', origLogoKey, 'Logo del Equipo', 'image')
+    const origJerseyKey = details.original_jersey !== undefined ? 'original_jersey' : 'original_jersey_url'
+    checkField('jersey_url', origJerseyKey, 'Jersey del Equipo', 'image')
+    checkField('games', 'original_games', 'Juegos en los que participa', 'text')
+    checkField('social_ig', 'original_social_ig', 'Instagram', 'text')
+    checkField('social_tiktok', 'original_social_tiktok', 'TikTok', 'text')
+    checkField('social_yt', 'original_social_yt', 'YouTube', 'text')
+    checkField('social_fb', 'original_social_fb', 'Facebook', 'text')
+    checkField('social_twitch', 'original_social_twitch', 'Twitch', 'text')
+    checkField('social_kick', 'original_social_kick', 'Kick', 'text')
+    checkField('social_x', 'original_social_x', 'X (Twitter)', 'text')
+    checkField('manager_name', 'original_manager_name', 'Nombre del Manager', 'text')
+    checkField('manager_nickname', 'original_manager_nickname', 'Nickname del Manager', 'text')
+    checkField('manager_discord', 'original_manager_discord', 'Discord del Manager', 'text')
+    checkField('manager_phone', 'original_manager_phone', 'WhatsApp del Manager', 'text')
   }
 
   // 2. Campos de Modificación de Perfil de Usuario y Jugador Profesional
@@ -181,11 +196,14 @@ function getModificationDiffs(details: any): DiffField[] {
   return diffs
 }
 
+export type ValidationType = 'all' | 'jugador' | 'equipo' | 'modificacion' | 'baja_contrato' | string
+
 interface PendingRequest {
   id: string
   type: ValidationType
   target_name: string
   created_at: string
+  updated_at: string
   status: 'pending' | 'approved' | 'rejected' | string
   submitted_by?: string
   details?: any
@@ -289,6 +307,7 @@ export function AdminValidations() {
           type: v.type as any,
           target_name: v.target_name,
           created_at: v.created_at,
+          updated_at: v.updated_at || v.created_at,
           status: v.status,
           submitted_by: v.submitted_by,
           details: v.details || {}
@@ -308,6 +327,7 @@ export function AdminValidations() {
             type: 'modificacion',
             target_name: `${m.name || m.nickname || 'Usuario'} (Cambio de Perfil)`,
             created_at: m.created_at,
+            updated_at: m.updated_at || m.created_at,
             status: 'pending',
             submitted_by: m.name || 'Usuario',
             details: m
@@ -328,6 +348,7 @@ export function AdminValidations() {
             type: 'jugador',
             target_name: p.nickname || p.name || 'Jugador',
             created_at: p.created_at,
+            updated_at: p.updated_at || p.created_at,
             status: p.player_status,
             submitted_by: p.name,
             details: p
@@ -348,6 +369,7 @@ export function AdminValidations() {
             type: 'equipo',
             target_name: t.name,
             created_at: t.created_at,
+            updated_at: t.updated_at || t.created_at,
             status: t.status,
             submitted_by: t.manager_id,
             details: t
@@ -356,8 +378,12 @@ export function AdminValidations() {
       })
     }
 
-    // Ordenar por fecha descendente
-    formattedRequests.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    // Ordenar: primero por updated_at (última acción), luego por created_at
+    formattedRequests.sort((a, b) => {
+      const aTime = a.updated_at || a.created_at
+      const bTime = b.updated_at || b.created_at
+      return new Date(bTime).getTime() - new Date(aTime).getTime()
+    })
 
     setRequests(formattedRequests)
     setLoading(false)
@@ -510,12 +536,35 @@ export function AdminValidations() {
             // Modificación de Equipo
             if (isApproved) {
               const updates: any = {}
-              if (details.name) updates.name = details.name
-              if (details.tag) updates.tag = details.tag
-              if (details.country) updates.country = details.country
-              if (details.logo_url) updates.logo_url = details.logo_url
+              if (details.name !== undefined) updates.name = details.name
+              if (details.tag !== undefined) updates.tag = details.tag
+              if (details.hashtag !== undefined) updates.hashtag = details.hashtag
+              if (details.country !== undefined) updates.country = details.country
+              if (details.logo_url !== undefined) updates.logo_url = details.logo_url
+              if (details.jersey_url !== undefined) updates.jersey_url = details.jersey_url
+              if (details.games !== undefined) updates.games = details.games
+              if (details.social_ig !== undefined) updates.social_ig = details.social_ig
+              if (details.social_tiktok !== undefined) updates.social_tiktok = details.social_tiktok
+              if (details.social_yt !== undefined) updates.social_yt = details.social_yt
+              if (details.social_fb !== undefined) updates.social_fb = details.social_fb
+              if (details.social_twitch !== undefined) updates.social_twitch = details.social_twitch
+              if (details.social_kick !== undefined) updates.social_kick = details.social_kick
+              if (details.social_x !== undefined) updates.social_x = details.social_x
 
-              await supabase.from('teams').update(updates).eq('id', details.team_id)
+              if (Object.keys(updates).length > 0) {
+                await supabase.from('teams').update(updates).eq('id', details.team_id)
+              }
+
+              if (details.manager_id) {
+                const managerUpdates: any = {}
+                if (details.manager_name) managerUpdates.name = details.manager_name
+                if (details.manager_nickname) managerUpdates.nickname = details.manager_nickname
+                if (details.manager_discord) managerUpdates.discord_handle = details.manager_discord
+
+                if (Object.keys(managerUpdates).length > 0) {
+                  await supabase.from('profiles').update(managerUpdates).eq('id', details.manager_id)
+                }
+              }
 
               await supabase.from('validations').update({
                 status: 'approved',
@@ -645,12 +694,21 @@ export function AdminValidations() {
         }
       }
 
-      setRequests(prev => prev.map(req => {
-        if (req.id === confirmAction.id) {
-          return { ...req, status: newStatus }
-        }
-        return req
-      }))
+      // Move the actioned request to the top by giving it the latest timestamp
+      const actionTimestamp = new Date().toISOString()
+      setRequests(prev => {
+        const updated = prev.map(req =>
+          req.id === confirmAction.id
+            ? { ...req, status: newStatus, updated_at: actionTimestamp }
+            : req
+        )
+        // Sort: most recently updated first, then most recently created
+        return updated.sort((a, b) => {
+          const aTime = a.updated_at || a.created_at
+          const bTime = b.updated_at || b.created_at
+          return new Date(bTime).getTime() - new Date(aTime).getTime()
+        })
+      })
 
       if (isApproved) {
         toast.success('Solicitud aprobada correctamente')
@@ -685,9 +743,15 @@ export function AdminValidations() {
         const { error: err } = await supabase.from('teams').update(cleanDetails).eq('id', selectedRequest.id)
         error = err;
       } else if (selectedRequest.type === 'modificacion') {
-        const userId = selectedRequest.details?.user_id || selectedRequest.id
-        const { error: err } = await supabase.from('profiles').update({ ...cleanDetails, edit_requested: false }).eq('id', userId)
-        error = err;
+        const isTeamMod = Boolean(selectedRequest.details?.team_id)
+        if (isTeamMod) {
+          const { error: err } = await supabase.from('teams').update(cleanDetails).eq('id', selectedRequest.details.team_id)
+          error = err;
+        } else {
+          const userId = selectedRequest.details?.user_id || selectedRequest.id
+          const { error: err } = await supabase.from('profiles').update({ ...cleanDetails, edit_requested: false }).eq('id', userId)
+          error = err;
+        }
         await supabase.from('validations').update({ details: editingDetails }).eq('id', selectedRequest.id)
       }
         

@@ -34,20 +34,47 @@ export function PlayerContracts() {
         .eq('type', 'baja_contrato')
 
       const map: Record<string, any> = {}
+      const adminIds: string[] = []
       if (bajaValidations) {
         bajaValidations.forEach((v: any) => {
           if (v.details?.contract_id) {
             map[v.details.contract_id] = v
+            if (v.details?.admin_id) adminIds.push(v.details.admin_id)
           }
         })
       }
 
+      // Obtener el nickname del administrador desde profiles
+      const adminNickMap: Record<string, string> = {}
+      if (adminIds.length > 0) {
+        const { data: adminProfiles } = await supabase
+          .from('profiles')
+          .select('id, nickname, game_nickname, name')
+          .in('id', adminIds)
+        if (adminProfiles) {
+          adminProfiles.forEach((p: any) => {
+            adminNickMap[p.id] = p.nickname || p.game_nickname || p.name
+          })
+        }
+      }
+
       if (data) {
-        const enriched = data.map((c: any) => ({
-          ...c,
-          bajaJustification: map[c.id]?.details?.justification || null,
-          bajaAdmin: map[c.id]?.details?.admin_name || map[c.id]?.submitted_by || null
-        }))
+        const enriched = data.map((c: any) => {
+          const v = map[c.id]
+          const adminId = v?.details?.admin_id
+          const adminNick =
+            (adminId && adminNickMap[adminId]) ||
+            v?.details?.admin_nickname ||
+            v?.details?.admin_name ||
+            v?.submitted_by ||
+            null
+
+          return {
+            ...c,
+            bajaJustification: v?.details?.justification || null,
+            bajaAdmin: adminNick
+          }
+        })
         setContracts(enriched)
       }
       setLoading(false)

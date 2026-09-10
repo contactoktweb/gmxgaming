@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 
 export function WhatYouGet() {
   return (
-    <section className="relative overflow-hidden bg-surface py-24 lg:py-32">
+    <section className="relative overflow-hidden bg-surface py-12 lg:py-16">
       <span className="pointer-events-none absolute right-0 top-10 select-none font-display text-[18vw] font-700 uppercase leading-none text-white/[0.02]">
         2026
       </span>

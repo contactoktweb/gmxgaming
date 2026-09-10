@@ -79,21 +79,48 @@ export function PlayerTeams() {
           .eq('type', 'baja_contrato')
 
         const valMap: Record<string, any> = {}
+        const adminIds: string[] = []
         if (bajaValidations) {
           bajaValidations.forEach((v: any) => {
             if (v.details?.contract_id) {
               valMap[v.details.contract_id] = v
+              if (v.details?.admin_id) adminIds.push(v.details.admin_id)
             }
           })
         }
 
+        // Obtener nickname del admin desde profiles
+        const adminNickMap: Record<string, string> = {}
+        if (adminIds.length > 0) {
+          const { data: adminProfiles } = await supabase
+            .from('profiles')
+            .select('id, nickname, game_nickname, name')
+            .in('id', adminIds)
+          if (adminProfiles) {
+            adminProfiles.forEach((p: any) => {
+              adminNickMap[p.id] = p.nickname || p.game_nickname || p.name
+            })
+          }
+        }
+
         const past = data
           .filter(c => c.status === 'completado' || c.status === 'cancelado' || c.status === 'rejected')
-          .map(c => ({
-            ...c,
-            bajaJustification: valMap[c.id]?.details?.justification || null,
-            bajaAdmin: valMap[c.id]?.details?.admin_name || valMap[c.id]?.submitted_by || null
-          }))
+          .map(c => {
+            const v = valMap[c.id]
+            const adminId = v?.details?.admin_id
+            const adminNick =
+              (adminId && adminNickMap[adminId]) ||
+              v?.details?.admin_nickname ||
+              v?.details?.admin_name ||
+              v?.submitted_by ||
+              null
+
+            return {
+              ...c,
+              bajaJustification: v?.details?.justification || null,
+              bajaAdmin: adminNick
+            }
+          })
         setPastTeams(past)
       }
 

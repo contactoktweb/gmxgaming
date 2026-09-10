@@ -73,12 +73,12 @@ export function Media() {
   if (videos.length === 0) return <section ref={ref} className="hidden" />
 
   return (
-    <section ref={ref} className="relative overflow-hidden bg-background py-24 lg:py-32">
+    <section ref={ref} className="relative overflow-hidden bg-background py-12 lg:py-16">
       {/* Background decoration */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary/10 via-background to-background" />
 
       <div className="container relative z-10 mx-auto px-5 lg:px-10">
-        <div className="mb-16 flex flex-col items-center text-center">
+        <div className="mb-8 flex flex-col items-center text-center lg:mb-10">
           <Reveal>
             <div className="mb-4 flex items-center gap-3">
               <span className="h-px w-10 bg-primary" />

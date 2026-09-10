@@ -50,14 +50,14 @@ export function Casters() {
   if (!loading && casters.length === 0) return <section ref={ref} className="hidden" />
 
   return (
-    <section ref={ref} className="relative overflow-hidden bg-deep py-24 lg:py-32">
+    <section ref={ref} className="relative overflow-hidden bg-deep py-12 lg:py-16">
       {/* Giant background text */}
       <span className="pointer-events-none absolute -right-20 top-20 select-none font-display text-[15vw] font-700 uppercase leading-none text-white/[0.02]">
         TALENTO
       </span>
 
       <div className="container relative z-10 mx-auto px-5 lg:px-10">
-        <div className="mb-16 flex flex-col sm:flex-row sm:items-end justify-between gap-8">
+        <div className="mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-8 lg:mb-10">
           <div>
             <Reveal>
               <div className="mb-4 flex items-center gap-3">
@@ -78,7 +78,7 @@ export function Casters() {
           
           <Reveal direction="left" delay={0.2}>
             <a
-              href="https://wa.me/1234567890?text=Hola,%20me%20gustar%C3%ADa%20postularme%20como%20caster%20para%20GMX%20Gaming!"
+              href="https://wa.me/525567862008?text=Hola,%20me%20gustar%C3%ADa%20postularme%20como%20caster%20para%20GMX%20Gaming!"
               target="_blank"
               rel="noopener noreferrer"
               className="group flex items-center gap-4 border border-border bg-surface px-6 py-4 transition-colors hover:border-primary/50 clip-corner"

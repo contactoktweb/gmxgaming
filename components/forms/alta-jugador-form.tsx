@@ -203,6 +203,28 @@ function FormContent() {
       return
     }
 
+    // Validar formato de correo electrónico
+    const emailValue = (formData.get('item_meta[676]') as string || '').trim()
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailValue || !emailRegex.test(emailValue)) {
+      alert('Por favor ingresa un correo electrónico válido.')
+      setFormStatus('idle')
+      return
+    }
+
+    // Validar fecha de nacimiento (no puede ser en el futuro)
+    const birthDateValue = formData.get('item_meta[675]') as string
+    if (birthDateValue) {
+      const birthDate = new Date(birthDateValue)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      if (birthDate > today) {
+        alert('La fecha de nacimiento no puede ser una fecha futura.')
+        setFormStatus('idle')
+        return
+      }
+    }
+
     // Payload principal — campos garantizados que existen en la tabla profiles
     const corePayload: Record<string, any> = {
       name: fullName,
@@ -455,6 +477,7 @@ function FormContent() {
               id="field_7jhiv"
               name="item_meta[675]"
               required
+              max={new Date().toISOString().split('T')[0]}
               className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>

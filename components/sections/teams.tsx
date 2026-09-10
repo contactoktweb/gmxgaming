@@ -41,8 +41,8 @@ export function Teams() {
   if (loading || teams.length === 0) return null
 
   return (
-    <section id="equipos" className="relative overflow-hidden bg-background py-24 lg:py-32">
-      <div className="mx-auto mb-14 max-w-[1400px] px-5 lg:px-10">
+    <section id="equipos" className="relative overflow-hidden bg-background py-12 lg:py-16">
+      <div className="mx-auto mb-8 max-w-[1400px] px-5 lg:mb-10 lg:px-10">
         <Reveal direction="fade">
           <div className="mb-5 flex items-center gap-3">
             <span className="h-px w-10 bg-primary" />
@@ -80,7 +80,7 @@ export function Teams() {
       <div className="relative">
         <div 
           ref={scrollContainerRef}
-          className="flex gap-6 overflow-x-auto snap-x snap-mandatory scrollbar-hide px-5 lg:px-10 pb-10"
+          className="flex gap-6 overflow-x-auto snap-x snap-mandatory scrollbar-hide px-5 lg:px-10 pb-4"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           {teams.map((t) => (

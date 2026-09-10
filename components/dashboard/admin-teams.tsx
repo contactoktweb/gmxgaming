@@ -137,7 +137,7 @@ export function AdminTeams() {
               roles: c.roles,
               conclusionDate: c.conclusion_date,
               justification: terminationLog?.details?.justification || null,
-              adminName: terminationLog?.details?.admin_name || terminationLog?.submitted_by || null
+              adminName: terminationLog?.details?.admin_nickname || terminationLog?.details?.admin_name || terminationLog?.submitted_by || null
             }
           })
 
@@ -195,13 +195,15 @@ export function AdminTeams() {
 
       if (contractError) throw contractError
 
+      const adminNick = user?.nickname || user?.name || user?.email || 'Administrador'
+
       // 2. Registrar en validations con la justificación obligatoria
       const { error: validationError } = await supabase
         .from('validations')
         .insert({
           type: 'baja_contrato',
           target_name: `Baja Administrativa: ${terminatingContract.playerName} (${terminatingContract.teamName})`,
-          submitted_by: user?.name || user?.email || 'Administrador',
+          submitted_by: adminNick,
           status: 'approved',
           details: {
             contract_id: terminatingContract.contractId,
@@ -211,7 +213,8 @@ export function AdminTeams() {
             team_name: terminatingContract.teamName,
             justification: trimmed,
             admin_id: user?.id,
-            admin_name: user?.name || user?.email || 'Administrador',
+            admin_nickname: adminNick,
+            admin_name: adminNick,
             conclusion_date: new Date().toISOString()
           }
         })

@@ -15,11 +15,11 @@ export const NAV_LINKS = [
 
 
 export const SOCIALS = [
-  { label: 'Twitch', href: 'https://twitch.tv/', short: 'TW' },
-  { label: 'YouTube', href: 'https://youtube.com/', short: 'YT' },
-  { label: 'Instagram', href: 'https://instagram.com/', short: 'IG' },
-  { label: 'Discord', href: 'https://discord.com/', short: 'DC' },
-  { label: 'TikTok', href: 'https://tiktok.com/', short: 'TK' },
+  { label: 'Discord', href: 'https://discord.gg/5vGVf2wBuD', short: 'DC' },
+  { label: 'YouTube', href: 'https://www.youtube.com/@mordongmx', short: 'YT' },
+  { label: 'Instagram', href: 'https://www.instagram.com/gmxgamingoficial/', short: 'IG' },
+  { label: 'TikTok', href: 'https://www.tiktok.com/@mordongmx', short: 'TK' },
+  { label: 'Twitch', href: 'https://www.twitch.tv/mordongmx', short: 'TW' },
 ]
 
 export const BENEFITS = [

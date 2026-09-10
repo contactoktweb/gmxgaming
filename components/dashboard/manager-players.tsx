@@ -102,10 +102,37 @@ export function ManagerPlayers() {
         .eq('type', 'baja_contrato')
 
       if (bajaValidations) {
+        const adminIds: string[] = []
+        bajaValidations.forEach((v: any) => {
+          if (v.details?.admin_id) adminIds.push(v.details.admin_id)
+        })
+
+        const adminNickMap: Record<string, string> = {}
+        if (adminIds.length > 0) {
+          const { data: adminProfiles } = await supabase
+            .from('profiles')
+            .select('id, nickname, game_nickname, name')
+            .in('id', adminIds)
+          if (adminProfiles) {
+            adminProfiles.forEach((p: any) => {
+              adminNickMap[p.id] = p.nickname || p.game_nickname || p.name
+            })
+          }
+        }
+
         const map: Record<string, any> = {}
         bajaValidations.forEach((v: any) => {
           if (v.details?.contract_id) {
-            map[v.details.contract_id] = v
+            const adminId = v.details.admin_id
+            const resolvedNick = (adminId && adminNickMap[adminId]) || v.details.admin_nickname || v.details.admin_name || v.submitted_by
+            map[v.details.contract_id] = {
+              ...v,
+              details: {
+                ...v.details,
+                admin_name: resolvedNick,
+                admin_nickname: resolvedNick
+              }
+            }
           }
         })
         setBajaValidationsMap(map)
@@ -278,12 +305,13 @@ export function ManagerPlayers() {
       if (error) throw error
 
       if (trimmed) {
+        const senderNick = user?.nickname || user?.name || user?.email || 'Manager'
         await supabase
           .from('validations')
           .insert({
             type: 'baja_contrato',
             target_name: `Solicitud de Baja: ${playerName} (${teamName})`,
-            submitted_by: user?.name || user?.email || 'Manager',
+            submitted_by: senderNick,
             status: 'pending',
             details: {
               contract_id: contractId,
@@ -293,7 +321,7 @@ export function ManagerPlayers() {
               team_name: teamName,
               justification: trimmed,
               manager_id: user?.id,
-              manager_name: user?.name || user?.email || 'Manager',
+              manager_name: senderNick,
               request_date: new Date().toISOString()
             }
           })
@@ -441,8 +469,8 @@ export function ManagerPlayers() {
                   {currentTeam.name}
                 </h2>
                 {currentTeam.tag && (
-                  <span className="px-2.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-xs font-700">
-                    {currentTeam.tag}
+                  <span className="px-2.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-xs font-700 uppercase tracking-wider">
+                    {currentTeam.tag.toUpperCase()}
                   </span>
                 )}
               </div>
@@ -875,7 +903,9 @@ export function ManagerPlayers() {
                     <div className="rounded bg-amber-500/10 border border-amber-500/20 p-2.5 text-xs text-amber-200">
                       <div className="flex items-center justify-between font-semibold text-[11px] uppercase tracking-wider text-amber-400 mb-1">
                         <span>Motivo de Baja Administrativa</span>
-                        {bajaLog.details.admin_name && <span>Por: {bajaLog.details.admin_name}</span>}
+                        {(bajaLog.details.admin_nickname || bajaLog.details.admin_name || bajaLog.submitted_by) && (
+                          <span>Por: {bajaLog.details.admin_nickname || bajaLog.details.admin_name || bajaLog.submitted_by}</span>
+                        )}
                       </div>
                       <p className="italic">"{bajaLog.details.justification}"</p>
                     </div>
