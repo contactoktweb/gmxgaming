@@ -139,6 +139,31 @@ export function formatLocation(rawLocation?: string | null): string {
 }
 
 /**
+ * Extrae el nombre limpio del país desde un campo de aeropuerto o ubicación (ej: "MÉXICO - CIUDAD..." -> "México").
+ * Si no hay valor o es N/A, retorna cadena vacía "".
+ */
+export function extractCountry(rawLocation?: string | null): string {
+  if (!rawLocation) return ''
+  const trimmed = rawLocation.trim()
+  if (!trimmed || trimmed.toUpperCase() === 'N/A') return ''
+
+  let name = trimmed
+  if (trimmed.includes(' - ')) {
+    const parts = trimmed.split(' - ').map(p => p.trim())
+    if (parts[0]) name = parts[0]
+  } else if (trimmed.length > 25) {
+    const firstPart = trimmed.split(/[-–,]/)[0].trim()
+    if (firstPart) name = firstPart
+  }
+
+  return name
+    .toLowerCase()
+    .split(/\s+/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
+/**
  * Convierte un texto a formato slug seguro para URLs y SEO.
  * Ej: "GMX ESPORTS" -> "gmx-esports", "José Hernández" -> "jose-hernandez"
  */

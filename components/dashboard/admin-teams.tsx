@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { ShieldCheck, Users, MapPin, ExternalLink, Eye, Trash2, X, AlertCircle, Check, ImageIcon, FileText, Download, Save, Upload, ZoomIn, ChevronDown, UserX } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
-import { cn, formatLocation, formatRoleTitle } from '@/lib/utils'
+import { cn, formatLocation, extractCountry, formatRoleTitle } from '@/lib/utils'
 import { GmxButton } from '@/components/gmx-button'
 import { toast } from 'sonner'
 
@@ -91,21 +91,26 @@ export function AdminTeams() {
         })
       }
 
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('teams')
         .select(`
           *,
-          manager:profiles!teams_manager_id_fkey(name, discord_handle),
+          manager:profiles!teams_manager_id_fkey(name, nickname, discord_handle),
           contracts(
             id,
             player_id,
             status,
             roles,
             conclusion_date,
-            profiles!contracts_player_id_fkey(id, name, nickname, discord_handle, country)
+            profiles!contracts_player_id_fkey(id, name, nickname, discord_handle, closest_airport)
           )
         `)
         .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Error al cargar equipos:', error)
+        toast.error('Error al cargar equipos: ' + error.message)
+      }
       
       if (data) {
         const formattedTeams = data.map((t: any) => {
@@ -118,7 +123,7 @@ export function AdminTeams() {
             playerId: c.player_id,
             name: c.profiles?.name || 'N/A',
             nickname: c.profiles?.nickname || c.profiles?.name || 'N/A',
-            country: c.profiles?.country || 'N/A',
+            country: extractCountry(c.profiles?.closest_airport) || 'N/A',
             discord: c.profiles?.discord_handle || 'N/A',
             status: c.status,
             roles: c.roles
@@ -153,7 +158,7 @@ export function AdminTeams() {
           return {
             id: t.id,
             name: t.name,
-            captain: t.manager?.name || 'Sin Manager',
+            captain: t.manager?.nickname || t.manager?.name || 'Sin Manager',
             managerDiscord: t.manager?.discord_handle || 'Sin Discord',
             region: t.country || 'Sin Región',
             logo: t.logo_url || '',

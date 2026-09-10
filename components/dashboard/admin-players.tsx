@@ -1,12 +1,12 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { User, Mail, Gamepad2, Shield, Eye, X, Phone, Calendar, Filter, Ban, CheckCircle2, Edit, Download, Save, ZoomIn, Star, ChevronDown, UserX, AlertCircle, FileText } from 'lucide-react'
+import { User, Mail, Gamepad2, Shield, Eye, X, Phone, Calendar, Filter, Ban, CheckCircle2, Edit, Download, Save, ZoomIn, Star, ChevronDown, UserX, AlertCircle, FileText, Globe } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
 import { GmxButton } from '@/components/gmx-button'
 import { toast } from 'sonner'
-import { cn, formatNickname, formatPersonName, formatRoleTitle } from '@/lib/utils'
+import { cn, formatNickname, formatPersonName, formatRoleTitle, extractCountry } from '@/lib/utils'
 
 const FIELD_LABELS: Record<string, string> = {
   name: 'Nombre Completo',
@@ -140,6 +140,7 @@ export function AdminPlayers() {
         .from('profiles')
         .select(`
           *,
+          player_game_info(game, game_id, server, game_nickname, country_account),
           contracts(
             id,
             team_id,
@@ -231,6 +232,8 @@ export function AdminPlayers() {
               }
             })
 
+          const playerCountry = p.country || (p.player_game_info && p.player_game_info[0]?.country_account) || extractCountry(p.closest_airport) || ''
+
           return {
             id: p.id,
             name: p.name,
@@ -240,10 +243,13 @@ export function AdminPlayers() {
             status: p.player_status || 'inactive',
             avatar: p.avatar_url,
             discord: p.discord_handle,
-            country: p.country,
+            country: playerCountry,
             created_at: p.created_at,
             is_featured: p.is_featured || false,
-            rawDetails: p,
+            rawDetails: {
+              ...p,
+              country: playerCountry
+            },
             activeContract,
             pastContracts
           }
@@ -303,13 +309,35 @@ export function AdminPlayers() {
     if (cleanDetails.nickname) cleanDetails.nickname = formatNickname(cleanDetails.nickname).trim()
     if (cleanDetails.game_nickname) cleanDetails.game_nickname = formatNickname(cleanDetails.game_nickname).trim()
 
+    // Si se actualizó el país, guardarlo en closest_airport que es la columna soportada por profiles
+    if (cleanDetails.country !== undefined) {
+      cleanDetails.closest_airport = cleanDetails.country
+    }
+    // Remover campos que no son columnas directas de profiles para evitar error 42703
+    delete cleanDetails.country
+    delete cleanDetails.contracts
+    delete cleanDetails.player_game_info
+    delete cleanDetails.id
+    delete cleanDetails.created_at
+    delete cleanDetails.email
+    delete cleanDetails.activeContract
+    delete cleanDetails.pastContracts
+
     const { error } = await supabase.from('profiles').update(cleanDetails).eq('id', selectedPlayer.id)
     if (!error) {
-      alert('Datos del jugador actualizados correctamente.')
-      setPlayers(prev => prev.map(p => p.id === selectedPlayer.id ? { ...p, rawDetails: { ...p.rawDetails, ...cleanDetails }, name: cleanDetails.name, discord: cleanDetails.discord_handle } : p))
+      toast.success('Datos del jugador actualizados correctamente.')
+      const updatedCountry = editingDetails.country || ''
+      setPlayers(prev => prev.map(p => p.id === selectedPlayer.id ? { 
+        ...p, 
+        country: updatedCountry,
+        rawDetails: { ...p.rawDetails, ...editingDetails, country: updatedCountry }, 
+        name: cleanDetails.name || p.name, 
+        discord: cleanDetails.discord_handle || p.discord 
+      } : p))
       setSelectedPlayer(null)
     } else {
-      alert('Error guardando los datos.')
+      console.error('Error saving player:', error)
+      toast.error('Error guardando los datos: ' + error.message)
     }
   }
 
@@ -509,7 +537,11 @@ export function AdminPlayers() {
         if (p.team !== filterTeam) return false
       }
       if (filterStatus !== 'all' && p.status !== filterStatus) return false
-      if (filterCountry !== 'all' && p.country !== filterCountry) return false
+      if (filterCountry === 'none') {
+        if (p.country) return false
+      } else if (filterCountry !== 'all') {
+        if (p.country !== filterCountry) return false
+      }
       if (searchQuery) {
         const q = searchQuery.toLowerCase()
         return (
@@ -517,7 +549,8 @@ export function AdminPlayers() {
           p.email.toLowerCase().includes(q) ||
           (p.discord && p.discord.toLowerCase().includes(q)) ||
           (p.rawDetails?.nickname && p.rawDetails.nickname.toLowerCase().includes(q)) ||
-          (p.team && p.team.toLowerCase().includes(q))
+          (p.team && p.team.toLowerCase().includes(q)) ||
+          (p.country && p.country.toLowerCase().includes(q))
         )
       }
       return true
@@ -612,6 +645,7 @@ export function AdminPlayers() {
                 className="appearance-none rounded-lg border border-border bg-background px-4 py-2.5 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer font-500"
               >
                 <option value="all">Todos los Países</option>
+                <option value="none">Sin País Asignado</option>
                 {uniqueCountries.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
               <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -682,6 +716,10 @@ export function AdminPlayers() {
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Calendar className="h-3.5 w-3.5 text-primary" />
                       <span className="truncate">{player.contractTimeLeft}</span>
+                    </div>
+                    <div className="col-span-2 flex items-center gap-2 text-xs text-muted-foreground">
+                      <Globe className="h-3.5 w-3.5 text-primary" />
+                      <span className="truncate">{player.country || 'Sin país asignado'}</span>
                     </div>
                   </div>
                   
