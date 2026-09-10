@@ -157,6 +157,7 @@ export function AltaContratoForm() {
           const category = teamCategoryMap.get(t.id) || (t.name.toLowerCase().includes('fem') ? 'Femenil' : 'Varonil / Mixto')
           return { ...t, category }
         })
+        .sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }))
 
       // 4. Obtener únicamente contratos activos o en proceso (excluye completados, cancelados y rechazados)
       const { data: contracts } = await supabase
@@ -194,7 +195,7 @@ export function AltaContratoForm() {
 
         // Solo permitir equipos Varonil / Mixto
         setAllowedDivision('Varonil / Mixto')
-        setTeams(parsedTeams.filter(t => t.category === 'Varonil / Mixto'))
+        setTeams([...parsedTeams.filter(t => t.category === 'Varonil / Mixto')].sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })))
         setInfoNotice('Regla de contratos: Como jugador varonil, tienes permitido contar con 1 contrato activo en división Varonil / Mixto.')
       } else {
         // Mujer: Hasta 2 activos (exactamente 1 varonil/mixto y 1 femenil)
@@ -207,15 +208,15 @@ export function AltaContratoForm() {
 
         if (hasVaronil) {
           setAllowedDivision('Femenil')
-          setTeams(parsedTeams.filter(t => t.category === 'Femenil'))
+          setTeams([...parsedTeams.filter(t => t.category === 'Femenil')].sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })))
           setInfoNotice('Cuentas con 1 contrato activo en división Varonil / Mixto. Tu cupo disponible restante es exclusivamente para 1 equipo de división Femenil.')
         } else if (hasFemenil) {
           setAllowedDivision('Varonil / Mixto')
-          setTeams(parsedTeams.filter(t => t.category === 'Varonil / Mixto'))
+          setTeams([...parsedTeams.filter(t => t.category === 'Varonil / Mixto')].sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })))
           setInfoNotice('Cuentas con 1 contrato activo en división Femenil. Tu cupo disponible restante es exclusivamente para 1 equipo de división Varonil / Mixto.')
         } else {
           setAllowedDivision('all')
-          setTeams(parsedTeams)
+          setTeams([...parsedTeams].sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })))
           setInfoNotice('Regla para jugadoras: Puedes tener hasta 2 contratos activos simultáneos (exclusivamente 1 en división Femenil y 1 en división Varonil / Mixto).')
         }
       }
@@ -274,15 +275,28 @@ export function AltaContratoForm() {
       return
     }
 
-    // Validar que no sea el líder del equipo
-    const selectedTeam = teams.find(t => t.id === teamId)
-    if (selectedTeam && selectedTeam.manager_id === user?.id) {
+    // Verificar directamente en BD que el equipo seleccionado existe y no pertenece al usuario
+    const { data: teamData, error: teamFetchError } = await supabase
+      .from('teams')
+      .select('id, name, manager_id, status')
+      .eq('id', teamId)
+      .single()
+
+    if (teamFetchError || !teamData) {
       setFormStatus('idle')
-      alert('No puedes solicitar un contrato hacia tu propio equipo siendo el líder.')
+      alert('El equipo seleccionado no existe o no está disponible.')
       return
     }
 
-    // Add the specific lane role if they selected player
+    if (teamData.manager_id === user?.id) {
+      setFormStatus('idle')
+      alert('No puedes solicitar un contrato con tu propio equipo. Como Manager, ya formas parte de él.')
+      return
+    }
+
+    const selectedTeam = teams.find(t => t.id === teamId)
+
+    // Construir roles a guardar
     const rolesToSave = [...selectedRoles]
     const linea = formData.get('item_meta_linea')
     if (selectedRoles.includes('JUGADOR(A)') && linea) {
