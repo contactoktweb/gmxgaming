@@ -31,7 +31,7 @@ const DEFAULT_COUNTRIES = [
 ]
 
 function FormContent() {
-  const [formStatus, setFormStatus] = useState<'idle' | 'loading' | 'success' | 'already_registered'>('idle')
+  const [formStatus, setFormStatus] = useState<'idle' | 'loading' | 'success' | 'already_registered' | 'pending_review'>('idle')
   const searchParams = useSearchParams()
   const defaultEmail = searchParams.get('email') || ''
   const { user } = useAuth()
@@ -58,14 +58,25 @@ function FormContent() {
     async function init() {
       if (!user) return
 
-      // Check if already registered
+      // Verificar estado del jugador con más detalle
       const { data: profile } = await supabase.from('profiles')
-        .select('is_player')
+        .select('is_player, player_status')
         .eq('id', user.id)
         .single()
 
-      if (profile && profile.is_player) {
-        setFormStatus('already_registered')
+      if (profile) {
+        if (profile.is_player && (profile.player_status === 'active' || profile.player_status === 'approved')) {
+          // Jugador activo y aprobado: no puede volver a registrarse
+          setFormStatus('already_registered')
+          setLoadingConfig(false)
+          return
+        } else if (profile.is_player && profile.player_status === 'pending') {
+          // Solicitud en revisión: bloquear sin permitir nuevo envío
+          setFormStatus('pending_review')
+          setLoadingConfig(false)
+          return
+        }
+        // Si fue rechazado o nunca registrado: permitir registrarse
       }
 
       const { data: settings } = await supabase.from('app_settings').select('*')
@@ -298,15 +309,83 @@ function FormContent() {
       const { error: gErr } = await supabase.from('player_game_info').insert(gamePayload)
       if (gErr) {
         console.warn('Error al guardar info de juego (no bloquea el registro):', gErr)
-        // No bloqueamos — el perfil ya se actualizó
       }
     }
-    
+
+    // Registrar en tabla validations para que aparezca en el panel de aprobaciones del admin
+    try {
+      // Verificar si ya existe un registro previo en validations para este jugador
+      const { data: existingVal } = await supabase
+        .from('validations')
+        .select('id')
+        .eq('type', 'jugador')
+        .filter('details->>user_id', 'eq', user?.id)
+        .limit(1)
+
+      const validationDetails = {
+        user_id: user?.id,
+        name: fullName,
+        nickname: cleanNick,
+        email: emailValue,
+        birth_date: birthDateValue || null,
+        gender: (formData.get('item_meta[783]') as string) || null,
+        country: (formData.get('item_meta[677]') as string) || null,
+        discord: (formData.get('item_meta[684]') as string) || null,
+        phone: (formData.get('item_meta[685]') as string) || null,
+        avatar_url: urlFoto,
+        id_photo_url: urlIdentidad,
+        passport_photo_url: urlPasaporte || null,
+        game: (formData.get('selected_game') as string) || selectedGame || null,
+        game_id: (formData.get('item_meta[697]') as string) || null,
+        ...socialLinks,
+      }
+
+      if (existingVal && existingVal.length > 0) {
+        // Actualizar el registro existente
+        await supabase.from('validations').update({
+          status: 'pending',
+          target_name: cleanNick,
+          submitted_by: fullName,
+          details: validationDetails,
+        }).eq('id', existingVal[0].id)
+      } else {
+        // Crear un registro nuevo
+        await supabase.from('validations').insert({
+          type: 'jugador',
+          target_name: cleanNick,
+          submitted_by: fullName,
+          status: 'pending',
+          details: validationDetails,
+        })
+      }
+    } catch (valErr) {
+      console.warn('Advertencia al registrar en validations (no bloquea el alta):', valErr)
+    }
+
     setFormStatus('success')
   }
 
   if (loadingConfig && formStatus !== 'already_registered') {
     return <div className="h-96 w-full animate-pulse rounded-xl border border-border bg-surface" />
+  }
+
+  if (formStatus === 'pending_review') {
+    return (
+      <div className="mx-auto w-full max-w-2xl rounded-xl border border-border bg-surface p-12 text-center shadow-2xl">
+        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-blue-500/10">
+          <Loader2 className="h-10 w-10 text-blue-400 animate-spin" />
+        </div>
+        <h2 className="font-display text-3xl font-700 uppercase tracking-tight text-white mb-4">
+          SOLICITUD EN REVISIÓN
+        </h2>
+        <p className="text-muted-foreground mb-8 leading-relaxed">
+          Tu solicitud de alta como Jugador Profesional ya fue enviada y se encuentra en proceso de revisión por el equipo de GMX Gaming. Te notificaremos por Discord o correo electrónico cuando sea procesada.
+        </p>
+        <GmxButton href="/micuenta" className="px-8">
+          IR A MI CUENTA
+        </GmxButton>
+      </div>
+    )
   }
 
   if (formStatus === 'already_registered') {

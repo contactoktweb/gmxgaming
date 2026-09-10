@@ -412,7 +412,13 @@ export function AdminValidations() {
       
       const requestToUpdate = requests.find(req => req.id === confirmAction.id)
       if (requestToUpdate?.type === 'jugador') {
-        await supabase.from('profiles').update({ is_player: false, player_status: 'none' }).eq('id', confirmAction.id)
+        // Usar el user_id real del jugador desde los detalles, no el ID del registro en validations
+        const playerUserId = requestToUpdate.details?.user_id || requestToUpdate.details?.id
+        if (playerUserId) {
+          await supabase.from('profiles').update({ is_player: false, player_status: 'none' }).eq('id', playerUserId)
+        }
+        // Eliminar también el registro de validations si existe
+        await supabase.from('validations').delete().eq('id', confirmAction.id)
       } else if (requestToUpdate?.type === 'equipo') {
         await supabase.from('teams').delete().eq('id', confirmAction.id)
       } else if (requestToUpdate?.type === 'modificacion') {
@@ -450,7 +456,20 @@ export function AdminValidations() {
       if (requestToUpdate) {
         if (requestToUpdate.type === 'jugador') {
           const targetUserId = requestToUpdate.details?.user_id || requestToUpdate.details?.id || confirmAction.id
-          await supabase.from('profiles').update({ player_status: newStatus }).eq('id', targetUserId)
+          
+          if (isApproved) {
+            // Aprobación: activar el jugador
+            await supabase.from('profiles').update({
+              is_player: true,
+              player_status: 'active'
+            }).eq('id', targetUserId)
+          } else {
+            // Rechazo: desactivar el jugador completamente y registrar razón
+            await supabase.from('profiles').update({
+              is_player: false,
+              player_status: 'rejected'
+            }).eq('id', targetUserId)
+          }
           
           // Actualizar en tabla validations si existe el registro con este ID
           const { data: valExists } = await supabase.from('validations').select('id').eq('id', confirmAction.id).limit(1)

@@ -419,50 +419,106 @@ export function AdminPlayers() {
   const exportToCSV = () => {
     const toExport = players.filter(p => selectedIds.has(p.id))
     if (toExport.length === 0) return alert('Selecciona al menos un jugador para exportar.')
+    downloadPlayersCSV(toExport, 'jugadores_seleccionados')
+  }
 
-    const headers = ['Nombre', 'Nickname', 'Discord', 'Email', 'Pais', 'Estado', 'Equipo', 'ID Pasaporte', 'Link Pasaporte', 'Link ID']
+  const exportAllToCSV = () => {
+    const toExport = filteredAndSortedPlayers
+    if (toExport.length === 0) return alert('No hay jugadores para exportar con los filtros actuales.')
+    const suffix = filterTeam !== 'all' ? `_equipo_${filterTeam}` :
+                   filterStatus !== 'all' ? `_estado_${filterStatus}` :
+                   filterCountry !== 'all' ? `_pais_${filterCountry}` : '_todos'
+    downloadPlayersCSV(toExport, `jugadores${suffix}`)
+  }
+
+  const downloadPlayersCSV = (list: Player[], baseName: string) => {
+    const date = new Date()
+    const dateStr = `${date.getFullYear()}${String(date.getMonth()+1).padStart(2,'0')}${String(date.getDate()).padStart(2,'0')}`
+    const headers = [
+      'Nombre',
+      'Nickname',
+      'Discord',
+      'Email',
+      'Pais',
+      'Estado',
+      'Equipo',
+      'Contrato Vence',
+      'Telefono',
+      'Fecha Nacimiento',
+      'Genero',
+      'Foto de Perfil (URL)',
+      'Documento Identidad (URL)',
+      'Pasaporte (URL)',
+      'Num. Pasaporte / Documento'
+    ]
     const csvContent = [
       headers.join(','),
-      ...toExport.map(p => {
-        const d = p.rawDetails
+      ...list.map(p => {
+        const d = p.rawDetails || {}
+        // Email: evitar que salga el placeholder 'Sin correo'
+        const emailVal = (p.email && p.email !== 'Sin correo') ? p.email : (d.email || '')
+        // País: usar el campo directo del jugador, fallback a rawDetails
+        const countryVal = p.country || d.country || ''
+        // Avatar/foto del jugador — campo directo mapeado
+        const avatarVal = p.avatar || d.avatar_url || ''
         return [
-          `"${p.name}"`,
-          `"${d.nickname || ''}"`,
-          `"${p.discord || ''}"`,
-          `"${p.email}"`,
-          `"${p.country || ''}"`,
-          `"${p.status}"`,
-          `"${p.team}"`,
-          `"${d.passport_number || ''}"`,
-          `"${d.passport_photo_url || ''}"`,
-          `"${d.id_photo_url || ''}"`
+          `"${(p.name || '').replace(/"/g, '""')}"`,
+          `"${(d.nickname || '').replace(/"/g, '""')}"`,
+          `"${(p.discord || '').replace(/"/g, '""')}"`,
+          `"${emailVal.replace(/"/g, '""')}"`,
+          `"${countryVal.replace(/"/g, '""')}"`,
+          `"${(p.status || '').replace(/"/g, '""')}"`,
+          `"${(p.team || '').replace(/"/g, '""')}"`,
+          `"${(p.contractTimeLeft || '').replace(/"/g, '""')}"`,
+          `"${(d.phone || '').replace(/"/g, '""')}"`,
+          `"${(d.birth_date || '').replace(/"/g, '""')}"`,
+          `"${(d.gender || '').replace(/"/g, '""')}"`,
+          `"${avatarVal}"`,
+          `"${(d.id_photo_url || '')}"`,
+          `"${(d.passport_photo_url || '')}"`,
+          `"${(d.passport_number || '').replace(/"/g, '""')}"`
         ].join(',')
       })
     ].join('\n')
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const bom = '\uFEFF'
+    const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' })
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
-    link.setAttribute('download', 'jugadores_export.csv')
+    link.setAttribute('download', `${baseName}_${dateStr}.csv`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
   }
 
-  // Unique values for filters
-  const uniqueTeams = useMemo(() => Array.from(new Set(players.map(p => p.team).filter(Boolean))), [players])
-  const uniqueCountries = useMemo(() => Array.from(new Set(players.map(p => p.country).filter(Boolean))), [players])
+  // Unique values for filters — exclude 'Ninguno' from teams (handled separately)
+  const uniqueTeams = useMemo(() =>
+    Array.from(new Set(players.map(p => p.team).filter(t => Boolean(t) && t !== 'Ninguno')))
+      .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }))
+  , [players])
+
+  const uniqueCountries = useMemo(() =>
+    Array.from(new Set(players.map(p => p.country).filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }))
+  , [players])
 
   const filteredAndSortedPlayers = useMemo(() => {
     let result = players.filter(p => {
-      if (filterTeam !== 'all' && p.team !== filterTeam) return false
+      if (filterTeam === 'none') {
+        if (p.team !== 'Ninguno') return false
+      } else if (filterTeam !== 'all') {
+        if (p.team !== filterTeam) return false
+      }
       if (filterStatus !== 'all' && p.status !== filterStatus) return false
       if (filterCountry !== 'all' && p.country !== filterCountry) return false
       if (searchQuery) {
         const q = searchQuery.toLowerCase()
-        return p.name.toLowerCase().includes(q) || 
-               p.email.toLowerCase().includes(q) || 
-               (p.discord && p.discord.toLowerCase().includes(q))
+        return (
+          p.name.toLowerCase().includes(q) ||
+          p.email.toLowerCase().includes(q) ||
+          (p.discord && p.discord.toLowerCase().includes(q)) ||
+          (p.rawDetails?.nickname && p.rawDetails.nickname.toLowerCase().includes(q)) ||
+          (p.team && p.team.toLowerCase().includes(q))
+        )
       }
       return true
     })
@@ -487,14 +543,22 @@ export function AdminPlayers() {
         
         {/* Header & Filters */}
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 mb-8">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 flex-wrap">
             <h2 className="font-display text-2xl font-700 uppercase tracking-tight text-white shrink-0">
               Jugadores
             </h2>
+            <GmxButton
+              onClick={exportAllToCSV}
+              className="h-9 px-3 gap-2 text-xs"
+              variant="secondary"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Exportar Todo ({filteredAndSortedPlayers.length})
+            </GmxButton>
             {selectedIds.size > 0 && (
               <GmxButton onClick={exportToCSV} className="h-9 px-3 gap-2 text-xs" variant="secondary">
                 <Download className="w-3.5 h-3.5" />
-                Exportar ({selectedIds.size})
+                Selección ({selectedIds.size})
               </GmxButton>
             )}
           </div>
@@ -517,6 +581,9 @@ export function AdminPlayers() {
                 >
                   <option value="all">Todos los Estados</option>
                   <option value="active">Activos</option>
+                  <option value="approved">Aprobados</option>
+                  <option value="pending">En Revisión</option>
+                  <option value="rejected">Rechazados</option>
                   <option value="inactive">Inactivos</option>
                   <option value="banned">Baneados</option>
                 </select>
@@ -530,6 +597,7 @@ export function AdminPlayers() {
                   className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-2.5 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer font-500"
                 >
                   <option value="all">Todos los Equipos</option>
+                  <option value="none">Sin Equipo</option>
                   {uniqueTeams.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

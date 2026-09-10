@@ -152,7 +152,6 @@ export function AltaContratoForm() {
       }
 
       const parsedTeams = (teamsData || [])
-        .filter(t => t.manager_id !== user.id)
         .map(t => {
           const category = teamCategoryMap.get(t.id) || (t.name.toLowerCase().includes('fem') ? 'Femenil' : 'Varonil / Mixto')
           return { ...t, category }
@@ -275,7 +274,7 @@ export function AltaContratoForm() {
       return
     }
 
-    // Verificar directamente en BD que el equipo seleccionado existe y no pertenece al usuario
+    // Verificar que el equipo seleccionado exista y esté disponible
     const { data: teamData, error: teamFetchError } = await supabase
       .from('teams')
       .select('id, name, manager_id, status')
@@ -285,12 +284,6 @@ export function AltaContratoForm() {
     if (teamFetchError || !teamData) {
       setFormStatus('idle')
       alert('El equipo seleccionado no existe o no está disponible.')
-      return
-    }
-
-    if (teamData.manager_id === user?.id) {
-      setFormStatus('idle')
-      alert('No puedes solicitar un contrato con tu propio equipo. Como Manager, ya formas parte de él.')
       return
     }
 
@@ -516,16 +509,16 @@ export function AltaContratoForm() {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {['JUGADOR(A)', 'COACH', 'ANALISTA', 'PSICOLOGO DEPORTIVO'].map((rol) => (
                 <label key={rol} className={cn(
-                  "flex cursor-pointer items-center gap-3 rounded-lg border p-4 transition-colors",
+                  "flex cursor-pointer items-center gap-3 rounded-lg border p-4 transition-colors min-h-[60px]",
                   selectedRoles.includes(rol) ? "border-primary bg-primary/5" : "border-border bg-background hover:border-primary/50"
                 )}>
                   <input
                     type="checkbox"
                     checked={selectedRoles.includes(rol)}
                     onChange={() => handleRoleToggle(rol)}
-                    className="h-5 w-5 rounded border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
+                    className="h-5 w-5 shrink-0 rounded border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
                   />
-                  <span className="text-sm font-600 text-white">{rol}</span>
+                  <span className="text-sm font-600 text-white leading-tight">{rol}</span>
                 </label>
               ))}
             </div>
