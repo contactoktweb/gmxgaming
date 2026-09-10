@@ -32,6 +32,7 @@ export function AltaContratoForm() {
   const [allowedDivision, setAllowedDivision] = useState<'all' | 'Varonil / Mixto' | 'Femenil'>('all')
   const [contractEndDate, setContractEndDate] = useState('')
   const [dateError, setDateError] = useState('')
+  const [isInitializing, setIsInitializing] = useState(true)
 
   const [hasVaronilContract, setHasVaronilContract] = useState(false)
   const [hasFemenilContract, setHasFemenilContract] = useState(false)
@@ -65,8 +66,11 @@ export function AltaContratoForm() {
 
   useEffect(() => {
     async function init() {
-      if (!user) return
-      setFormStatus('loading')
+      if (!user) {
+        setIsInitializing(false)
+        return
+      }
+      setIsInitializing(true)
 
       // Cargar configuraciones de países desde app_settings
       try {
@@ -98,6 +102,7 @@ export function AltaContratoForm() {
           setBlockMessage('Tu perfil de Jugador Profesional no se encuentra activo.')
         }
         setFormStatus('blocked')
+        setIsInitializing(false)
         return
       }
 
@@ -183,6 +188,7 @@ export function AltaContratoForm() {
         if (activeList.length >= 1) {
           setBlockMessage('Ya cuentas con un contrato activo o en proceso. Los jugadores varoniles solo pueden tener 1 contrato a la vez. Cuando tu contrato anterior sea dado de baja, podrás registrar uno nuevo.')
           setFormStatus('blocked')
+          setIsInitializing(false)
           return
         }
 
@@ -195,6 +201,7 @@ export function AltaContratoForm() {
         if (hasVaronil && hasFemenil) {
           setBlockMessage('Has alcanzado el límite máximo de contratos permitidos para jugadoras (1 en equipo Femenil y 1 en equipo Varonil / Mixto). Si alguno de tus contratos es dado de baja, podrás registrar uno nuevo en esa división.')
           setFormStatus('blocked')
+          setIsInitializing(false)
           return
         }
 
@@ -212,6 +219,7 @@ export function AltaContratoForm() {
           setInfoNotice('Regla para jugadoras: Puedes tener hasta 2 contratos activos simultáneos (exclusivamente 1 en división Femenil y 1 en división Varonil / Mixto).')
         }
       }
+      setIsInitializing(false)
     }
     init()
   }, [user])
@@ -255,12 +263,14 @@ export function AltaContratoForm() {
     if (!rawEndDate) {
       setDateError('Por favor selecciona la fecha de duración del contrato.')
       alert('Por favor selecciona la fecha de duración del contrato.')
+      setFormStatus('idle')
       return
     }
 
     if (rawEndDate <= todayStr) {
       setDateError('La fecha del contrato debe ser posterior al día de hoy.')
       alert('La duración del contrato debe ser una fecha posterior al día de hoy. No se permiten fechas anteriores ni el día actual.')
+      setFormStatus('idle')
       return
     }
 
@@ -323,6 +333,20 @@ export function AltaContratoForm() {
       alert('Error al enviar el contrato: ' + error.message)
       console.error(error)
     }
+  }
+
+  if (isInitializing) {
+    return (
+      <div className="mx-auto w-full max-w-4xl rounded-xl border border-border bg-surface p-8 shadow-2xl lg:p-12">
+        <div className="h-10 w-64 mx-auto rounded-lg bg-white/5 animate-pulse mb-4" />
+        <div className="h-4 w-80 mx-auto rounded bg-white/5 animate-pulse mb-12" />
+        <div className="space-y-6">
+          {[1,2,3,4].map(i => (
+            <div key={i} className="h-14 w-full rounded-md bg-white/5 animate-pulse" />
+          ))}
+        </div>
+      </div>
+    )
   }
 
   if (formStatus === 'blocked') {
