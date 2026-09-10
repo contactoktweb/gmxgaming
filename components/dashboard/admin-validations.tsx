@@ -458,10 +458,12 @@ export function AdminValidations() {
           const targetUserId = requestToUpdate.details?.user_id || requestToUpdate.details?.id || confirmAction.id
           
           if (isApproved) {
-            // Aprobación: activar el jugador
+            // Aprobación: activar el jugador y asegurar que su país quede persistido
+            const countryVal = requestToUpdate.details?.country || requestToUpdate.details?.closest_airport || 'México'
             await supabase.from('profiles').update({
               is_player: true,
-              player_status: 'active'
+              player_status: 'active',
+              closest_airport: countryVal
             }).eq('id', targetUserId)
           } else {
             // Rechazo: desactivar el jugador completamente y registrar razón

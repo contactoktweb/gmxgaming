@@ -24,7 +24,7 @@ import {
   Globe,
   Share2
 } from 'lucide-react'
-import { cn, formatRoleTitle, formatRolesList, formatNickname, formatPersonName } from '@/lib/utils'
+import { cn, formatRoleTitle, formatRolesList, formatNickname, formatPersonName, extractCountry } from '@/lib/utils'
 import { GmxButton } from '@/components/gmx-button'
 import { useAuth } from '@/lib/auth-context'
 import { createClient } from '@/utils/supabase/client'
@@ -266,7 +266,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
       profilePhoto: profileData?.avatar_url || profilePhoto || null,
       imagesChanged: false,
       discord_handle: profileData?.discord_handle || '',
-      country: profileData?.country || '',
+      country: profileData?.country || extractCountry(profileData?.closest_airport) || '',
       phone: profileData?.phone || '',
       social_ig: profileData?.social_ig || '',
       social_tiktok: profileData?.social_tiktok || '',
@@ -383,10 +383,8 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
         const { error } = await supabase.from('profiles').update({
           name: formattedName,
           avatar_url: finalAvatarUrl,
-          bio: editForm.bio.trim() || null,
           discord_handle: editForm.discord_handle.trim() || null,
-          country: editForm.country.trim() || null,
-          phone: editForm.phone.trim() || null,
+          closest_airport: editForm.country.trim() || null,
           social_ig: editForm.social_ig.trim() || null,
           social_tiktok: editForm.social_tiktok.trim() || null,
           social_yt: editForm.social_yt.trim() || null,

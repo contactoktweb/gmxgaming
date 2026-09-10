@@ -1,12 +1,12 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { User, Mail, Gamepad2, Shield, Eye, X, Phone, Calendar, Filter, Ban, CheckCircle2, Edit, Download, Save, ZoomIn, Star, ChevronDown, UserX, AlertCircle, FileText, Globe } from 'lucide-react'
+import { User, Mail, Gamepad2, Shield, Eye, X, Phone, Calendar, Filter, Ban, CheckCircle2, Edit, Download, Save, ZoomIn, Star, ChevronDown, UserX, AlertCircle, FileText, Globe, Upload, Image as ImageIcon, Loader2 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
 import { GmxButton } from '@/components/gmx-button'
 import { toast } from 'sonner'
-import { cn, formatNickname, formatPersonName, formatRoleTitle, extractCountry } from '@/lib/utils'
+import { cn, formatNickname, formatPersonName, formatRoleTitle, extractCountry, DEFAULT_COUNTRIES } from '@/lib/utils'
 
 const FIELD_LABELS: Record<string, string> = {
   name: 'Nombre Completo',
@@ -151,7 +151,7 @@ export function AdminPlayers() {
             conclusion_date,
             status,
             created_at,
-            teams(id, name, logo_url)
+            teams(id, name, logo_url, country)
           )
         `)
         .eq('is_player', true)
@@ -232,7 +232,7 @@ export function AdminPlayers() {
               }
             })
 
-          const playerCountry = p.country || (p.player_game_info && p.player_game_info[0]?.country_account) || extractCountry(p.closest_airport) || ''
+          const playerCountry = p.country || (p.player_game_info && p.player_game_info[0]?.country_account) || extractCountry(p.closest_airport) || activeContractRaw?.teams?.country || 'México'
 
           return {
             id: p.id,
@@ -302,37 +302,90 @@ export function AdminPlayers() {
     setActionModal(null)
   }
 
+  const openPlayerDetails = (player: Player) => {
+    setSelectedPlayer(player)
+    setEditingDetails({
+      name: player.name || '',
+      nickname: player.rawDetails?.nickname || '',
+      game_nickname: player.rawDetails?.game_nickname || '',
+      discord_handle: player.discord || player.rawDetails?.discord_handle || '',
+      country: player.country || 'México',
+      player_status: player.status || 'active',
+      is_featured: Boolean(player.is_featured),
+      passport_number: player.rawDetails?.passport_number || '',
+      avatar_url: player.avatar || '',
+      cover_url: player.rawDetails?.cover_url || '',
+      id_photo_url: player.rawDetails?.id_photo_url || '',
+      passport_photo_url: player.rawDetails?.passport_photo_url || '',
+      social_x: player.rawDetails?.social_x || '',
+      social_ig: player.rawDetails?.social_ig || '',
+      social_tiktok: player.rawDetails?.social_tiktok || '',
+      social_yt: player.rawDetails?.social_yt || '',
+      social_twitch: player.rawDetails?.social_twitch || '',
+      social_kick: player.rawDetails?.social_kick || '',
+      social_fb: player.rawDetails?.social_fb || '',
+    })
+    setModalTab('profile')
+  }
+
+  const handleUploadPlayerMedia = async (file: File, fieldKey: string) => {
+    try {
+      toast.loading('Subiendo imagen...', { id: 'upload-player-media' })
+      const fileExt = file.name.split('.').pop()
+      const bucket = (fieldKey === 'avatar_url' || fieldKey === 'cover_url') ? 'avatars' : 'documents'
+      const fileName = `player_${fieldKey}_${Date.now()}.${fileExt}`
+      const { data, error } = await supabase.storage.from(bucket).upload(fileName, file)
+      if (error) throw error
+      const { data: pUrl } = supabase.storage.from(bucket).getPublicUrl(data.path)
+      setEditingDetails((prev: any) => ({ ...prev, [fieldKey]: pUrl.publicUrl }))
+      toast.success('Imagen subida correctamente', { id: 'upload-player-media' })
+    } catch (err: any) {
+      console.error('Error uploading player media:', err)
+      toast.error('Error al subir imagen: ' + (err?.message || 'Error desconocido'), { id: 'upload-player-media' })
+    }
+  }
+
   const handleSaveDetails = async () => {
     if (!selectedPlayer || !editingDetails) return
-    const cleanDetails = { ...editingDetails }
-    if (cleanDetails.name) cleanDetails.name = formatPersonName(cleanDetails.name).trim()
-    if (cleanDetails.nickname) cleanDetails.nickname = formatNickname(cleanDetails.nickname).trim()
-    if (cleanDetails.game_nickname) cleanDetails.game_nickname = formatNickname(cleanDetails.game_nickname).trim()
+    const nameVal = formatPersonName(editingDetails.name || '').trim()
+    const nickVal = formatNickname(editingDetails.nickname || '').trim()
+    const gameNickVal = formatNickname(editingDetails.game_nickname || '').trim()
+    const countryVal = editingDetails.country?.trim() || 'México'
 
-    // Si se actualizó el país, guardarlo en closest_airport que es la columna soportada por profiles
-    if (cleanDetails.country !== undefined) {
-      cleanDetails.closest_airport = cleanDetails.country
+    const updates = {
+      name: nameVal,
+      nickname: nickVal,
+      game_nickname: gameNickVal,
+      discord_handle: editingDetails.discord_handle?.trim() || null,
+      closest_airport: countryVal,
+      player_status: editingDetails.player_status || 'active',
+      is_featured: Boolean(editingDetails.is_featured),
+      passport_number: editingDetails.passport_number?.trim() || null,
+      avatar_url: editingDetails.avatar_url?.trim() || null,
+      cover_url: editingDetails.cover_url?.trim() || null,
+      id_photo_url: editingDetails.id_photo_url?.trim() || null,
+      passport_photo_url: editingDetails.passport_photo_url?.trim() || null,
+      social_x: editingDetails.social_x?.trim() || null,
+      social_ig: editingDetails.social_ig?.trim() || null,
+      social_tiktok: editingDetails.social_tiktok?.trim() || null,
+      social_yt: editingDetails.social_yt?.trim() || null,
+      social_twitch: editingDetails.social_twitch?.trim() || null,
+      social_kick: editingDetails.social_kick?.trim() || null,
+      social_fb: editingDetails.social_fb?.trim() || null,
     }
-    // Remover campos que no son columnas directas de profiles para evitar error 42703
-    delete cleanDetails.country
-    delete cleanDetails.contracts
-    delete cleanDetails.player_game_info
-    delete cleanDetails.id
-    delete cleanDetails.created_at
-    delete cleanDetails.email
-    delete cleanDetails.activeContract
-    delete cleanDetails.pastContracts
 
-    const { error } = await supabase.from('profiles').update(cleanDetails).eq('id', selectedPlayer.id)
+    const { error } = await supabase.from('profiles').update(updates).eq('id', selectedPlayer.id)
     if (!error) {
       toast.success('Datos del jugador actualizados correctamente.')
-      const updatedCountry = editingDetails.country || ''
       setPlayers(prev => prev.map(p => p.id === selectedPlayer.id ? { 
         ...p, 
-        country: updatedCountry,
-        rawDetails: { ...p.rawDetails, ...editingDetails, country: updatedCountry }, 
-        name: cleanDetails.name || p.name, 
-        discord: cleanDetails.discord_handle || p.discord 
+        name: nameVal,
+        avatar: updates.avatar_url || p.avatar,
+        discord: updates.discord_handle,
+        country: countryVal,
+        status: updates.player_status,
+        is_featured: updates.is_featured,
+        rawDetails: { ...p.rawDetails, ...updates, country: countryVal }
       } : p))
       setSelectedPlayer(null)
     } else {
@@ -537,11 +590,7 @@ export function AdminPlayers() {
         if (p.team !== filterTeam) return false
       }
       if (filterStatus !== 'all' && p.status !== filterStatus) return false
-      if (filterCountry === 'none') {
-        if (p.country) return false
-      } else if (filterCountry !== 'all') {
-        if (p.country !== filterCountry) return false
-      }
+      if (filterCountry !== 'all' && p.country !== filterCountry) return false
       if (searchQuery) {
         const q = searchQuery.toLowerCase()
         return (
@@ -645,7 +694,6 @@ export function AdminPlayers() {
                 className="appearance-none rounded-lg border border-border bg-background px-4 py-2.5 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer font-500"
               >
                 <option value="all">Todos los Países</option>
-                <option value="none">Sin País Asignado</option>
                 {uniqueCountries.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
               <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -719,7 +767,7 @@ export function AdminPlayers() {
                     </div>
                     <div className="col-span-2 flex items-center gap-2 text-xs text-muted-foreground">
                       <Globe className="h-3.5 w-3.5 text-primary" />
-                      <span className="truncate">{player.country || 'Sin país asignado'}</span>
+                      <span className="truncate">{player.country}</span>
                     </div>
                   </div>
                   
@@ -738,15 +786,11 @@ export function AdminPlayers() {
                       <Star className={cn("h-3 w-3", player.is_featured && "fill-current")} />
                     </button>
                     <button
-                      onClick={() => {
-                        setSelectedPlayer(player)
-                        setEditingDetails(player.rawDetails)
-                        setModalTab('profile')
-                      }}
-                      title="Ver Detalles Completos"
+                      onClick={() => openPlayerDetails(player)}
+                      title="Ver Detalles Completos y Editar"
                       className="flex-1 flex h-8 items-center justify-center gap-1 rounded bg-surface border border-border text-xs font-500 text-white hover:bg-white/5 transition-colors"
                     >
-                      <Eye className="h-3 w-3" /> Detalles
+                      <Eye className="h-3 w-3" /> Detalles / Editar
                     </button>
                     <button
                       onClick={() => {
@@ -828,85 +872,215 @@ export function AdminPlayers() {
             {/* Body con Scroll */}
             <div data-lenis-prevent data-modal-scrollbody className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6">
               {modalTab === 'profile' ? (
-                <div className="grid sm:grid-cols-2 gap-6">
-                  {Object.entries(editingDetails)
-                    .filter(([key, value]) => {
-                      const lower = key.toLowerCase()
-                      if (EXCLUDED_FIELDS.has(lower)) return false
-                      if (value === null || value === undefined || value === '') return false
-                      return true
-                    })
-                    .map(([key, value]) => {
-                      const isImage = typeof value === 'string' && (value.startsWith('http') || value.startsWith('data:image')) && !value.endsWith('.pdf');
-                      const isBoolean = typeof value === 'boolean';
-                      const labelTitle = getFieldLabel(key);
-                      
-                      return (
-                        <div key={key} className={cn("space-y-2", isImage ? "col-span-full sm:col-span-1" : "")}>
-                          <label className="text-xs font-700 uppercase tracking-wider text-primary">
-                            {labelTitle}
-                          </label>
+                <div className="space-y-6">
+                  {/* SECCIÓN 1: Identidad y Juego */}
+                  <div className="rounded-xl border border-border bg-background/50 p-5 space-y-4">
+                    <h4 className="text-xs font-700 uppercase tracking-wider text-primary flex items-center gap-2 border-b border-border/60 pb-3">
+                      <User className="w-4 h-4" />
+                      Datos de Identidad y Gaming
+                    </h4>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-600 text-muted-foreground uppercase">Nombre Completo</label>
+                        <input
+                          type="text"
+                          value={editingDetails.name || ''}
+                          onChange={(e) => setEditingDetails({ ...editingDetails, name: formatPersonName(e.target.value) })}
+                          className="w-full rounded-lg border border-border bg-surface px-3.5 py-2 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary uppercase"
+                          placeholder="Nombre y Apellidos"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-600 text-muted-foreground uppercase">Nickname / Apodo</label>
+                        <input
+                          type="text"
+                          value={editingDetails.nickname || ''}
+                          onChange={(e) => setEditingDetails({ ...editingDetails, nickname: formatNickname(e.target.value) })}
+                          className="w-full rounded-lg border border-border bg-surface px-3.5 py-2 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary uppercase"
+                          placeholder="Nickname"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-600 text-muted-foreground uppercase">Nombre en Juego (IGN)</label>
+                        <input
+                          type="text"
+                          value={editingDetails.game_nickname || ''}
+                          onChange={(e) => setEditingDetails({ ...editingDetails, game_nickname: formatNickname(e.target.value) })}
+                          className="w-full rounded-lg border border-border bg-surface px-3.5 py-2 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary uppercase"
+                          placeholder="IGN"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-600 text-muted-foreground uppercase">Usuario de Discord</label>
+                        <input
+                          type="text"
+                          value={editingDetails.discord_handle || ''}
+                          onChange={(e) => setEditingDetails({ ...editingDetails, discord_handle: e.target.value })}
+                          className="w-full rounded-lg border border-border bg-surface px-3.5 py-2 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                          placeholder="ej. usuario#1234 o usuario"
+                        />
+                      </div>
+                    </div>
+                  </div>
 
-                          {isImage ? (
-                            <div className="rounded-xl border border-border bg-background p-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                              <div className="relative w-20 h-20 shrink-0 rounded-xl overflow-hidden border-2 border-border bg-surface shadow-md">
-                                <img src={value as string} alt={labelTitle} className="w-full h-full object-cover" />
-                              </div>
-                              <button 
-                                type="button"
-                                onClick={() => setLightboxImage({ src: value as string, label: labelTitle })}
-                                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface border border-border text-white hover:border-primary hover:text-primary text-xs font-600 uppercase tracking-wider transition-colors shadow-sm"
-                              >
-                                <ZoomIn className="w-4 h-4 text-primary" />
-                                Agrandar Imagen
-                              </button>
-                            </div>
-                          ) : isBoolean ? (
-                            <div className="relative">
-                              <select
-                                className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-2.5 pr-10 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer"
-                                value={value ? 'true' : 'false'}
-                                onChange={(e) => setEditingDetails({ ...editingDetails, [key]: e.target.value === 'true' })}
-                              >
-                                <option value="true">Sí</option>
-                                <option value="false">No</option>
-                              </select>
-                              <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            </div>
-                          ) : key === 'player_status' || key === 'status' ? (
-                            <div className="relative">
-                              <select
-                                className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-2.5 pr-10 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer font-500"
-                                value={value as string || 'pending'}
-                                onChange={(e) => setEditingDetails({ ...editingDetails, [key]: e.target.value })}
-                              >
-                                <option value="active">Activo</option>
-                                <option value="inactive">Inactivo</option>
-                                <option value="banned">Baneado</option>
-                                <option value="pending">Pendiente</option>
-                                <option value="rejected">Rechazado</option>
-                              </select>
-                              <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            </div>
-                          ) : (
-                            <input
-                              type="text"
-                              value={value as string || ''}
-                              onChange={(e) => {
-                                let val = e.target.value
-                                if (key === 'name') val = formatPersonName(val)
-                                if (key === 'nickname' || key === 'game_nickname') val = formatNickname(val)
-                                setEditingDetails({ ...editingDetails, [key]: val })
-                              }}
-                              className={cn(
-                                "w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary",
-                                (key === 'name' || key === 'nickname' || key === 'game_nickname') && "uppercase"
-                              )}
-                            />
-                          )}
+                  {/* SECCIÓN 2: Ubicación y Estado */}
+                  <div className="rounded-xl border border-border bg-background/50 p-5 space-y-4">
+                    <h4 className="text-xs font-700 uppercase tracking-wider text-primary flex items-center gap-2 border-b border-border/60 pb-3">
+                      <Globe className="w-4 h-4" />
+                      Ubicación y Estado en la Plataforma
+                    </h4>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-600 text-muted-foreground uppercase">País de Residencia</label>
+                        <div className="relative">
+                          <select
+                            value={editingDetails.country || 'México'}
+                            onChange={(e) => setEditingDetails({ ...editingDetails, country: e.target.value })}
+                            className="w-full appearance-none rounded-lg border border-border bg-surface px-3.5 py-2 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer font-500"
+                          >
+                            {DEFAULT_COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         </div>
-                      )
-                    })}
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-600 text-muted-foreground uppercase">Estado del Jugador</label>
+                        <div className="relative">
+                          <select
+                            value={editingDetails.player_status || 'active'}
+                            onChange={(e) => setEditingDetails({ ...editingDetails, player_status: e.target.value })}
+                            className="w-full appearance-none rounded-lg border border-border bg-surface px-3.5 py-2 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer font-500"
+                          >
+                            <option value="active">Activo</option>
+                            <option value="inactive">Inactivo</option>
+                            <option value="banned">Baneado</option>
+                            <option value="pending">Pendiente</option>
+                            <option value="rejected">Rechazado</option>
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-600 text-muted-foreground uppercase">Jugador Destacado en Inicio</label>
+                        <div className="relative">
+                          <select
+                            value={editingDetails.is_featured ? 'true' : 'false'}
+                            onChange={(e) => setEditingDetails({ ...editingDetails, is_featured: e.target.value === 'true' })}
+                            className="w-full appearance-none rounded-lg border border-border bg-surface px-3.5 py-2 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer font-500"
+                          >
+                            <option value="true">Sí (Destacado)</option>
+                            <option value="false">No</option>
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-600 text-muted-foreground uppercase">Nº Pasaporte / Documento</label>
+                        <input
+                          type="text"
+                          value={editingDetails.passport_number || ''}
+                          onChange={(e) => setEditingDetails({ ...editingDetails, passport_number: e.target.value })}
+                          className="w-full rounded-lg border border-border bg-surface px-3.5 py-2 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                          placeholder="Número oficial"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* SECCIÓN 3: Redes Sociales */}
+                  <div className="rounded-xl border border-border bg-background/50 p-5 space-y-4">
+                    <h4 className="text-xs font-700 uppercase tracking-wider text-primary flex items-center gap-2 border-b border-border/60 pb-3">
+                      <Globe className="w-4 h-4" />
+                      Redes Sociales
+                    </h4>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      {[
+                        { key: 'social_x', label: 'X (Twitter)', placeholder: 'https://x.com/...' },
+                        { key: 'social_ig', label: 'Instagram', placeholder: 'https://instagram.com/...' },
+                        { key: 'social_tiktok', label: 'TikTok', placeholder: 'https://tiktok.com/@...' },
+                        { key: 'social_yt', label: 'YouTube', placeholder: 'https://youtube.com/@...' },
+                        { key: 'social_twitch', label: 'Twitch', placeholder: 'https://twitch.tv/...' },
+                        { key: 'social_kick', label: 'Kick', placeholder: 'https://kick.com/...' },
+                        { key: 'social_fb', label: 'Facebook', placeholder: 'https://facebook.com/...' },
+                      ].map((s) => (
+                        <div key={s.key} className="space-y-1.5">
+                          <label className="text-xs font-600 text-muted-foreground uppercase">{s.label}</label>
+                          <input
+                            type="text"
+                            value={editingDetails[s.key] || ''}
+                            onChange={(e) => setEditingDetails({ ...editingDetails, [s.key]: e.target.value })}
+                            className="w-full rounded-lg border border-border bg-surface px-3.5 py-2 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                            placeholder={s.placeholder}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* SECCIÓN 4: Fotografías y Documentos */}
+                  <div className="rounded-xl border border-border bg-background/50 p-5 space-y-4">
+                    <h4 className="text-xs font-700 uppercase tracking-wider text-primary flex items-center gap-2 border-b border-border/60 pb-3">
+                      <ImageIcon className="w-4 h-4" />
+                      Archivos e Imágenes Oficiales
+                    </h4>
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                      {[
+                        { key: 'avatar_url', label: 'Foto de Perfil' },
+                        { key: 'cover_url', label: 'Foto de Portada' },
+                        { key: 'id_photo_url', label: 'Documento INE / DNI' },
+                        { key: 'passport_photo_url', label: 'Foto de Pasaporte' }
+                      ].map((item) => {
+                        const url = editingDetails[item.key] || ''
+                        return (
+                          <div key={item.key} className="space-y-3">
+                            <label className="text-xs font-600 text-muted-foreground uppercase block">{item.label}</label>
+                            <div className="relative w-full h-36 rounded-xl border border-border bg-surface overflow-hidden flex items-center justify-center group">
+                              {url ? (
+                                <img src={url} alt={item.label} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="text-center p-3 text-muted-foreground text-xs">
+                                  <ImageIcon className="w-6 h-6 mx-auto mb-1 opacity-50" />
+                                  Sin imagen
+                                </div>
+                              )}
+                              {url && (
+                                <button
+                                  type="button"
+                                  onClick={() => setLightboxImage({ src: url, label: item.label })}
+                                  className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-xs text-white font-semibold"
+                                >
+                                  <ZoomIn className="w-4 h-4" /> Agrandar
+                                </button>
+                              )}
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-[11px] text-muted-foreground font-500 block">Subir archivo nuevo:</label>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  if (e.target.files && e.target.files[0]) {
+                                    handleUploadPlayerMedia(e.target.files[0], item.key)
+                                  }
+                                }}
+                                className="w-full text-xs text-muted-foreground file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[11px] text-muted-foreground font-500 block">O URL directa:</label>
+                              <input
+                                type="text"
+                                value={url}
+                                onChange={(e) => setEditingDetails({ ...editingDetails, [item.key]: e.target.value })}
+                                className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-white focus:border-primary focus:outline-none"
+                                placeholder="https://..."
+                              />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-6">

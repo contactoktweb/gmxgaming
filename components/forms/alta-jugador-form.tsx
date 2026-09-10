@@ -237,11 +237,13 @@ function FormContent() {
     }
 
     // Payload principal — campos garantizados que existen en la tabla profiles
+    const countryValue = (formData.get('item_meta[722]') as string) || (formData.get('item_meta[677]') as string) || 'México'
     const corePayload: Record<string, any> = {
       name: fullName,
       nickname: cleanNick,
       game_nickname: cleanNick,
       discord_handle: formData.get('item_meta[684]') || null,
+      closest_airport: countryValue,
       is_player: true,
       player_status: 'pending',
     }

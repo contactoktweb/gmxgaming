@@ -1,10 +1,33 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ShieldCheck, Users, MapPin, ExternalLink, Eye, Trash2, X, AlertCircle, Check, ImageIcon, FileText, Download, Save, Upload, ZoomIn, ChevronDown, UserX } from 'lucide-react'
+import { 
+  ShieldCheck, 
+  Users, 
+  MapPin, 
+  ExternalLink, 
+  Eye, 
+  Trash2, 
+  X, 
+  AlertCircle, 
+  Check, 
+  ImageIcon, 
+  FileText, 
+  Download, 
+  Save, 
+  Upload, 
+  ZoomIn, 
+  ChevronDown, 
+  UserX,
+  Edit,
+  Share2,
+  Trophy,
+  Loader2,
+  Globe
+} from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
-import { cn, formatLocation, extractCountry, formatRoleTitle } from '@/lib/utils'
+import { cn, formatLocation, extractCountry, formatRoleTitle, DEFAULT_COUNTRIES } from '@/lib/utils'
 import { GmxButton } from '@/components/gmx-button'
 import { toast } from 'sonner'
 
@@ -33,11 +56,14 @@ interface PastContractRoster {
 interface Team {
   id: string
   name: string
+  tag?: string
+  hashtag?: string
   captain: string
   managerDiscord: string
   region: string
   logo: string
-  status: 'active' | 'inactive' | 'banned' | string
+  jersey?: string
+  status: 'active' | 'inactive' | 'banned' | 'pending' | string
   points: number
   foundation_date: string
   roster: PlayerRoster[]
@@ -45,10 +71,44 @@ interface Team {
   rawDetails: any
 }
 
+interface ManagerProfile {
+  id: string
+  name: string
+  nickname?: string | null
+  discord_handle?: string | null
+  email?: string | null
+}
+
+interface EditingTeamState {
+  id: string
+  name: string
+  tag: string
+  hashtag: string
+  country: string
+  status: string
+  manager_id: string
+  logo_url: string
+  jersey_url: string
+  games: string[]
+  social_x: string
+  social_ig: string
+  social_tiktok: string
+  social_yt: string
+  social_fb: string
+  social_twitch: string
+  social_kick: string
+}
+
 export function AdminTeams() {
   const { user } = useAuth()
   const [teams, setTeams] = useState<Team[]>([])
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
+  const [modalTab, setModalTab] = useState<'info' | 'roster'>('info')
+  const [editingTeam, setEditingTeam] = useState<EditingTeamState | null>(null)
+  const [isSavingTeam, setIsSavingTeam] = useState(false)
+  const [availableManagers, setAvailableManagers] = useState<ManagerProfile[]>([])
+  const [lightboxImage, setLightboxImage] = useState<{ src: string; label: string } | null>(null)
+
   const [confirmAction, setConfirmAction] = useState<{ id: string, name: string } | null>(null)
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
@@ -68,8 +128,6 @@ export function AdminTeams() {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterRegion, setFilterRegion] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
-
-  const [editingLogo, setEditingLogo] = useState<string>('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
@@ -89,6 +147,16 @@ export function AdminTeams() {
             terminationsMap.set(v.details.contract_id, v)
           }
         })
+      }
+
+      // Cargar perfiles de managers disponibles para asignación
+      const { data: managersData } = await supabase
+        .from('profiles')
+        .select('id, name, nickname, discord_handle, email')
+        .order('name')
+
+      if (managersData) {
+        setAvailableManagers(managersData)
       }
 
       const { data, error } = await supabase
@@ -158,10 +226,13 @@ export function AdminTeams() {
           return {
             id: t.id,
             name: t.name,
+            tag: t.tag || '',
+            hashtag: t.hashtag || '',
             captain: t.manager?.nickname || t.manager?.name || 'Sin Manager',
             managerDiscord: t.manager?.discord_handle || 'Sin Discord',
             region: t.country || 'Sin Región',
             logo: t.logo_url || '',
+            jersey: t.jersey_url || '',
             status,
             points: 0,
             foundation_date: new Date(t.created_at).toLocaleDateString(),
@@ -178,13 +249,123 @@ export function AdminTeams() {
   }, [])
 
   useEffect(() => {
-    if (selectedTeam || confirmAction || terminatingContract) {
+    if (selectedTeam || confirmAction || terminatingContract || lightboxImage) {
       window.__lenis?.stop()
     } else {
       window.__lenis?.start()
     }
     return () => { window.__lenis?.start() }
-  }, [selectedTeam, confirmAction, terminatingContract])
+  }, [selectedTeam, confirmAction, terminatingContract, lightboxImage])
+
+  const openTeamDetails = (team: Team) => {
+    const raw = team.rawDetails || {}
+    setSelectedTeam(team)
+    setEditingTeam({
+      id: team.id,
+      name: raw.name || team.name || '',
+      tag: raw.tag || '',
+      hashtag: raw.hashtag || '',
+      country: raw.country || team.region || 'México',
+      status: team.status || 'active',
+      manager_id: raw.manager_id || '',
+      logo_url: raw.logo_url || team.logo || '',
+      jersey_url: raw.jersey_url || team.jersey || '',
+      games: Array.isArray(raw.games) && raw.games.length > 0 ? raw.games : ['Mobile Legends'],
+      social_x: raw.social_x || '',
+      social_ig: raw.social_ig || '',
+      social_tiktok: raw.social_tiktok || '',
+      social_yt: raw.social_yt || '',
+      social_fb: raw.social_fb || '',
+      social_twitch: raw.social_twitch || '',
+      social_kick: raw.social_kick || '',
+    })
+    setModalTab('info')
+  }
+
+  const handleUploadTeamMedia = async (file: File, fieldKey: 'logo_url' | 'jersey_url') => {
+    try {
+      toast.loading('Subiendo imagen del equipo...', { id: 'upload-team-media' })
+      const fileExt = file.name.split('.').pop()
+      const fileName = `team_${fieldKey}_${Date.now()}.${fileExt}`
+      const { data, error } = await supabase.storage.from('teams').upload(fileName, file)
+      if (error) throw error
+      const { data: pUrl } = supabase.storage.from('teams').getPublicUrl(data.path)
+      const newUrl = pUrl.publicUrl
+      setEditingTeam(prev => prev ? { ...prev, [fieldKey]: newUrl } : null)
+      toast.success('Imagen subida correctamente', { id: 'upload-team-media' })
+    } catch (err: any) {
+      console.error('Error uploading team media:', err)
+      toast.error('Error al subir imagen: ' + (err?.message || 'Error desconocido'), { id: 'upload-team-media' })
+    }
+  }
+
+  const handleSaveTeam = async () => {
+    if (!editingTeam || !selectedTeam) return
+    const nameVal = editingTeam.name.trim()
+    if (!nameVal) {
+      toast.error('El nombre del equipo no puede estar vacío.')
+      return
+    }
+
+    setIsSavingTeam(true)
+    toast.loading('Guardando cambios del equipo...', { id: 'save-team' })
+
+    try {
+      const updates = {
+        name: nameVal,
+        tag: editingTeam.tag.trim().toUpperCase() || null,
+        hashtag: editingTeam.hashtag.trim() || null,
+        country: editingTeam.country.trim() || 'México',
+        status: editingTeam.status || 'active',
+        manager_id: editingTeam.manager_id ? editingTeam.manager_id : null,
+        logo_url: editingTeam.logo_url.trim() || null,
+        jersey_url: editingTeam.jersey_url.trim() || null,
+        games: editingTeam.games.length > 0 ? editingTeam.games : ['Mobile Legends'],
+        social_x: editingTeam.social_x.trim() || null,
+        social_ig: editingTeam.social_ig.trim() || null,
+        social_tiktok: editingTeam.social_tiktok.trim() || null,
+        social_yt: editingTeam.social_yt.trim() || null,
+        social_fb: editingTeam.social_fb.trim() || null,
+        social_twitch: editingTeam.social_twitch.trim() || null,
+        social_kick: editingTeam.social_kick.trim() || null,
+      }
+
+      const { error } = await supabase.from('teams').update(updates).eq('id', editingTeam.id)
+      if (error) throw error
+
+      // Obtener información del nuevo manager
+      const newManager = availableManagers.find(m => m.id === updates.manager_id)
+      const captainName = newManager ? (newManager.nickname || newManager.name) : 'Sin Manager'
+      const managerDiscord = newManager?.discord_handle || 'Sin Discord'
+
+      const updatedTeamObj: Team = {
+        ...selectedTeam,
+        name: updates.name,
+        tag: updates.tag || '',
+        hashtag: updates.hashtag || '',
+        region: updates.country,
+        status: updates.status,
+        logo: updates.logo_url || '',
+        jersey: updates.jersey_url || '',
+        captain: captainName,
+        managerDiscord: managerDiscord,
+        rawDetails: {
+          ...selectedTeam.rawDetails,
+          ...updates
+        }
+      }
+
+      setTeams(prev => prev.map(t => t.id === editingTeam.id ? updatedTeamObj : t))
+      setSelectedTeam(updatedTeamObj)
+
+      toast.success('Información del equipo guardada con éxito', { id: 'save-team' })
+    } catch (err: any) {
+      console.error('Error saving team:', err)
+      toast.error('Error al guardar equipo: ' + (err?.message || 'Error inesperado'), { id: 'save-team' })
+    } finally {
+      setIsSavingTeam(false)
+    }
+  }
 
   const handleAdminTerminateContract = async () => {
     if (!terminatingContract) return
@@ -289,18 +470,7 @@ export function AdminTeams() {
       await supabase.from('teams').delete().eq('id', confirmAction.id)
       setTeams(prev => prev.filter(t => t.id !== confirmAction.id))
       setConfirmAction(null)
-    }
-  }
-
-  const handleUpdateLogo = async () => {
-    if (!selectedTeam || !editingLogo) return
-    const { error } = await supabase.from('teams').update({ logo_url: editingLogo }).eq('id', selectedTeam.id)
-    if (!error) {
-      setTeams(prev => prev.map(t => t.id === selectedTeam.id ? { ...t, logo: editingLogo } : t))
-      setSelectedTeam({ ...selectedTeam, logo: editingLogo })
-      alert('Logo actualizado correctamente.')
-    } else {
-      alert('Error al actualizar el logo.')
+      toast.success('Equipo eliminado correctamente')
     }
   }
 
@@ -336,13 +506,15 @@ export function AdminTeams() {
   const downloadTeamsCSV = (list: Team[], baseName: string) => {
     const date = new Date()
     const dateStr = `${date.getFullYear()}${String(date.getMonth()+1).padStart(2,'0')}${String(date.getDate()).padStart(2,'0')}`
-    const headers = ['Nombre', 'Estado', 'País / Región', 'Manager', 'Discord Manager', 'Jugadores Activos', 'Fecha Creación', 'Logo URL']
+    const headers = ['Nombre', 'Tag', 'Hashtag', 'Estado', 'País / Región', 'Manager', 'Discord Manager', 'Jugadores Activos', 'Fecha Creación', 'Logo URL', 'Jersey URL']
     const csvContent = [
       headers.join(','),
       ...list.map(t => {
         const rosterNames = t.roster.map(p => p.nickname || p.name).join(' | ')
         return [
           `"${(t.name || '').replace(/"/g, '""')}"`,
+          `"${(t.tag || '').replace(/"/g, '""')}"`,
+          `"${(t.hashtag || '').replace(/"/g, '""')}"`,
           `"${t.status}"`,
           `"${(t.region || '').replace(/"/g, '""')}"`,
           `"${(t.captain || '').replace(/"/g, '""')}"`,
@@ -350,6 +522,7 @@ export function AdminTeams() {
           `"${rosterNames.replace(/"/g, '""')}"`,
           `"${t.foundation_date}"`,
           `"${t.logo || ''}"`,
+          `"${t.jersey || ''}"`,
         ].join(',')
       })
     ].join('\n')
@@ -375,6 +548,21 @@ export function AdminTeams() {
     if (toExport.length === 0) return alert('Selecciona al menos un equipo para exportar.')
     downloadTeamsCSV(toExport, 'equipos_seleccionados')
   }
+
+  const socialPlatforms = [
+    { key: 'social_x', label: 'X (Twitter)', placeholder: 'https://x.com/...' },
+    { key: 'social_ig', label: 'Instagram', placeholder: 'https://instagram.com/...' },
+    { key: 'social_tiktok', label: 'TikTok', placeholder: 'https://tiktok.com/@...' },
+    { key: 'social_yt', label: 'YouTube', placeholder: 'https://youtube.com/@...' },
+    { key: 'social_fb', label: 'Facebook', placeholder: 'https://facebook.com/...' },
+    { key: 'social_twitch', label: 'Twitch', placeholder: 'https://twitch.tv/...' },
+    { key: 'social_kick', label: 'Kick', placeholder: 'https://kick.com/...' },
+  ] as const
+
+  const countrySelectOptions = Array.from(new Set([
+    ...DEFAULT_COUNTRIES,
+    editingTeam?.country
+  ].filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b, 'es'))
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -455,16 +643,13 @@ export function AdminTeams() {
             {filteredAndSortedTeams.map(team => (
               <div key={team.id} className="group relative flex flex-col items-center rounded-lg border border-border bg-background p-6 text-center transition-colors hover:border-primary/50">
                 
-                <div className="absolute right-3 top-3 flex flex-col gap-2">
+                <div className="absolute right-3 top-3 flex items-center gap-1.5">
                   <button 
-                    onClick={() => {
-                      setSelectedTeam(team)
-                      setEditingLogo(team.logo)
-                    }}
-                    title="Ver Detalles"
+                    onClick={() => openTeamDetails(team)}
+                    title="Editar Información"
                     className="p-2 text-muted-foreground hover:text-white transition-colors bg-surface border border-border rounded-md hover:border-primary"
                   >
-                    <Eye className="w-4 h-4" />
+                    <Edit className="w-4 h-4" />
                   </button>
                   <button 
                     onClick={() => setConfirmAction({ id: team.id, name: team.name })}
@@ -474,11 +659,20 @@ export function AdminTeams() {
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
-                <img 
-                  src={team.logo || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
-                  alt={team.name} 
-                  className="mb-4 h-20 w-20 rounded-full object-cover ring-4 ring-surface"
-                />
+
+                <div className="relative mb-4">
+                  <img 
+                    src={team.logo || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
+                    alt={team.name} 
+                    className="h-20 w-20 rounded-full object-cover ring-4 ring-surface bg-surface"
+                  />
+                  {team.tag && (
+                    <span className="absolute -bottom-1 -right-1 px-1.5 py-0.5 rounded bg-primary text-black font-extrabold text-[10px] tracking-wider uppercase shadow">
+                      {team.tag}
+                    </span>
+                  )}
+                </div>
+
                 <h3 className="mb-1 font-display text-lg font-700 uppercase text-white group-hover:text-primary transition-colors">
                   {team.name}
                 </h3>
@@ -498,15 +692,21 @@ export function AdminTeams() {
                   <div className="flex items-center gap-1.5 text-sm font-500 text-white">
                     <Users className="h-4 w-4 text-primary" />
                     {team.status === 'active' ? (
-                       <span className="text-emerald-500">Activo</span>
+                       <span className="text-emerald-500 font-semibold text-xs uppercase">Activo</span>
+                    ) : team.status === 'pending' ? (
+                       <span className="text-amber-400 font-semibold text-xs uppercase">En Revisión</span>
                     ) : team.status === 'banned' ? (
-                       <span className="text-red-500">Baneado</span>
+                       <span className="text-red-500 font-semibold text-xs uppercase">Baneado</span>
                     ) : (
-                       <span className="text-yellow-500">Inactivo</span>
+                       <span className="text-yellow-500 font-semibold text-xs uppercase">Inactivo</span>
                     )}
                   </div>
-                  <button onClick={() => { setSelectedTeam(team); setEditingLogo(team.logo); }} className="text-xs font-500 text-primary hover:text-white transition-colors flex items-center gap-1">
-                    Ver Detalles <ExternalLink className="h-3 w-3" />
+                  <button 
+                    onClick={() => openTeamDetails(team)} 
+                    className="text-xs font-600 text-primary hover:text-white transition-colors flex items-center gap-1.5"
+                  >
+                    <span>Editar / Roster</span>
+                    <ExternalLink className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>
@@ -515,18 +715,26 @@ export function AdminTeams() {
         )}
       </div>
 
-      {/* Details Modal */}
-      {selectedTeam && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+      {/* Details & Edit Modal */}
+      {selectedTeam && editingTeam && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-3 sm:p-6">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedTeam(null)} />
-          <div className="relative flex flex-col w-full max-w-3xl h-[90vh] overflow-hidden rounded-xl border border-border bg-surface shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="relative flex flex-col w-full max-w-4xl h-[92vh] overflow-hidden rounded-xl border border-border bg-surface shadow-2xl animate-in zoom-in-95 duration-200">
+            
             {/* Header Fijo */}
-            <div className="flex shrink-0 items-center justify-between border-b border-border p-6 bg-surface z-10">
-              <div>
-                <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
-                  <ShieldCheck className="w-5 h-5 text-primary" />
-                  Detalles del Equipo
-                </h3>
+            <div className="flex shrink-0 items-center justify-between border-b border-border px-6 py-4 bg-surface z-10">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-display text-lg sm:text-xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
+                    Administración de Equipo
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Modifica todos los datos oficiales, multimedia, estado y roster del equipo.
+                  </p>
+                </div>
               </div>
               <button 
                 onClick={() => setSelectedTeam(null)}
@@ -535,236 +743,536 @@ export function AdminTeams() {
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {/* Selector de Pestañas */}
+            <div className="flex border-b border-border bg-background/50 px-6 gap-2">
+              <button
+                type="button"
+                onClick={() => setModalTab('info')}
+                className={cn(
+                  "py-3 px-4 font-display text-xs font-700 uppercase tracking-wider transition-colors border-b-2 flex items-center gap-2",
+                  modalTab === 'info'
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-white"
+                )}
+              >
+                <Edit className="w-4 h-4" />
+                Datos del Equipo
+              </button>
+              <button
+                type="button"
+                onClick={() => setModalTab('roster')}
+                className={cn(
+                  "py-3 px-4 font-display text-xs font-700 uppercase tracking-wider transition-colors border-b-2 flex items-center gap-2",
+                  modalTab === 'roster'
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-white"
+                )}
+              >
+                <Users className="w-4 h-4" />
+                Roster y Contratos
+                <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[10px] text-primary">
+                  {selectedTeam.roster.length}
+                </span>
+              </button>
+            </div>
             
             {/* Body con Scroll */}
-            <div data-lenis-prevent data-modal-scrollbody className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6">
+            <div data-lenis-prevent data-modal-scrollbody className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6 space-y-6">
               
-              <div className="flex flex-col md:flex-row gap-8 mb-8">
-                <div className="flex flex-col items-center shrink-0">
-                  <img 
-                    src={selectedTeam.logo || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
-                    alt={selectedTeam.name} 
-                    className="h-32 w-32 rounded-full border-4 border-surface object-cover bg-surface mb-4"
-                  />
-                  
-                  <div className="w-full mt-4">
-                    <label className="text-xs text-muted-foreground font-600 uppercase mb-1 block">Actualizar Logo</label>
-                    <input 
-                      type="file" 
-                      accept="image/*"
-                      onChange={async (e) => {
-                        if (e.target.files && e.target.files[0]) {
-                          const file = e.target.files[0];
-                          toast.loading('Subiendo logo...', { id: 'upload-logo' });
-                          const fileExt = file.name.split('.').pop();
-                          const fileName = `team-logo-${Date.now()}.${fileExt}`;
-                          const { error: uploadError, data } = await supabase.storage.from('teams').upload(fileName, file);
-                          if (uploadError) {
-                            toast.error('Error al subir la imagen', { id: 'upload-logo' });
-                            return;
-                          }
-                          const { data: publicUrlData } = supabase.storage.from('teams').getPublicUrl(data.path);
-                          const newUrl = publicUrlData.publicUrl;
-                          
-                          const { error: updateError } = await supabase.from('teams').update({ logo_url: newUrl }).eq('id', selectedTeam.id);
-                          
-                          if (updateError) {
-                            toast.error('Error al guardar en base de datos', { id: 'upload-logo' });
-                          } else {
-                            setTeams(prev => prev.map(t => t.id === selectedTeam.id ? { ...t, logo: newUrl } : t));
-                            setSelectedTeam({ ...selectedTeam, logo: newUrl });
-                            toast.success('Logo actualizado', { id: 'upload-logo' });
-                          }
-                        }
-                      }}
-                      className="w-full text-xs text-muted-foreground file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
-                    />
-                  </div>
-                </div>
+              {modalTab === 'info' ? (
+                <div className="space-y-6">
 
-                <div className="flex-1">
-                  <h3 className="font-display text-3xl font-700 uppercase tracking-tight text-white mb-6">
-                    {selectedTeam.name}
-                  </h3>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="rounded-lg border border-border bg-background p-4">
-                      <p className="text-xs text-muted-foreground uppercase tracking-widest font-600 mb-1">Manager</p>
-                      <p className="text-sm font-500 text-white truncate">{selectedTeam.captain}</p>
-                      <p className="text-xs text-primary truncate mt-1">Discord: {selectedTeam.managerDiscord}</p>
-                    </div>
-                    <div className="rounded-lg border border-border bg-background p-4">
-                      <p className="text-xs text-muted-foreground uppercase tracking-widest font-600 mb-1">Región</p>
-                      <p className="text-sm font-500 text-white truncate">{selectedTeam.region}</p>
-                    </div>
-                    <div className="rounded-lg border border-border bg-background p-4 flex flex-col justify-center">
-                      <div className="relative mt-1">
-                        <select 
-                          className={cn(
-                            "w-full appearance-none rounded-lg border border-border bg-surface px-3 py-2 pr-8 text-xs font-600 uppercase focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer transition-colors",
-                            selectedTeam.status === 'active' ? 'text-emerald-400 border-emerald-500/30' : selectedTeam.status === 'banned' ? 'text-red-400 border-red-500/30' : 'text-amber-400 border-amber-500/30'
+                  {/* Resumen Superior */}
+                  <div className="rounded-xl border border-border bg-background/60 p-4 flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <img 
+                        src={editingTeam.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
+                        alt={editingTeam.name} 
+                        className="h-16 w-16 rounded-full border-2 border-primary/30 object-cover bg-surface"
+                      />
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-display text-xl font-bold uppercase text-white">
+                            {editingTeam.name || 'Sin Nombre'}
+                          </h4>
+                          {editingTeam.tag && (
+                            <span className="px-2 py-0.5 rounded bg-primary text-black font-extrabold text-xs tracking-wider uppercase">
+                              [{editingTeam.tag}]
+                            </span>
                           )}
-                          value={selectedTeam.status}
-                          onChange={async (e) => {
-                            const newStatus = e.target.value;
-                            const { error } = await supabase.from('teams').update({ status: newStatus }).eq('id', selectedTeam.id);
-                            if (!error) {
-                              setTeams(prev => prev.map(t => t.id === selectedTeam.id ? { ...t, status: newStatus } : t));
-                              setSelectedTeam({ ...selectedTeam, status: newStatus });
-                              toast.success('Estado actualizado correctamente');
-                            } else {
-                              toast.error('Error al actualizar el estado');
-                            }
-                          }}
-                        >
-                          <option value="active" className="text-emerald-500">Activo</option>
-                          <option value="inactive" className="text-yellow-500">Inactivo</option>
-                          <option value="banned" className="text-red-500">Baneado</option>
-                        </select>
-                        <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                          {editingTeam.hashtag && (
+                            <span className="text-xs text-primary font-semibold">
+                              {editingTeam.hashtag}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          ID: <span className="text-white font-mono text-[11px]">{editingTeam.id}</span> • Fundación: {selectedTeam.foundation_date}
+                        </p>
                       </div>
                     </div>
-                    <div className="rounded-lg border border-border bg-background p-4">
-                      <p className="text-xs text-muted-foreground uppercase tracking-widest font-600 mb-1">Fundación</p>
-                      <p className="text-sm font-500 text-white truncate">{selectedTeam.foundation_date}</p>
+
+                    <div className="flex items-center gap-2">
+                      <span className={cn(
+                        "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border",
+                        editingTeam.status === 'active' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
+                        editingTeam.status === 'pending' ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' :
+                        editingTeam.status === 'banned' ? 'bg-red-500/10 text-red-400 border-red-500/30' :
+                        'bg-yellow-500/10 text-yellow-400 border-yellow-500/30'
+                      )}>
+                        {editingTeam.status === 'active' ? 'Activo' : editingTeam.status === 'pending' ? 'En Revisión' : editingTeam.status === 'banned' ? 'Baneado' : 'Inactivo'}
+                      </span>
                     </div>
                   </div>
-                </div>
-              </div>
 
-              <div className="mt-8 border-t border-border pt-8">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-display text-xl font-700 uppercase tracking-tight text-white">Roster Actual</h4>
-                  <span className="text-xs text-muted-foreground">
-                    {selectedTeam.roster.length} {selectedTeam.roster.length === 1 ? 'jugador activo' : 'jugadores activos'}
-                  </span>
-                </div>
-                
-                {selectedTeam.roster.length === 0 ? (
-                  <div className="text-center py-8 border border-dashed border-border rounded-lg bg-background/50">
-                    <p className="text-muted-foreground text-sm">Este equipo no tiene jugadores con contratos activos.</p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto rounded-lg border border-border">
-                    <table className="w-full text-left text-sm">
-                      <thead className="bg-background">
-                        <tr>
-                          <th className="px-4 py-3 font-600 text-muted-foreground text-xs uppercase tracking-wider">JUGADOR</th>
-                          <th className="px-4 py-3 font-600 text-muted-foreground text-xs uppercase tracking-wider">ROLES</th>
-                          <th className="px-4 py-3 font-600 text-muted-foreground text-xs uppercase tracking-wider">PAÍS</th>
-                          <th className="px-4 py-3 font-600 text-muted-foreground text-xs uppercase tracking-wider">DISCORD</th>
-                          <th className="px-4 py-3 font-600 text-muted-foreground text-xs uppercase tracking-wider text-right">ACCIÓN</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border bg-surface">
-                        {selectedTeam.roster.map((p, idx) => (
-                          <tr key={idx} className="transition-colors hover:bg-white/5">
-                            <td className="px-4 py-3">
-                              <div className="font-bold text-white tracking-wide">{p.nickname}</div>
-                              {p.name && p.name !== p.nickname && (
-                                <div className="text-xs text-muted-foreground">{p.name}</div>
-                              )}
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="flex flex-wrap gap-1">
-                                {Array.isArray(p.roles) && p.roles.length > 0 ? (
-                                  p.roles.map((r: any, rIdx: number) => (
-                                    <span key={rIdx} className="rounded bg-primary/10 border border-primary/20 px-1.5 py-0.5 text-[11px] font-medium text-primary">
-                                      {formatRoleTitle(r)}
-                                    </span>
-                                  ))
-                                ) : (
-                                  <span className="text-xs text-muted-foreground">-</span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-muted-foreground">
-                              <span className="inline-flex items-center gap-1.5 text-xs">
-                                <span>🌐</span> {formatLocation(p.country)}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-primary text-xs">{p.discord}</td>
-                            <td className="px-4 py-3 text-right">
-                              <button
-                                onClick={() => {
-                                  setTerminatingContract({
-                                    contractId: p.contractId,
-                                    playerId: p.playerId,
-                                    playerName: p.nickname || p.name,
-                                    teamId: selectedTeam.id,
-                                    teamName: selectedTeam.name
-                                  })
-                                  setTerminationJustification('')
-                                }}
-                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold text-red-400 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-colors"
-                                title="Dar de baja contrato administrativamente"
-                              >
-                                <UserX className="w-3.5 h-3.5" />
-                                <span>Dar de Baja</span>
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
+                  {/* SECCIÓN 1: Identidad y Configuración General */}
+                  <div className="rounded-xl border border-border bg-background/50 p-5 space-y-4">
+                    <h4 className="text-xs font-700 uppercase tracking-wider text-primary flex items-center gap-2 border-b border-border/60 pb-3">
+                      <ShieldCheck className="w-4 h-4" />
+                      Identidad & Información General
+                    </h4>
 
-              {/* Historial de Contratos Pasados y Bajas */}
-              <div className="mt-8 border-t border-border pt-8">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-display text-xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
-                    <span>Historial de Bajas y Contratos Pasados</span>
-                  </h4>
-                  <span className="text-xs text-muted-foreground">
-                    {selectedTeam.pastContracts?.length || 0} en registro
-                  </span>
-                </div>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-600 text-muted-foreground uppercase block mb-1">
+                          Nombre del Equipo <span className="text-red-400">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={editingTeam.name}
+                          onChange={(e) => setEditingTeam({ ...editingTeam, name: e.target.value })}
+                          className="w-full rounded-lg border border-border bg-surface px-3.5 py-2 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary uppercase font-semibold"
+                          placeholder="Ej: GMX ESPORTS"
+                        />
+                      </div>
 
-                {(!selectedTeam.pastContracts || selectedTeam.pastContracts.length === 0) ? (
-                  <div className="text-center py-6 border border-dashed border-border rounded-lg bg-background/50">
-                    <p className="text-muted-foreground text-xs">No hay registro de contratos anteriores o dados de baja en este equipo.</p>
+                      <div>
+                        <label className="text-xs font-600 text-muted-foreground uppercase block mb-1">
+                          Tag / Siglas Oficiales
+                        </label>
+                        <input
+                          type="text"
+                          value={editingTeam.tag}
+                          onChange={(e) => setEditingTeam({ ...editingTeam, tag: e.target.value.toUpperCase() })}
+                          className="w-full rounded-lg border border-border bg-surface px-3.5 py-2 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary uppercase font-semibold"
+                          placeholder="Ej: GMX"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-600 text-muted-foreground uppercase block mb-1">
+                          Hashtag Oficial
+                        </label>
+                        <input
+                          type="text"
+                          value={editingTeam.hashtag}
+                          onChange={(e) => setEditingTeam({ ...editingTeam, hashtag: e.target.value })}
+                          className="w-full rounded-lg border border-border bg-surface px-3.5 py-2 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                          placeholder="Ej: #GOGOGMX"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-600 text-muted-foreground uppercase block mb-1">
+                          País / Región Principal
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={editingTeam.country}
+                            onChange={(e) => setEditingTeam({ ...editingTeam, country: e.target.value })}
+                            className="w-full appearance-none rounded-lg border border-border bg-surface px-3.5 py-2 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                          >
+                            {countrySelectOptions.map((c) => (
+                              <option key={c} value={c}>
+                                {c}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-600 text-muted-foreground uppercase block mb-1">
+                          Estado en la Plataforma
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={editingTeam.status}
+                            onChange={(e) => setEditingTeam({ ...editingTeam, status: e.target.value })}
+                            className="w-full appearance-none rounded-lg border border-border bg-surface px-3.5 py-2 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer font-semibold"
+                          >
+                            <option value="active" className="text-emerald-400">Activo (Visible en competiciones)</option>
+                            <option value="pending" className="text-amber-400">En Revisión / Pendiente</option>
+                            <option value="inactive" className="text-yellow-400">Inactivo</option>
+                            <option value="banned" className="text-red-400">Baneado</option>
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-600 text-muted-foreground uppercase block mb-1">
+                          Manager / Representante Asignado
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={editingTeam.manager_id}
+                            onChange={(e) => setEditingTeam({ ...editingTeam, manager_id: e.target.value })}
+                            className="w-full appearance-none rounded-lg border border-border bg-surface px-3.5 py-2 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                          >
+                            <option value="">Sin Manager Asignado</option>
+                            {availableManagers.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.nickname ? `${m.nickname} (${m.name})` : m.name}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                ) : (
-                  <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-                    {selectedTeam.pastContracts.map((past, pIdx) => (
-                      <div key={pIdx} className="rounded-lg border border-border/80 bg-background/60 p-3.5 flex flex-col gap-2">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-sm text-white">{past.nickname || past.name}</span>
-                            <div className="flex gap-1">
-                              {Array.isArray(past.roles) && past.roles.map((r: any, rIdx: number) => (
-                                <span key={rIdx} className="rounded bg-white/5 border border-white/10 px-1.5 py-0.2 text-[10px] text-muted-foreground">
-                                  {formatRoleTitle(r)}
-                                </span>
-                              ))}
+
+                  {/* SECCIÓN 2: Multimedia Oficial (Logo y Jersey) */}
+                  <div className="rounded-xl border border-border bg-background/50 p-5 space-y-4">
+                    <h4 className="text-xs font-700 uppercase tracking-wider text-primary flex items-center gap-2 border-b border-border/60 pb-3">
+                      <ImageIcon className="w-4 h-4" />
+                      Identidad Visual & Multimedia (Logo y Camiseta)
+                    </h4>
+
+                    <div className="grid sm:grid-cols-2 gap-6">
+                      
+                      {/* Logo Oficial */}
+                      <div className="space-y-3">
+                        <label className="text-xs font-600 text-muted-foreground uppercase block">
+                          Logo Oficial del Equipo
+                        </label>
+                        <div className="relative w-full h-44 rounded-xl border border-border bg-surface overflow-hidden flex items-center justify-center group">
+                          {editingTeam.logo_url ? (
+                            <img 
+                              src={editingTeam.logo_url} 
+                              alt="Logo Oficial" 
+                              className="w-full h-full object-contain p-2" 
+                            />
+                          ) : (
+                            <div className="text-center p-3 text-muted-foreground text-xs">
+                              <ImageIcon className="w-8 h-8 mx-auto mb-1 opacity-50" />
+                              Sin logo asignado
                             </div>
-                          </div>
-                          <div className="text-[11px] text-muted-foreground">
-                            {past.conclusionDate ? `Baja / Conclusión: ${new Date(past.conclusionDate).toLocaleDateString()}` : 'Contrato Concluido'}
-                          </div>
+                          )}
+                          {editingTeam.logo_url && (
+                            <button
+                              type="button"
+                              onClick={() => setLightboxImage({ src: editingTeam.logo_url, label: `Logo de ${editingTeam.name}` })}
+                              className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-xs text-white font-semibold"
+                            >
+                              <ZoomIn className="w-4 h-4" /> Agrandar
+                            </button>
+                          )}
                         </div>
 
-                        {past.justification ? (
-                          <div className="mt-1 rounded bg-amber-500/10 border border-amber-500/20 p-2.5 text-xs text-amber-300/90">
-                            <div className="flex items-center justify-between font-semibold text-[11px] uppercase tracking-wider text-amber-400 mb-1">
-                              <span>Justificación Administrativa</span>
-                              {past.adminName && <span>Por: {past.adminName}</span>}
-                            </div>
-                            <p className="italic">"{past.justification}"</p>
-                          </div>
-                        ) : (
-                          <div className="text-[11px] text-muted-foreground italic">
-                            Concluido por finalización de plazo o acuerdo mutuo.
-                          </div>
-                        )}
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] text-muted-foreground font-500 block">Subir archivo nuevo:</label>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              if (e.target.files && e.target.files[0]) {
+                                handleUploadTeamMedia(e.target.files[0], 'logo_url')
+                              }
+                            }}
+                            className="w-full text-xs text-muted-foreground file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-muted-foreground font-500 block">O URL directa:</label>
+                          <input
+                            type="text"
+                            value={editingTeam.logo_url}
+                            onChange={(e) => setEditingTeam({ ...editingTeam, logo_url: e.target.value })}
+                            className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-white focus:border-primary focus:outline-none"
+                            placeholder="https://..."
+                          />
+                        </div>
                       </div>
-                    ))}
+
+                      {/* Camiseta / Jersey Oficial */}
+                      <div className="space-y-3">
+                        <label className="text-xs font-600 text-muted-foreground uppercase block">
+                          Camiseta / Jersey Oficial
+                        </label>
+                        <div className="relative w-full h-44 rounded-xl border border-border bg-surface overflow-hidden flex items-center justify-center group">
+                          {editingTeam.jersey_url ? (
+                            <img 
+                              src={editingTeam.jersey_url} 
+                              alt="Camiseta Oficial" 
+                              className="w-full h-full object-contain p-2" 
+                            />
+                          ) : (
+                            <div className="text-center p-3 text-muted-foreground text-xs">
+                              <ImageIcon className="w-8 h-8 mx-auto mb-1 opacity-50" />
+                              Sin camiseta registrada
+                            </div>
+                          )}
+                          {editingTeam.jersey_url && (
+                            <button
+                              type="button"
+                              onClick={() => setLightboxImage({ src: editingTeam.jersey_url, label: `Camiseta de ${editingTeam.name}` })}
+                              className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-xs text-white font-semibold"
+                            >
+                              <ZoomIn className="w-4 h-4" /> Agrandar
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] text-muted-foreground font-500 block">Subir archivo nuevo:</label>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              if (e.target.files && e.target.files[0]) {
+                                handleUploadTeamMedia(e.target.files[0], 'jersey_url')
+                              }
+                            }}
+                            className="w-full text-xs text-muted-foreground file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-muted-foreground font-500 block">O URL directa:</label>
+                          <input
+                            type="text"
+                            value={editingTeam.jersey_url}
+                            onChange={(e) => setEditingTeam({ ...editingTeam, jersey_url: e.target.value })}
+                            className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-white focus:border-primary focus:outline-none"
+                            placeholder="https://..."
+                          />
+                        </div>
+                      </div>
+
+                    </div>
                   </div>
-                )}
-              </div>
+
+                  {/* SECCIÓN 3: Redes Sociales del Equipo */}
+                  <div className="rounded-xl border border-border bg-background/50 p-5 space-y-4">
+                    <h4 className="text-xs font-700 uppercase tracking-wider text-primary flex items-center gap-2 border-b border-border/60 pb-3">
+                      <Share2 className="w-4 h-4" />
+                      Redes Sociales Oficiales
+                    </h4>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      {socialPlatforms.map((s) => (
+                        <div key={s.key}>
+                          <label className="text-xs font-600 text-muted-foreground uppercase block mb-1">
+                            {s.label}
+                          </label>
+                          <input
+                            type="text"
+                            value={editingTeam[s.key] || ''}
+                            onChange={(e) => setEditingTeam({ ...editingTeam, [s.key]: e.target.value })}
+                            className="w-full rounded-lg border border-border bg-surface px-3.5 py-2 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                            placeholder={s.placeholder}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Barra de Guardar */}
+                  <div className="sticky bottom-0 bg-surface/95 backdrop-blur border border-border p-4 rounded-xl flex items-center justify-between gap-4 z-20 shadow-xl">
+                    <div className="text-xs text-muted-foreground">
+                      Los cambios se aplicarán inmediatamente en la base de datos de GMX Gaming.
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isSavingTeam}
+                      onClick={handleSaveTeam}
+                      className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider text-black bg-primary hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 disabled:opacity-50 cursor-pointer"
+                    >
+                      {isSavingTeam ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Guardando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-4 h-4" />
+                          <span>Guardar Cambios</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  
+                  {/* Roster Actual */}
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="font-display text-lg font-700 uppercase tracking-tight text-white flex items-center gap-2">
+                        <Users className="w-5 h-5 text-primary" />
+                        Roster Actual
+                      </h4>
+                      <span className="text-xs text-muted-foreground">
+                        {selectedTeam.roster.length} {selectedTeam.roster.length === 1 ? 'jugador activo' : 'jugadores activos'}
+                      </span>
+                    </div>
+                    
+                    {selectedTeam.roster.length === 0 ? (
+                      <div className="text-center py-8 border border-dashed border-border rounded-lg bg-background/50">
+                        <p className="text-muted-foreground text-sm">Este equipo no tiene jugadores con contratos activos actualmente.</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto rounded-lg border border-border">
+                        <table className="w-full text-left text-sm">
+                          <thead className="bg-background">
+                            <tr>
+                              <th className="px-4 py-3 font-600 text-muted-foreground text-xs uppercase tracking-wider">JUGADOR</th>
+                              <th className="px-4 py-3 font-600 text-muted-foreground text-xs uppercase tracking-wider">ROLES</th>
+                              <th className="px-4 py-3 font-600 text-muted-foreground text-xs uppercase tracking-wider">PAÍS</th>
+                              <th className="px-4 py-3 font-600 text-muted-foreground text-xs uppercase tracking-wider">DISCORD</th>
+                              <th className="px-4 py-3 font-600 text-muted-foreground text-xs uppercase tracking-wider text-right">ACCIÓN</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border bg-surface">
+                            {selectedTeam.roster.map((p, idx) => (
+                              <tr key={idx} className="transition-colors hover:bg-white/5">
+                                <td className="px-4 py-3">
+                                  <div className="font-bold text-white tracking-wide">{p.nickname}</div>
+                                  {p.name && p.name !== p.nickname && (
+                                    <div className="text-xs text-muted-foreground">{p.name}</div>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex flex-wrap gap-1">
+                                    {Array.isArray(p.roles) && p.roles.length > 0 ? (
+                                      p.roles.map((r: any, rIdx: number) => (
+                                        <span key={rIdx} className="rounded bg-primary/10 border border-primary/20 px-1.5 py-0.5 text-[11px] font-medium text-primary">
+                                          {formatRoleTitle(r)}
+                                        </span>
+                                      ))
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">-</span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-muted-foreground">
+                                  <span className="inline-flex items-center gap-1.5 text-xs">
+                                    <span>🌐</span> {formatLocation(p.country)}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-primary text-xs">{p.discord}</td>
+                                <td className="px-4 py-3 text-right">
+                                  <button
+                                    onClick={() => {
+                                      setTerminatingContract({
+                                        contractId: p.contractId,
+                                        playerId: p.playerId,
+                                        playerName: p.nickname || p.name,
+                                        teamId: selectedTeam.id,
+                                        teamName: selectedTeam.name
+                                      })
+                                      setTerminationJustification('')
+                                    }}
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold text-red-400 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-colors"
+                                    title="Dar de baja contrato administrativamente"
+                                  >
+                                    <UserX className="w-3.5 h-3.5" />
+                                    <span>Dar de Baja</span>
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Historial de Contratos Pasados y Bajas */}
+                  <div className="mt-8 border-t border-border pt-8">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="font-display text-lg font-700 uppercase tracking-tight text-white flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-primary" />
+                        Historial de Bajas y Contratos Pasados
+                      </h4>
+                      <span className="text-xs text-muted-foreground">
+                        {selectedTeam.pastContracts?.length || 0} en registro
+                      </span>
+                    </div>
+
+                    {(!selectedTeam.pastContracts || selectedTeam.pastContracts.length === 0) ? (
+                      <div className="text-center py-6 border border-dashed border-border rounded-lg bg-background/50">
+                        <p className="text-muted-foreground text-xs">No hay registro de contratos anteriores o dados de baja en este equipo.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                        {selectedTeam.pastContracts.map((past, pIdx) => (
+                          <div key={pIdx} className="rounded-lg border border-border/80 bg-background/60 p-3.5 flex flex-col gap-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-sm text-white">{past.nickname || past.name}</span>
+                                <div className="flex gap-1">
+                                  {Array.isArray(past.roles) && past.roles.map((r: any, rIdx: number) => (
+                                    <span key={rIdx} className="rounded bg-white/5 border border-white/10 px-1.5 py-0.2 text-[10px] text-muted-foreground">
+                                      {formatRoleTitle(r)}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="text-[11px] text-muted-foreground">
+                                {past.conclusionDate ? `Baja / Conclusión: ${new Date(past.conclusionDate).toLocaleDateString()}` : 'Contrato Concluido'}
+                              </div>
+                            </div>
+
+                            {past.justification ? (
+                              <div className="mt-1 rounded bg-amber-500/10 border border-amber-500/20 p-2.5 text-xs text-amber-300/90">
+                                <div className="flex items-center justify-between font-semibold text-[11px] uppercase tracking-wider text-amber-400 mb-1">
+                                  <span>Justificación Administrativa</span>
+                                  {past.adminName && <span>Por: {past.adminName}</span>}
+                                </div>
+                                <p className="italic">"{past.justification}"</p>
+                              </div>
+                            ) : (
+                              <div className="text-[11px] text-muted-foreground italic">
+                                Concluido por finalización de plazo o acuerdo mutuo.
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+              )}
+
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox Zoom Modal */}
+      {lightboxImage && (
+        <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center">
+            <button
+              type="button"
+              onClick={() => setLightboxImage(null)}
+              className="absolute -top-12 right-0 p-2 text-white/80 hover:text-white rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <img
+              src={lightboxImage.src}
+              alt={lightboxImage.label}
+              className="max-h-[80vh] w-auto rounded-lg object-contain border border-border shadow-2xl"
+            />
+            <span className="mt-3 text-sm font-600 text-white uppercase tracking-wider">{lightboxImage.label}</span>
           </div>
         </div>
       )}
