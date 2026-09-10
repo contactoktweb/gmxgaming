@@ -102,9 +102,10 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
   
   useEffect(() => {
     if (!user) return
+    const currentUser = user
 
-    setName(user.name)
-    setProfilePhoto(user.avatar || null)
+    setName(currentUser.name)
+    setProfilePhoto(currentUser.avatar || null)
 
     async function loadAllUserData() {
       setLoadingData(true)
@@ -113,7 +114,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
         const { data: profile } = await supabase
           .from('profiles')
           .select('*, player_game_info(*)')
-          .eq('id', user.id)
+          .eq('id', currentUser.id)
           .single()
 
         if (profile) {
@@ -126,7 +127,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
         const { data: validations } = await supabase
           .from('validations')
           .select('*')
-          .or(`submitted_by.eq.${user.email || 'none'},submitted_by.eq.${user.name || 'none'},details->>user_id.eq.${user.id}`)
+          .or(`submitted_by.eq.${currentUser.email || 'none'},submitted_by.eq.${currentUser.name || 'none'},details->>user_id.eq.${currentUser.id}`)
           .order('created_at', { ascending: false })
           .limit(1)
 
@@ -139,7 +140,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
         const { data: managedTeams } = await supabase
           .from('teams')
           .select('*')
-          .eq('manager_id', user.id)
+          .eq('manager_id', currentUser.id)
           .order('created_at', { ascending: false })
 
         // 3b. Contracts (Teams playing for)
@@ -149,7 +150,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
             *,
             teams (id, name, tag, logo_url, country, status)
           `)
-          .eq('player_id', user.id)
+          .eq('player_id', currentUser.id)
           .order('created_at', { ascending: false })
 
         // Determine active team
@@ -161,7 +162,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
         } else if (contractsData && contractsData.length > 0) {
           const active = contractsData.find((c: any) => 
             c.status === 'active' || c.status === 'activo' || c.status === 'pending_manager' || c.status === 'pendiente' || c.status === 'pending_player_release' || c.status === 'pending_manager_release'
-          ) || contractsData[0]
+          )
 
           if (active && active.teams) {
             setUserTeam({
@@ -170,16 +171,22 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               contractStatus: active.status,
               contractRole: Array.isArray(active.roles) ? active.roles.join(', ') : active.roles
             })
+          } else {
+            setUserTeam(null)
           }
+        } else {
+          setUserTeam(null)
         }
 
         // Determine active contract
         if (contractsData && contractsData.length > 0) {
           const active = contractsData.find((c: any) => 
             c.status === 'active' || c.status === 'activo' || c.status === 'pending_manager' || c.status === 'pendiente' || c.status === 'pending_player_release' || c.status === 'pending_manager_release'
-          ) || contractsData[0]
+          )
 
-          setActiveContract(active)
+          setActiveContract(active || null)
+        } else {
+          setActiveContract(null)
         }
 
       } catch (err) {

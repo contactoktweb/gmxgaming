@@ -33,6 +33,10 @@ export function AltaContratoForm() {
   const [contractEndDate, setContractEndDate] = useState('')
   const [dateError, setDateError] = useState('')
 
+  const [hasVaronilContract, setHasVaronilContract] = useState(false)
+  const [hasFemenilContract, setHasFemenilContract] = useState(false)
+  const [countries, setCountries] = useState<any[]>([])
+
   // Fechas límite: fecha de hoy y fecha mínima permitida (mañana) en formato YYYY-MM-DD
   const today = new Date()
   const todayYear = today.getFullYear()
@@ -48,14 +52,12 @@ export function AltaContratoForm() {
   const minDateStr = `${minYear}-${minMonth}-${minDay}`
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value
-    setContractEndDate(val)
-    if (val) {
-      if (val <= todayStr) {
-        setDateError('La fecha del contrato debe ser posterior al día de hoy.')
-      } else {
-        setDateError('')
-      }
+    const selected = e.target.value
+    setContractEndDate(selected)
+    if (!selected) {
+      setDateError('Por favor selecciona una fecha.')
+    } else if (selected <= todayStr) {
+      setDateError('La fecha debe ser posterior al día de hoy.')
     } else {
       setDateError('')
     }
@@ -63,10 +65,20 @@ export function AltaContratoForm() {
 
   useEffect(() => {
     async function init() {
-      if (!user) {
-        setBlockMessage('Debes iniciar sesión para poder registrar un contrato.')
-        setFormStatus('blocked')
-        return
+      if (!user) return
+      setFormStatus('loading')
+
+      // Cargar configuraciones de países desde app_settings
+      try {
+        const { data: configData } = await supabase.from('app_settings').select('*')
+        if (configData) {
+          const countryConfig = configData.find(s => s.id === 'enabled_countries')
+          if (countryConfig && Array.isArray(countryConfig.value) && countryConfig.value.length > 0) {
+            setCountries(countryConfig.value)
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching dynamic country configuration:', err)
       }
 
       // 1. Validar si el usuario es jugador profesional aprobado
@@ -96,13 +108,14 @@ export function AltaContratoForm() {
         .select('details')
         .or(`submitted_by.eq.${user.id},submitted_by.eq.${user.email || 'none'},details->>user_id.eq.${user.id}`)
         .order('created_at', { ascending: false })
-        .limit(5)
+        .limit(10)
 
       if (userValidations && userValidations.length > 0) {
         for (const v of userValidations) {
           const g = v.details?.gender || v.details?.genero || v.details?.['item_meta[783]'] || v.details?.item_meta?.[783]
           if (typeof g === 'string') {
-            if (g.toLowerCase().includes('fem') || g.toLowerCase() === 'f') {
+            const lower = g.toLowerCase()
+            if (lower.includes('fem') || lower === 'f' || lower.includes('mujer')) {
               detectedGender = 'Femenino'
               break
             }
@@ -140,28 +153,35 @@ export function AltaContratoForm() {
           return { ...t, category }
         })
 
-      // 4. Obtener contratos activos o en proceso
+      // 4. Obtener únicamente contratos activos o en proceso (excluye completados, cancelados y rechazados)
       const { data: contracts } = await supabase
         .from('contracts')
         .select('*, teams(id, name)')
         .eq('player_id', user.id)
-        .in('status', ['active', 'activo', 'pending_manager', 'pendiente'])
+        .in('status', ['active', 'activo', 'pending_manager', 'pendiente', 'pending_player_release', 'pending_manager_release'])
 
       const activeList = contracts || []
-      const hasVaronil = activeList.some((c: any) => {
-        const cat = c.team_gender_category === 'female' ? 'Femenil' : (teamCategoryMap.get(c.team_id) || 'Varonil / Mixto')
-        return cat === 'Varonil / Mixto'
-      })
-      const hasFemenil = activeList.some((c: any) => {
-        const cat = c.team_gender_category === 'female' ? 'Femenil' : (teamCategoryMap.get(c.team_id) || 'Varonil / Mixto')
-        return cat === 'Femenil'
-      })
+
+      const getCat = (c: any) => {
+        if (c.team_gender_category === 'female') return 'Femenil'
+        if (c.team_gender_category === 'mixed') return 'Varonil / Mixto'
+        const fromMap = teamCategoryMap.get(c.team_id)
+        if (fromMap) return fromMap
+        const teamName = c.teams?.name || ''
+        return teamName.toLowerCase().includes('fem') ? 'Femenil' : 'Varonil / Mixto'
+      }
+
+      const hasVaronil = activeList.some((c: any) => getCat(c) === 'Varonil / Mixto')
+      const hasFemenil = activeList.some((c: any) => getCat(c) === 'Femenil')
+
+      setHasVaronilContract(hasVaronil)
+      setHasFemenilContract(hasFemenil)
 
       // 5. Aplicar regla de contratos según género
       if (detectedGender === 'Masculino') {
         // Hombre: Solo 1 contrato activo de equipo varonil/mixto
         if (activeList.length >= 1) {
-          setBlockMessage('Ya tienes un contrato activo o en proceso. Los jugadores varoniles solo pueden tener 1 contrato activo de equipo varonil/mixto a la vez.')
+          setBlockMessage('Ya cuentas con un contrato activo o en proceso. Los jugadores varoniles solo pueden tener 1 contrato a la vez. Cuando tu contrato anterior sea dado de baja, podrás registrar uno nuevo.')
           setFormStatus('blocked')
           return
         }
@@ -171,9 +191,9 @@ export function AltaContratoForm() {
         setTeams(parsedTeams.filter(t => t.category === 'Varonil / Mixto'))
         setInfoNotice('Regla de contratos: Como jugador varonil, tienes permitido contar con 1 contrato activo en división Varonil / Mixto.')
       } else {
-        // Mujer: Hasta 2 activos (1 varonil/mixto y 1 femenil)
+        // Mujer: Hasta 2 activos (exactamente 1 varonil/mixto y 1 femenil)
         if (hasVaronil && hasFemenil) {
-          setBlockMessage('Has alcanzado el límite máximo de contratos permitidos para jugadoras (1 en equipo Varonil/Mixto y 1 en equipo Femenil).')
+          setBlockMessage('Has alcanzado el límite máximo de contratos permitidos para jugadoras (1 en equipo Femenil y 1 en equipo Varonil / Mixto). Si alguno de tus contratos es dado de baja, podrás registrar uno nuevo en esa división.')
           setFormStatus('blocked')
           return
         }
@@ -181,15 +201,15 @@ export function AltaContratoForm() {
         if (hasVaronil) {
           setAllowedDivision('Femenil')
           setTeams(parsedTeams.filter(t => t.category === 'Femenil'))
-          setInfoNotice('Tienes 1 contrato activo en división Varonil / Mixto. Tu cupo restante disponible es para 1 equipo de división Femenil.')
+          setInfoNotice('Cuentas con 1 contrato activo en división Varonil / Mixto. Tu cupo disponible restante es exclusivamente para 1 equipo de división Femenil.')
         } else if (hasFemenil) {
           setAllowedDivision('Varonil / Mixto')
           setTeams(parsedTeams.filter(t => t.category === 'Varonil / Mixto'))
-          setInfoNotice('Tienes 1 contrato activo en división Femenil. Tu cupo restante disponible es para 1 equipo de división Varonil / Mixto.')
+          setInfoNotice('Cuentas con 1 contrato activo en división Femenil. Tu cupo disponible restante es exclusivamente para 1 equipo de división Varonil / Mixto.')
         } else {
           setAllowedDivision('all')
           setTeams(parsedTeams)
-          setInfoNotice('Regla para jugadoras: Puedes tener hasta 2 contratos activos simultáneos (1 en equipo Varonil/Mixto y 1 en equipo Femenil).')
+          setInfoNotice('Regla para jugadoras: Puedes tener hasta 2 contratos activos simultáneos (exclusivamente 1 en división Femenil y 1 en división Varonil / Mixto).')
         }
       }
     }
@@ -261,6 +281,30 @@ export function AltaContratoForm() {
 
     const isFemenil = selectedTeam?.category === 'Femenil'
 
+    if (playerGender === 'Masculino') {
+      if (isFemenil) {
+        setFormStatus('idle')
+        alert('Los jugadores varoniles no pueden registrar contratos en la división Femenil.')
+        return
+      }
+      if (hasVaronilContract) {
+        setFormStatus('idle')
+        alert('Ya cuentas con un contrato activo en la división Varonil / Mixto. Los jugadores varoniles solo pueden tener 1 contrato activo. Cuando tu contrato sea dado de baja, podrás registrar uno nuevo.')
+        return
+      }
+    } else {
+      if (isFemenil && hasFemenilContract) {
+        setFormStatus('idle')
+        alert('Ya cuentas con un contrato activo en la división Femenil. Las jugadoras solo pueden tener 1 contrato en Femenil y 1 en Varonil / Mixto.')
+        return
+      }
+      if (!isFemenil && hasVaronilContract) {
+        setFormStatus('idle')
+        alert('Ya cuentas con un contrato activo en la división Varonil / Mixto. Las jugadoras solo pueden tener 1 contrato en Femenil y 1 en Varonil / Mixto.')
+        return
+      }
+    }
+
     const payload = {
       player_id: user?.id,
       team_id: teamId,
@@ -316,7 +360,7 @@ export function AltaContratoForm() {
           <GmxButton href="/micuenta" className="w-full sm:w-auto px-8">
             IR A MI CUENTA
           </GmxButton>
-          <GmxButton href="/" variant="outline" className="w-full sm:w-auto px-8">
+          <GmxButton href="/" variant="secondary" className="w-full sm:w-auto px-8">
             VOLVER AL INICIO
           </GmxButton>
         </div>

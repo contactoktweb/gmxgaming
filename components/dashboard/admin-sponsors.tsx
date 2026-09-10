@@ -62,12 +62,27 @@ export function AdminSponsors() {
       })
 
       if (error) {
-        toast.error('Error al guardar en la base de datos: ' + error.message)
-      } else {
-        setSponsors(newList)
+        console.error('Error saving sponsors to app_settings:', error)
+        toast.error('Error al guardar: ' + error.message)
+        return false
       }
+
+      // Sincronizar también con admin_settings si la tabla existe
+      try {
+        await supabase.from('admin_settings').upsert({
+          id: 'sponsors',
+          value: newList
+        })
+      } catch (err) {
+        // Ignorar si no existe
+      }
+
+      setSponsors(newList)
+      return true
     } catch (err: any) {
+      console.error('Unexpected error saving sponsors:', err)
       toast.error('Error inesperado al guardar')
+      return false
     } finally {
       setSaving(false)
     }
@@ -127,11 +142,11 @@ export function AdminSponsors() {
 
     const trimmedName = formData.name.trim()
     if (!trimmedName) {
-      toast.error('El nombre del sponsor (Alt) es obligatorio')
+      toast.error('El nombre del sponsor es obligatorio')
       return
     }
 
-    let formattedUrl = formData.url.trim()
+    let formattedUrl = formData.url ? formData.url.trim() : ''
     if (formattedUrl && !formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
       formattedUrl = `https://${formattedUrl}`
     }
@@ -147,21 +162,24 @@ export function AdminSponsors() {
     if (editingIndex !== null) {
       updatedList = [...sponsors]
       updatedList[editingIndex] = newSponsorItem
-      toast.success('Sponsor actualizado')
     } else {
       updatedList = [...sponsors, newSponsorItem]
-      toast.success('Sponsor agregado')
     }
 
-    setIsModalOpen(false)
-    await persistSponsors(updatedList)
+    const ok = await persistSponsors(updatedList)
+    if (ok) {
+      toast.success(editingIndex !== null ? 'Sponsor actualizado con éxito' : 'Sponsor guardado con éxito')
+      setIsModalOpen(false)
+    }
   }
 
   const handleDelete = async (index: number) => {
     const updatedList = sponsors.filter((_, idx) => idx !== index)
     setDeleteConfirm(null)
-    toast.success('Sponsor eliminado')
-    await persistSponsors(updatedList)
+    const ok = await persistSponsors(updatedList)
+    if (ok) {
+      toast.success('Sponsor eliminado')
+    }
   }
 
   const handleMove = async (index: number, direction: 'up' | 'down') => {
@@ -194,7 +212,7 @@ export function AdminSponsors() {
               </span>
             </div>
             <p className="mt-1.5 text-xs sm:text-sm text-muted-foreground">
-              Administra los sponsors, logos con texto alternativo (Alt) y enlaces de redirección externa (`_blank`) del carrusel.
+              Administra las marcas, patrocinadores y enlaces del carrusel principal.
             </p>
           </div>
 
@@ -213,7 +231,7 @@ export function AdminSponsors() {
             <Handshake className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />
             <h3 className="font-display text-lg font-700 uppercase text-white mb-1">Sin Sponsors Registrados</h3>
             <p className="text-xs text-muted-foreground max-w-md mx-auto mb-4">
-              Agrega patrocinadores con su imagen, texto descriptivo (Alt) y URL de redirección.
+              Agrega patrocinadores con su logo y enlace para mostrarlos en el carrusel del sitio.
             </p>
             <GmxButton onClick={handleOpenNew} variant="secondary" className="gap-2 text-xs">
               <Plus className="w-4 h-4" /> Registrar Primer Sponsor
@@ -240,7 +258,7 @@ export function AdminSponsors() {
                         <span className="font-display text-base font-700 uppercase tracking-tight text-white/70">
                           {sponsor.name}
                         </span>
-                        <span className="block text-[10px] text-muted-foreground mt-1">(Solo texto / Sin imagen)</span>
+                        <span className="block text-[10px] text-muted-foreground mt-1">Sin logo cargado</span>
                       </div>
                     )}
 
@@ -256,9 +274,6 @@ export function AdminSponsors() {
                       <h3 className="font-display font-700 text-white text-base truncate" title={sponsor.name}>
                         {sponsor.name}
                       </h3>
-                      <span className="text-[10px] uppercase font-600 px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 shrink-0">
-                        Alt: {sponsor.name}
-                      </span>
                     </div>
 
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1">
@@ -274,7 +289,7 @@ export function AdminSponsors() {
                           {sponsor.url}
                         </a>
                       ) : (
-                        <span className="text-muted-foreground/60 italic">Sin enlace de redirección</span>
+                        <span className="text-muted-foreground/60 italic">Sin enlace</span>
                       )}
                     </div>
                   </div>
@@ -307,7 +322,7 @@ export function AdminSponsors() {
                         href={sponsor.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        title="Probar enlace en nueva pestaña"
+                        title="Probar enlace"
                         className="p-1.5 rounded border border-border bg-surface text-primary hover:bg-primary/10 hover:border-primary transition-colors"
                       >
                         <ExternalLink className="w-3.5 h-3.5" />
@@ -338,7 +353,7 @@ export function AdminSponsors() {
       {/* Modal Agregar / Editar Sponsor */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => !uploadingImage && setIsModalOpen(false)} />
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => !uploadingImage && !saving && setIsModalOpen(false)} />
           <div className="relative w-full max-w-lg rounded-xl border border-border bg-surface shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
             
             {/* Modal Header */}
@@ -348,7 +363,7 @@ export function AdminSponsors() {
                 {editingIndex !== null ? 'Editar Sponsor' : 'Nuevo Sponsor'}
               </h3>
               <button 
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => !saving && setIsModalOpen(false)}
                 className="text-muted-foreground hover:text-white transition-colors p-2 rounded-full hover:bg-white/5"
               >
                 <X className="w-5 h-5" />
@@ -357,22 +372,19 @@ export function AdminSponsors() {
 
             {/* Modal Form */}
             <form onSubmit={handleSaveForm} className="p-6 space-y-5">
-              {/* Nombre / Alt */}
+              {/* Nombre */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-700 uppercase tracking-wider text-primary">
-                  Nombre del Sponsor (Texto Alt) <span className="text-red-400">*</span>
+                  Nombre del Sponsor <span className="text-red-400">*</span>
                 </label>
                 <input 
                   type="text"
                   required
                   value={formData.name}
                   onChange={e => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Ej: HYPERPLAY, REDBYTE, FED. MX ESPORTS..."
+                  placeholder="Ej: HYPERPLAY, REDBYTE, NopaStore..."
                   className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 />
-                <p className="text-[11px] text-muted-foreground">
-                  Este texto se usará como etiqueta y atributo accesible <code className="text-primary font-mono">alt="{formData.name || 'nombre'}"</code> en el logo.
-                </p>
               </div>
 
               {/* Imagen / Logo */}
@@ -399,14 +411,14 @@ export function AdminSponsors() {
 
                   <div className="flex flex-col justify-center">
                     <input 
-                      type="url"
+                      type="text"
                       value={formData.image_url}
                       onChange={e => setFormData({ ...formData, image_url: e.target.value })}
-                      placeholder="O ingresa URL de imagen (https://...)"
+                      placeholder="O ingresa enlace directo..."
                       className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                     />
                     <p className="text-[10px] text-muted-foreground mt-1.5">
-                      Fondo transparente (PNG/SVG) recomendado para mejor integración.
+                      Fondo transparente (PNG o SVG) recomendado.
                     </p>
                   </div>
                 </div>
@@ -443,18 +455,17 @@ export function AdminSponsors() {
                 )}
               </div>
 
-              {/* Link de Redirección */}
+              {/* Enlace Web */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-700 uppercase tracking-wider text-primary">
-                  Link de Redirección (URL) <span className="text-red-400">*</span>
+                  Enlace Web o Red Social
                 </label>
                 <div className="relative">
                   <input 
                     type="text"
-                    required
                     value={formData.url}
                     onChange={e => setFormData({ ...formData, url: e.target.value })}
-                    placeholder="https://ejemplo.com/patrocinador"
+                    placeholder="https://ejemplo.com o perfil social"
                     className="w-full rounded-lg border border-border bg-background px-4 py-2.5 pr-10 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary font-mono text-xs"
                   />
                   {formData.url && (
@@ -463,15 +474,12 @@ export function AdminSponsors() {
                       target="_blank"
                       rel="noopener noreferrer"
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-primary hover:text-white transition-colors"
-                      title="Probar en nueva pestaña"
+                      title="Probar enlace"
                     >
                       <ExternalLink className="w-4 h-4" />
                     </a>
                   )}
                 </div>
-                <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                  <span>ℹ️</span> Al hacer clic sobre el sponsor, <strong>se abrirá este enlace en una nueva pestaña</strong> (`target="_blank"`).
-                </p>
               </div>
 
               {/* Action Buttons */}
@@ -479,13 +487,19 @@ export function AdminSponsors() {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-white rounded-lg border border-border hover:bg-white/5 transition-colors"
+                  disabled={saving}
+                  className="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-white rounded-lg border border-border hover:bg-white/5 transition-colors disabled:opacity-50"
                 >
                   Cancelar
                 </button>
-                <GmxButton type="submit" disabled={uploadingImage || saving} className="gap-2 px-5">
-                  <Save className="w-4 h-4" />
-                  {editingIndex !== null ? 'Actualizar Sponsor' : 'Guardar Sponsor'}
+                <GmxButton 
+                  as="button"
+                  type="submit" 
+                  disabled={uploadingImage || saving} 
+                  className="gap-2 px-5"
+                >
+                  <Save className={cn("w-4 h-4", saving && "animate-spin")} />
+                  {saving ? 'Guardando...' : editingIndex !== null ? 'Actualizar Sponsor' : 'Guardar Sponsor'}
                 </GmxButton>
               </div>
             </form>

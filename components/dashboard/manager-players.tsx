@@ -27,6 +27,7 @@ interface ContractRequest {
   start_date: string | null
   end_date: string | null
   created_at: string
+  team_gender_category?: string
   profiles?: {
     id: string
     name: string
@@ -131,9 +132,9 @@ export function ManagerPlayers() {
       // Check player's existing active contracts in database (excluyendo el actual)
       const { data: activePlayerContracts } = await supabase
         .from('contracts')
-        .select('id, team_id, team_gender_category, status')
+        .select('id, team_id, team_gender_category, status, teams(id, name)')
         .eq('player_id', playerId)
-        .in('status', ['active', 'activo'])
+        .in('status', ['active', 'activo', 'pending_player_release', 'pending_manager_release'])
 
       // Detect player gender from validations
       let detectedGender: 'Masculino' | 'Femenino' = 'Masculino'
@@ -190,7 +191,8 @@ export function ManagerPlayers() {
         }
 
         const hasSameCategory = activeList.some((c: any) => {
-          const cat = c.team_gender_category === 'female' ? 'Femenil' : 'Varonil / Mixto'
+          const isFem = c.team_gender_category === 'female' || (c.teams?.name || '').toLowerCase().includes('fem')
+          const cat = isFem ? 'Femenil' : 'Varonil / Mixto'
           return cat === currentCategory
         })
 
@@ -259,7 +261,10 @@ export function ManagerPlayers() {
     if (!terminatingContract) return
     const contractId = terminatingContract.id
     const playerName = terminatingContract.profiles?.name || 'el jugador'
+    const teamName = currentTeam?.name || 'el equipo'
+    const trimmed = terminationJustification.trim()
 
+    setSubmittingTermination(true)
     toast.loading('Enviando solicitud de baja...', { id: 'contract-term' })
 
     try {
@@ -270,94 +275,41 @@ export function ManagerPlayers() {
         })
         .eq('id', contractId)
 
-      if (!error) {
-        toast.success('Solicitud de Baja Enviada', {
-          id: 'contract-term',
-          description: `Se envió la solicitud a ${playerName}. El contrato finalizará una vez que el jugador la acepte.`
-        })
-        setContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'pending_player_release' } : c))
-        setTerminatingContract(null)
-      } else {
-        toast.error('Error al solicitar la baja: ' + error.message, { id: 'contract-term' })
-      }
-    } catch (err: any) {
-      console.error('Error al solicitar baja:', err)
-      toast.error('Error al solicitar baja: ' + (err?.message || 'Error inesperado'), { id: 'contract-term' })
-    }
-  }
+      if (error) throw error
 
-  // Baja administrativa inmediata para administradores
-  const handleAdminDirectTermination = async () => {
-    if (!terminatingContract) return
-    const trimmed = terminationJustification.trim()
-    if (!trimmed || trimmed.length < 5) {
-      toast.error('La justificación es obligatoria (mínimo 5 caracteres).')
-      return
-    }
-
-    setSubmittingTermination(true)
-    toast.loading('Aplicando baja administrativa inmediata...', { id: 'contract-term' })
-
-    try {
-      const contractId = terminatingContract.id
-      const playerName = terminatingContract.profiles?.name || 'el jugador'
-      const teamName = currentTeam?.name || 'el equipo'
-
-      const { error: contractError } = await supabase
-        .from('contracts')
-        .update({
-          status: 'completado',
-          conclusion_date: new Date().toISOString()
-        })
-        .eq('id', contractId)
-
-      if (contractError) throw contractError
-
-      const { error: validationError } = await supabase
-        .from('validations')
-        .insert({
-          type: 'baja_contrato',
-          target_name: `Baja Administrativa: ${playerName} (${teamName})`,
-          submitted_by: user?.name || user?.email || 'Administrador',
-          status: 'approved',
-          details: {
-            contract_id: contractId,
-            player_id: terminatingContract.player_id,
-            player_name: playerName,
-            team_id: terminatingContract.team_id,
-            team_name: teamName,
-            justification: trimmed,
-            admin_id: user?.id,
-            admin_name: user?.name || user?.email || 'Administrador',
-            conclusion_date: new Date().toISOString()
-          }
-        })
-
-      if (validationError) {
-        console.error('Error recording validation:', validationError)
+      if (trimmed) {
+        await supabase
+          .from('validations')
+          .insert({
+            type: 'baja_contrato',
+            target_name: `Solicitud de Baja: ${playerName} (${teamName})`,
+            submitted_by: user?.name || user?.email || 'Manager',
+            status: 'pending',
+            details: {
+              contract_id: contractId,
+              player_id: terminatingContract.player_id,
+              player_name: playerName,
+              team_id: terminatingContract.team_id,
+              team_name: teamName,
+              justification: trimmed,
+              manager_id: user?.id,
+              manager_name: user?.name || user?.email || 'Manager',
+              request_date: new Date().toISOString()
+            }
+          })
       }
 
-      toast.success('Baja Administrativa Aplicada', {
+      toast.success('Solicitud de Baja Enviada', {
         id: 'contract-term',
-        description: `Se dio de baja inmediatamente a ${playerName}. La justificación quedó registrada.`
+        description: `Se envió la solicitud a ${playerName}. El contrato no finalizará hasta que el jugador la acepte.`
       })
 
-      setBajaValidationsMap(prev => ({
-        ...prev,
-        [contractId]: {
-          details: {
-            justification: trimmed,
-            admin_name: user?.name || user?.email || 'Administrador'
-          }
-        }
-      }))
-
-      setContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'completado', conclusion_date: new Date().toISOString() } : c))
+      setContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'pending_player_release' } : c))
       setTerminatingContract(null)
       setTerminationJustification('')
     } catch (err: any) {
-      console.error('Error in direct termination:', err)
-      toast.error('Error al aplicar la baja: ' + (err?.message || 'Error inesperado'), { id: 'contract-term' })
+      console.error('Error al solicitar baja:', err)
+      toast.error('Error al solicitar baja: ' + (err?.message || 'Error inesperado'), { id: 'contract-term' })
     } finally {
       setSubmittingTermination(false)
     }
@@ -538,17 +490,17 @@ export function ManagerPlayers() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6">
           <div className="rounded-lg bg-background border border-border p-4">
             <p className="text-xs font-600 uppercase tracking-wider text-muted-foreground">Solicitudes Entrada</p>
-            <p className="font-display text-2xl sm:text-3xl font-700 text-amber-400 mt-1">{pendingRequests.length}</p>
+            <p className="font-display text-2xl sm:text-3xl font-bold text-amber-400 mt-1">{pendingRequests.length}</p>
           </div>
           <div className="rounded-lg bg-background border border-border p-4">
             <p className="text-xs font-600 uppercase tracking-wider text-muted-foreground">Bajas Solicitadas</p>
-            <p className={cn("font-display text-2xl sm:text-3xl font-700 mt-1", pendingPlayerReleases.length > 0 ? "text-red-400" : "text-muted-foreground")}>
+            <p className="font-display text-2xl sm:text-3xl font-bold text-red-400 mt-1">
               {pendingPlayerReleases.length}
             </p>
           </div>
           <div className="rounded-lg bg-background border border-border p-4">
             <p className="text-xs font-600 uppercase tracking-wider text-muted-foreground">Jugadores Roster</p>
-            <p className="font-display text-2xl sm:text-3xl font-700 text-emerald-400 mt-1">{activeRoster.length}</p>
+            <p className="font-display text-2xl sm:text-3xl font-bold text-emerald-400 mt-1">{activeRoster.length}</p>
           </div>
           <div className="col-span-2 sm:col-span-1 rounded-lg bg-background border border-border p-4 flex items-center justify-between">
             <div>
@@ -935,7 +887,7 @@ export function ManagerPlayers() {
         </div>
       )}
 
-      {/* Modal para Dar de Baja Contrato (Admin inmediato con justificación obligatoria o Manager con solicitud) */}
+      {/* Modal para Solicitar Baja de Contrato */}
       {terminatingContract && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div 
@@ -948,81 +900,54 @@ export function ManagerPlayers() {
             </div>
             
             <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white text-center mb-2">
-              {user?.role === 'admin' ? 'Baja Administrativa Inmediata' : '¿Solicitar baja a este jugador?'}
+              ¿Solicitar baja a este jugador?
             </h3>
             
             <p className="text-sm text-muted-foreground text-center mb-4">
-              Estás a punto de dar de baja el contrato de <strong className="text-white">{terminatingContract.profiles?.name}</strong> en <strong className="text-white">{currentTeam.name}</strong>.
+              Estás a punto de solicitar la baja del contrato de <strong className="text-white">{terminatingContract.profiles?.name}</strong> en <strong className="text-white">{currentTeam.name}</strong>.
             </p>
 
-            {user?.role === 'admin' ? (
-              <div className="space-y-4 text-sm text-muted-foreground mb-6">
-                <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-200/90 leading-relaxed">
-                  ℹ️ <strong className="text-amber-300">Modo Administrador:</strong> Esta baja se ejecutará <strong>automáticamente e inmediatamente</strong>. El registro del contrato se mantendrá intacto en el historial. Es <strong>obligatorio</strong> ingresar la justificación.
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-white mb-1.5">
-                    Motivo / Justificación obligatoria <span className="text-red-400">*</span>
-                  </label>
-                  <textarea
-                    value={terminationJustification}
-                    onChange={(e) => setTerminationJustification(e.target.value)}
-                    placeholder="Escribe obligatoriamente el motivo de la baja administrativa (mínimo 5 caracteres)..."
-                    rows={4}
-                    className="w-full rounded-lg border border-border bg-background p-3 text-sm text-white placeholder:text-muted-foreground/60 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 transition-colors"
-                  />
-                  <div className="flex justify-between items-center mt-1 text-[11px] text-muted-foreground">
-                    <span>Mínimo 5 caracteres</span>
-                    <span className={terminationJustification.trim().length >= 5 ? 'text-emerald-400' : 'text-amber-400'}>
-                      {terminationJustification.trim().length} caracteres
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex gap-3 justify-end pt-2">
-                  <button
-                    type="button"
-                    disabled={submittingTermination}
-                    onClick={() => {
-                      setTerminatingContract(null)
-                      setTerminationJustification('')
-                    }}
-                    className="flex-1 py-2.5 rounded-md border border-border text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-white hover:bg-white/5 transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    disabled={submittingTermination || terminationJustification.trim().length < 5}
-                    onClick={handleAdminDirectTermination}
-                    className="flex-1 py-2.5 rounded-md bg-red-600 hover:bg-red-500 text-xs font-semibold uppercase tracking-wider text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {submittingTermination ? 'Procesando...' : 'Confirmar Baja Inmediata'}
-                  </button>
-                </div>
+            <div className="space-y-4 text-sm text-muted-foreground mb-6">
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3.5 text-xs text-amber-200/90 leading-relaxed">
+                ℹ️ Se notificará al jugador para rescindir el contrato. <strong>No se dará de baja automáticamente</strong> hasta que el jugador revise y acepte la solicitud desde su panel de equipo.
               </div>
-            ) : (
+
               <div>
-                <p className="text-xs text-muted-foreground text-center mb-6">
-                  Se notificará al jugador para que acepte la baja y quede desvinculado como agente libre.
-                </p>
-                <div className="flex gap-3 justify-end">
-                  <button
-                    onClick={() => setTerminatingContract(null)}
-                    className="flex-1 py-2.5 rounded-md border border-border text-sm font-600 text-white hover:bg-white/5 transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={handleTerminateContract}
-                    className="flex-1 py-2.5 rounded-md bg-red-600 hover:bg-red-700 text-sm font-600 text-white uppercase tracking-wider transition-colors"
-                  >
-                    Enviar Solicitud
-                  </button>
-                </div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-white mb-1.5">
+                  Motivo de la baja (opcional)
+                </label>
+                <textarea
+                  value={terminationJustification}
+                  onChange={(e) => setTerminationJustification(e.target.value)}
+                  placeholder="Escribe el motivo o justificación de la baja..."
+                  rows={3}
+                  className="w-full rounded-lg border border-border bg-background p-3 text-sm text-white placeholder:text-muted-foreground/60 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 transition-colors"
+                />
               </div>
-            )}
+
+              <div className="flex gap-3 justify-end pt-2">
+                <button
+                  type="button"
+                  disabled={submittingTermination}
+                  onClick={() => {
+                    setTerminatingContract(null)
+                    setTerminationJustification('')
+                  }}
+                  className="flex-1 py-2.5 rounded-md border border-border text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-white hover:bg-white/5 transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={submittingTermination}
+                  onClick={handleTerminateContract}
+                  className="flex-1 py-2.5 rounded-md bg-red-600 hover:bg-red-500 text-xs font-semibold uppercase tracking-wider text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <UserX className="w-4 h-4" />
+                  {submittingTermination ? 'Enviando Solicitud...' : 'Enviar Solicitud de Baja'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -18,11 +18,10 @@ export function Partners() {
           .maybeSingle()
 
         if (data && Array.isArray(data.value) && data.value.length > 0) {
-          // Validar y mapear
           const valid = data.value.map((item: any, idx: number) => ({
             id: item.id || `sponsor-${idx}`,
             name: typeof item === 'string' ? item : item.name || 'Sponsor',
-            image_url: typeof item === 'string' ? '' : item.image_url || '',
+            image_url: typeof item === 'string' ? '' : (item.image_url || '').trim(),
             url: typeof item === 'string' ? 'https://gmxgaming.com/' : item.url || 'https://gmxgaming.com/'
           }))
           setSponsors(valid)
@@ -32,10 +31,27 @@ export function Partners() {
       }
     }
     loadSponsors()
+
+    // Suscripción en tiempo real para reflejar cambios y nuevos logos al instante
+    const channel = supabase
+      .channel('public:app_settings:sponsors')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings', filter: 'id=eq.sponsors' }, () => {
+        loadSponsors()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
 
-  const displayList = sponsors.length > 0 ? sponsors : PARTNERS
-  const doubled = [...displayList, ...displayList]
+  const baseList = sponsors.length > 0 ? sponsors : PARTNERS
+
+  // Aseguramos que la pista tenga suficientes elementos para sobrepasar cualquier resolución de pantalla (mínimo 10 items)
+  let trackItems = [...baseList]
+  while (trackItems.length < 10) {
+    trackItems = [...trackItems, ...baseList]
+  }
 
   return (
     <section className="border-y border-border bg-deep py-14 overflow-hidden relative" aria-label="Nuestros Sponsors y Aliados">
@@ -45,52 +61,61 @@ export function Partners() {
         </h2>
       </div>
 
-      <div className="relative flex overflow-hidden group">
-        <div className="flex shrink-0 items-center gap-12 sm:gap-16 pr-12 sm:pr-16 animate-marquee-right group-hover:[animation-play-state:paused]">
-          {doubled.map((sponsor, i) => {
-            const hasImage = Boolean(sponsor.image_url)
-            const redirectUrl = sponsor.url || 'https://gmxgaming.com/'
+      <div className="relative flex overflow-hidden group w-full">
+        {/* Contenedor infinito que se desplaza exactamente el 50% de su ancho total */}
+        <div className="flex w-max animate-marquee-left group-hover:[animation-play-state:paused] [animation-duration:35s]">
+          {/* Pista 1 */}
+          <div className="flex shrink-0 items-center gap-12 sm:gap-16 pr-12 sm:pr-16">
+            {trackItems.map((sponsor, i) => (
+              <SponsorItem key={`track1-${sponsor.id || sponsor.name}-${i}`} sponsor={sponsor} />
+            ))}
+          </div>
 
-            return (
-              <a
-                key={`${sponsor.id || sponsor.name}-${i}`}
-                href={redirectUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={`${sponsor.name} - Abrir en una nueva pestaña`}
-                className="shrink-0 flex items-center justify-center transition-all duration-300 hover:scale-105 opacity-60 hover:opacity-100 cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary rounded-lg p-2"
-                data-cursor
-              >
-                {hasImage ? (
-                  <img
-                    src={sponsor.image_url}
-                    alt={sponsor.name}
-                    loading="lazy"
-                    className="h-8 sm:h-11 w-auto max-w-[140px] sm:max-w-[180px] object-contain filter drop-shadow hover:brightness-110 transition-all duration-300"
-                    onError={(e) => {
-                      // Fallback a texto si la imagen falla al cargar
-                      e.currentTarget.style.display = 'none'
-                      const sibling = e.currentTarget.nextElementSibling as HTMLElement
-                      if (sibling) sibling.style.display = 'inline-block'
-                    }}
-                  />
-                ) : null}
-
-                <span
-                  className={hasImage ? "hidden font-display text-xl sm:text-2xl font-700 uppercase tracking-tight text-white/50 hover:text-white transition-colors duration-300" : "font-display text-xl sm:text-2xl font-700 uppercase tracking-tight text-white/50 hover:text-white transition-colors duration-300"}
-                >
-                  {sponsor.name}
-                </span>
-              </a>
-            )
-          })}
+          {/* Pista 2 (clon idéntico que toma el relevo sin saltos ni cortes) */}
+          <div className="flex shrink-0 items-center gap-12 sm:gap-16 pr-12 sm:pr-16" aria-hidden="true">
+            {trackItems.map((sponsor, i) => (
+              <SponsorItem key={`track2-${sponsor.id || sponsor.name}-${i}`} sponsor={sponsor} />
+            ))}
+          </div>
         </div>
 
-        {/* Gradientes laterales para efecto fade */}
+        {/* Gradientes laterales para efecto fade suave */}
         <div className="pointer-events-none absolute inset-y-0 left-0 w-16 sm:w-28 bg-gradient-to-r from-deep to-transparent z-10" />
         <div className="pointer-events-none absolute inset-y-0 right-0 w-16 sm:w-28 bg-gradient-to-l from-deep to-transparent z-10" />
       </div>
     </section>
+  )
+}
+
+function SponsorItem({ sponsor }: { sponsor: PartnerSponsor }) {
+  const [imageFailed, setImageFailed] = useState(false)
+  const rawUrl = sponsor.image_url?.trim()
+  const hasImage = Boolean(rawUrl && rawUrl !== 'null' && rawUrl !== 'undefined' && !imageFailed)
+  const redirectUrl = sponsor.url || 'https://gmxgaming.com/'
+
+  return (
+    <a
+      href={redirectUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={`${sponsor.name} - Abrir en una nueva pestaña`}
+      className="shrink-0 flex items-center justify-center transition-all duration-300 hover:scale-105 opacity-80 hover:opacity-100 cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary rounded-lg p-2"
+      data-cursor
+    >
+      {hasImage ? (
+        <img
+          src={rawUrl}
+          alt={sponsor.name}
+          loading="lazy"
+          className="h-9 sm:h-12 w-auto max-w-[140px] sm:max-w-[180px] object-contain drop-shadow hover:brightness-110 transition-all duration-300"
+          onError={() => setImageFailed(true)}
+        />
+      ) : (
+        <span className="font-display text-xl sm:text-2xl font-700 uppercase tracking-tight text-white/60 hover:text-white transition-colors duration-300 whitespace-nowrap">
+          {sponsor.name}
+        </span>
+      )}
+    </a>
   )
 }
 

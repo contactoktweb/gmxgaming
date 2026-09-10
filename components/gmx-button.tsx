@@ -10,35 +10,33 @@ type Props = {
   variant?: 'primary' | 'secondary'
   className?: string
   arrow?: boolean
-  onClick?: () => void
+  onClick?: (e?: any) => void
   disabled?: boolean
+  type?: 'button' | 'submit' | 'reset'
+  as?: 'a' | 'button'
 }
 
 export function GmxButton({
   children,
-  href = '#registro',
+  href,
   variant = 'primary',
   className,
   arrow = true,
   onClick,
   disabled = false,
+  type,
+  as,
 }: Props) {
   const base =
-    'group relative inline-flex items-center justify-center gap-2 overflow-hidden px-7 py-4 font-display text-[13px] font-600 uppercase tracking-[0.18em] transition-colors duration-300 clip-corner sm:text-sm'
+    'group relative inline-flex items-center justify-center gap-2 overflow-hidden px-7 py-4 font-display text-[13px] font-600 uppercase tracking-[0.18em] transition-colors duration-300 clip-corner sm:text-sm cursor-pointer'
 
   const styles =
     variant === 'primary'
       ? 'bg-primary text-white'
       : 'border border-white/25 bg-transparent text-white hover:text-white'
 
-  return (
-    <a
-      href={disabled ? undefined : href}
-      onClick={disabled ? (e) => e.preventDefault() : onClick}
-      aria-disabled={disabled}
-      className={cn(base, styles, disabled && 'cursor-not-allowed opacity-50 pointer-events-none', className)}
-      data-cursor={disabled ? undefined : ''}
-    >
+  const inner = (
+    <>
       {/* Fill sweep */}
       <span
         className={cn(
@@ -52,6 +50,36 @@ export function GmxButton({
           <ArrowUpRight className="size-4 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
         )}
       </span>
+    </>
+  )
+
+  const isButton = as === 'button' || Boolean(type) || (!href && Boolean(onClick))
+
+  if (isButton) {
+    return (
+      <button
+        type={type || 'button'}
+        onClick={onClick}
+        disabled={disabled}
+        aria-disabled={disabled}
+        className={cn(base, styles, disabled && 'cursor-not-allowed opacity-50 pointer-events-none', className)}
+        data-cursor={disabled ? undefined : ''}
+      >
+        {inner}
+      </button>
+    )
+  }
+
+  return (
+    <a
+      href={disabled ? undefined : (href || '#registro')}
+      onClick={disabled ? (e) => e.preventDefault() : onClick}
+      aria-disabled={disabled}
+      className={cn(base, styles, disabled && 'cursor-not-allowed opacity-50 pointer-events-none', className)}
+      data-cursor={disabled ? undefined : ''}
+    >
+      {inner}
     </a>
   )
 }
+
