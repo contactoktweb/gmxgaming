@@ -542,7 +542,9 @@ export function AdminPlayers() {
       <div className="rounded-xl border border-border bg-surface p-6 sm:p-8">
         
         {/* Header & Filters */}
-        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 mb-8">
+        <div className="flex flex-col gap-4 mb-8">
+
+          {/* Fila 1: Título + Botones */}
           <div className="flex items-center gap-3 flex-wrap">
             <h2 className="font-display text-2xl font-700 uppercase tracking-tight text-white shrink-0">
               Jugadores
@@ -562,52 +564,52 @@ export function AdminPlayers() {
               </GmxButton>
             )}
           </div>
-          
-          <div className="flex flex-col sm:flex-row flex-wrap items-center gap-3 w-full xl:w-auto">
-            <input 
-              type="text" 
-              placeholder="Buscar por nombre, email o discord..." 
+
+          {/* Fila 2: Búsqueda + Filtros */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <input
+              type="text"
+              placeholder="Buscar por nombre, email o discord..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full sm:w-64 rounded-md border border-border bg-background px-4 py-2 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              className="w-full sm:w-60 rounded-md border border-border bg-background px-4 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
             />
-            
-            <div className="flex flex-wrap sm:flex-nowrap gap-3 w-full sm:w-auto">
-              <div className="relative flex-1 sm:flex-none">
-                <select 
-                  value={filterStatus} 
-                  onChange={e => setFilterStatus(e.target.value)}
-                  className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-2.5 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer font-500"
-                >
-                  <option value="all">Todos los Estados</option>
-                  <option value="active">Activos</option>
-                  <option value="approved">Aprobados</option>
-                  <option value="pending">En Revisión</option>
-                  <option value="rejected">Rechazados</option>
-                  <option value="inactive">Inactivos</option>
-                  <option value="banned">Baneados</option>
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              </div>
 
-              <div className="relative flex-1 sm:flex-none">
-                <select 
-                  value={filterTeam} 
-                  onChange={e => setFilterTeam(e.target.value)}
-                  className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-2.5 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer font-500"
-                >
-                  <option value="all">Todos los Equipos</option>
-                  <option value="none">Sin Equipo</option>
-                  {uniqueTeams.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              </div>
+            <div className="relative">
+              <select
+                value={filterStatus}
+                onChange={e => setFilterStatus(e.target.value)}
+                className="appearance-none rounded-lg border border-border bg-background px-4 py-2.5 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer font-500"
+              >
+                <option value="all">Todos los Estados</option>
+                <option value="active">Activos</option>
+                <option value="approved">Aprobados</option>
+                <option value="pending">En Revisión</option>
+                <option value="rejected">Rechazados</option>
+                <option value="inactive">Inactivos</option>
+                <option value="banned">Baneados</option>
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            </div>
 
-            <div className="relative flex-1 sm:flex-none sm:w-44 min-w-0">
-              <select 
-                value={filterCountry} 
+            <div className="relative">
+              <select
+                value={filterTeam}
+                onChange={e => setFilterTeam(e.target.value)}
+                className="appearance-none rounded-lg border border-border bg-background px-4 py-2.5 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer font-500"
+              >
+                <option value="all">Todos los Equipos</option>
+                <option value="none">Sin Equipo</option>
+                {uniqueTeams.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            </div>
+
+            <div className="relative">
+              <select
+                value={filterCountry}
                 onChange={e => setFilterCountry(e.target.value)}
-                className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-2.5 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer font-500 truncate"
+                className="appearance-none rounded-lg border border-border bg-background px-4 py-2.5 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer font-500"
               >
                 <option value="all">Todos los Países</option>
                 {uniqueCountries.map(c => <option key={c} value={c}>{c}</option>)}

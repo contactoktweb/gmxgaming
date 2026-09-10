@@ -15,6 +15,18 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
   const cookieStore = await cookies()
   const supabase = createClient(cookieStore)
 
+  // Verificar si el usuario actual es administrador
+  const { data: { user: authUser } } = await supabase.auth.getUser()
+  let isAdmin = false
+  if (authUser) {
+    const { data: authProfile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', authUser.id)
+      .single()
+    isAdmin = authProfile?.role === 'admin'
+  }
+
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(paramSlug)
 
   let player = null
@@ -115,9 +127,12 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
               <h1 className="font-display text-4xl font-700 uppercase tracking-tight text-white sm:text-6xl">
                 {gameInfo?.game_nickname || player.nickname || player.name}
               </h1>
-              <p className="mt-2 text-xl font-500 text-muted-foreground">
-                {player.name}
-              </p>
+              {/* Solo el administrador ve el nombre real */}
+              {isAdmin && player.name && (
+                <p className="mt-2 text-xl font-500 text-muted-foreground">
+                  {player.name}
+                </p>
+              )}
 
               <div className="mt-6 flex flex-wrap items-center gap-4">
                 {player.social_ig && (

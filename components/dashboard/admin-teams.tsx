@@ -141,6 +141,14 @@ export function AdminTeams() {
             }
           })
 
+          // Normalizar status para que coincida con los filtros
+          const rawStatus = t.status || 'inactive'
+          let normalizedStatus = rawStatus
+          if (rawStatus === 'approved' || rawStatus === 'activo') normalizedStatus = 'active'
+          else if (rawStatus === 'pendiente') normalizedStatus = 'pending'
+          else if (rawStatus === 'completado' || rawStatus === 'cancelado') normalizedStatus = 'inactive'
+          const status = normalizedStatus
+
           return {
             id: t.id,
             name: t.name,
@@ -148,7 +156,7 @@ export function AdminTeams() {
             managerDiscord: t.manager?.discord_handle || 'Sin Discord',
             region: t.country || 'Sin Región',
             logo: t.logo_url || '',
-            status: t.status || 'inactive',
+            status,
             points: 0,
             foundation_date: new Date(t.created_at).toLocaleDateString(),
             roster,
@@ -305,7 +313,7 @@ export function AdminTeams() {
       return true
     })
 
-    const statusWeight: Record<string, number> = { active: 3, inactive: 2, banned: 1 }
+    const statusWeight: Record<string, number> = { active: 4, pending: 3, inactive: 2, banned: 1 }
     result.sort((a, b) => {
       const weightA = statusWeight[a.status] || 0
       const weightB = statusWeight[b.status] || 0
@@ -351,6 +359,7 @@ export function AdminTeams() {
                 >
                   <option value="all">Todos los Estados</option>
                   <option value="active">Activos</option>
+                  <option value="pending">En Revisión</option>
                   <option value="inactive">Inactivos</option>
                   <option value="banned">Baneados</option>
                 </select>

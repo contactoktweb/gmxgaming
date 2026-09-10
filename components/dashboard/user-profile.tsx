@@ -55,7 +55,17 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
     name: '',
     bio: '',
     profilePhoto: null as string | null,
-    imagesChanged: false
+    imagesChanged: false,
+    discord_handle: '',
+    country: '',
+    phone: '',
+    social_ig: '',
+    social_tiktok: '',
+    social_yt: '',
+    social_twitch: '',
+    social_kick: '',
+    social_x: '',
+    social_fb: '',
   })
 
   const [playerEditForm, setPlayerEditForm] = useState({
@@ -254,7 +264,17 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
       name: profileData?.name || name || '',
       bio: profileData?.bio || bio || '',
       profilePhoto: profileData?.avatar_url || profilePhoto || null,
-      imagesChanged: false
+      imagesChanged: false,
+      discord_handle: profileData?.discord_handle || '',
+      country: profileData?.country || '',
+      phone: profileData?.phone || '',
+      social_ig: profileData?.social_ig || '',
+      social_tiktok: profileData?.social_tiktok || '',
+      social_yt: profileData?.social_yt || '',
+      social_twitch: profileData?.social_twitch || '',
+      social_kick: profileData?.social_kick || '',
+      social_x: profileData?.social_x || '',
+      social_fb: profileData?.social_fb || '',
     })
     setFotoFile(null)
     setIsEditing(true)
@@ -296,7 +316,17 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
     editForm.name.trim() !== currentBaseName ||
     editForm.bio.trim() !== currentBaseBio ||
     editForm.profilePhoto !== currentBasePhoto ||
-    editForm.imagesChanged
+    editForm.imagesChanged ||
+    editForm.discord_handle !== (profileData?.discord_handle || '') ||
+    editForm.country !== (profileData?.country || '') ||
+    editForm.phone !== (profileData?.phone || '') ||
+    editForm.social_ig !== (profileData?.social_ig || '') ||
+    editForm.social_tiktok !== (profileData?.social_tiktok || '') ||
+    editForm.social_yt !== (profileData?.social_yt || '') ||
+    editForm.social_twitch !== (profileData?.social_twitch || '') ||
+    editForm.social_kick !== (profileData?.social_kick || '') ||
+    editForm.social_x !== (profileData?.social_x || '') ||
+    editForm.social_fb !== (profileData?.social_fb || '')
 
   const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -352,7 +382,18 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
 
         const { error } = await supabase.from('profiles').update({
           name: formattedName,
-          avatar_url: finalAvatarUrl
+          avatar_url: finalAvatarUrl,
+          bio: editForm.bio.trim() || null,
+          discord_handle: editForm.discord_handle.trim() || null,
+          country: editForm.country.trim() || null,
+          phone: editForm.phone.trim() || null,
+          social_ig: editForm.social_ig.trim() || null,
+          social_tiktok: editForm.social_tiktok.trim() || null,
+          social_yt: editForm.social_yt.trim() || null,
+          social_twitch: editForm.social_twitch.trim() || null,
+          social_kick: editForm.social_kick.trim() || null,
+          social_x: editForm.social_x.trim() || null,
+          social_fb: editForm.social_fb.trim() || null,
         }).eq('id', user.id)
 
         if (error) throw error
@@ -364,7 +405,17 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
           ...prev,
           name: formattedName,
           bio: editForm.bio.trim(),
-          avatar_url: finalAvatarUrl
+          avatar_url: finalAvatarUrl,
+          discord_handle: editForm.discord_handle.trim() || null,
+          country: editForm.country.trim() || null,
+          phone: editForm.phone.trim() || null,
+          social_ig: editForm.social_ig.trim() || null,
+          social_tiktok: editForm.social_tiktok.trim() || null,
+          social_yt: editForm.social_yt.trim() || null,
+          social_twitch: editForm.social_twitch.trim() || null,
+          social_kick: editForm.social_kick.trim() || null,
+          social_x: editForm.social_x.trim() || null,
+          social_fb: editForm.social_fb.trim() || null,
         }))
 
         toast.success('Perfil Actualizado', {
@@ -1016,7 +1067,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                 </div>
               </div>
 
-              {/* Text Fields */}
+              {/* Nombre y Bio */}
               <div className="space-y-4 pt-2 border-t border-border/50">
                 <div className="space-y-2">
                   <label className="text-xs font-600 uppercase tracking-widest text-primary block">
@@ -1039,10 +1090,75 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                   <textarea 
                     value={editForm.bio}
                     onChange={(e) => setEditForm(prev => ({ ...prev, bio: e.target.value }))}
-                    rows={4}
+                    rows={3}
                     placeholder="Cuéntanos sobre tu trayectoria o rol en eSports..."
                     className="w-full rounded-md border border-border bg-background px-4 py-3 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors resize-none"
                   />
+                </div>
+              </div>
+
+              {/* Contacto */}
+              <div className="space-y-4 pt-2 border-t border-border/50">
+                <p className="text-xs font-600 uppercase tracking-widest text-primary">Contacto</p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-500 text-muted-foreground uppercase tracking-widest block">Discord</label>
+                    <input
+                      type="text"
+                      value={editForm.discord_handle}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, discord_handle: e.target.value }))}
+                      placeholder="usuario#0000"
+                      className="w-full rounded-md border border-border bg-background px-4 py-3 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-500 text-muted-foreground uppercase tracking-widest block">WhatsApp / Teléfono</label>
+                    <input
+                      type="tel"
+                      value={editForm.phone}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, phone: e.target.value }))}
+                      placeholder="+52 000 000 0000"
+                      className="w-full rounded-md border border-border bg-background px-4 py-3 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <label className="text-xs font-500 text-muted-foreground uppercase tracking-widest block">País de Residencia</label>
+                    <input
+                      type="text"
+                      value={editForm.country}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, country: e.target.value }))}
+                      placeholder="México"
+                      className="w-full rounded-md border border-border bg-background px-4 py-3 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Redes Sociales */}
+              <div className="space-y-4 pt-2 border-t border-border/50">
+                <p className="text-xs font-600 uppercase tracking-widest text-primary">Redes Sociales</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {([
+                    { key: 'social_ig', label: 'Instagram', placeholder: 'https://instagram.com/...' },
+                    { key: 'social_tiktok', label: 'TikTok', placeholder: 'https://tiktok.com/@...' },
+                    { key: 'social_yt', label: 'YouTube', placeholder: 'https://youtube.com/...' },
+                    { key: 'social_twitch', label: 'Twitch', placeholder: 'https://twitch.tv/...' },
+                    { key: 'social_kick', label: 'Kick', placeholder: 'https://kick.com/...' },
+                    { key: 'social_x', label: 'X (Twitter)', placeholder: 'https://x.com/...' },
+                    { key: 'social_fb', label: 'Facebook', placeholder: 'https://facebook.com/...' },
+                  ] as const).map(({ key, label, placeholder }) => (
+                    <div key={key} className="space-y-1.5">
+                      <label className="text-xs font-500 text-muted-foreground block">{label}</label>
+                      <input
+                        type="url"
+                        value={editForm[key]}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, [key]: e.target.value }))}
+                        placeholder={placeholder}
+                        className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-xs text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+                      />
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

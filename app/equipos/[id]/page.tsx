@@ -217,7 +217,7 @@ export default function TeamDetailsPage() {
                   <span className="text-[10px] font-600 text-muted-foreground uppercase tracking-widest mb-1">Torneos Jugados</span>
                   <div className="flex items-center justify-center md:justify-start gap-2 text-white">
                     <Trophy className="w-5 h-5 text-amber-400" />
-                    <span className="font-700 text-xl">{tournamentsCount}</span>
+                    <span className="font-display font-700 text-xl">{tournamentsCount}</span>
                   </div>
                 </div>
                 <div className="flex flex-col text-center md:text-left">
@@ -226,7 +226,7 @@ export default function TeamDetailsPage() {
                     <User className="w-5 h-5 text-primary" />
                     <span className="font-600">
                       {manager 
-                        ? (manager.nickname ? `${manager.name} (${manager.nickname})` : manager.name)
+                        ? (manager.nickname || manager.game_nickname || manager.name)
                         : (team.manager_discord_handle || 'N/A')
                       }
                     </span>
@@ -275,7 +275,7 @@ export default function TeamDetailsPage() {
                           />
                           <div className="z-10 min-w-0">
                             <h4 className="font-display text-lg font-700 text-white group-hover:text-primary transition-colors truncate">
-                              {player.nickname ? `${player.name} (${player.nickname})` : player.name}
+                              {player.nickname || player.game_nickname || player.name}
                             </h4>
                             <div className="flex items-center gap-2 mt-1">
                               <span className="text-[10px] font-600 text-primary uppercase tracking-widest">
