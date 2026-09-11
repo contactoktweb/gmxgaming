@@ -5,13 +5,16 @@ import { AnimatePresence, motion } from 'motion/react'
 import { Search, X, Loader2, Users, Shield, Trophy } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useDebounce } from '@/hooks/use-debounce'
-import { cn } from '@/lib/utils'
+import { cn, getPlayerSlug, getTeamSlug, getTournamentSlug } from '@/lib/utils'
+import Link from 'next/link'
 
 type SearchResult = {
   id: string
   title: string
   type: 'player' | 'team' | 'tournament'
   subtitle?: string
+  slug?: string
+  imageUrl?: string | null
 }
 
 export function GlobalSearch() {
@@ -58,30 +61,74 @@ export function GlobalSearch() {
 
   useEffect(() => {
     async function searchDatabase() {
-      if (!debouncedQuery || debouncedQuery.length < 2) {
+      const cleanTerm = debouncedQuery.replace(/[,()]/g, ' ').trim()
+      if (!cleanTerm || cleanTerm.length < 2) {
         setResults([])
         return
       }
       setIsLoading(true)
 
-      const searchTerms = `%${debouncedQuery}%`
+      const searchTerms = `%${cleanTerm}%`
       const results: SearchResult[] = []
 
-      // Promesas concurrentes
+      // Promesas concurrentes buscando jugadores por nickname, game_nickname y nombre
       const [teamsResponse, playersResponse, tournamentsResponse] = await Promise.all([
-        supabase.from('teams').select('id, name, tag').ilike('name', searchTerms).limit(5),
-        supabase.from('profiles').select('id, game_nickname, name').ilike('game_nickname', searchTerms).limit(5),
-        supabase.from('tournaments').select('id, name').ilike('name', searchTerms).limit(5)
+        supabase
+          .from('teams')
+          .select('id, name, tag, logo_url')
+          .or(`name.ilike.${searchTerms},tag.ilike.${searchTerms}`)
+          .limit(5),
+        supabase
+          .from('profiles')
+          .select('id, nickname, game_nickname, name, avatar_url, is_player')
+          .eq('is_player', true)
+          .or(`nickname.ilike.${searchTerms},game_nickname.ilike.${searchTerms},name.ilike.${searchTerms}`)
+          .limit(5),
+        supabase
+          .from('tournaments')
+          .select('id, name')
+          .ilike('name', searchTerms)
+          .limit(5)
       ])
 
       if (teamsResponse.data) {
-        teamsResponse.data.forEach(t => results.push({ id: t.id, title: t.name, subtitle: t.tag, type: 'team' }))
+        teamsResponse.data.forEach(t => {
+          const slug = getTeamSlug(t) || t.id
+          results.push({
+            id: t.id,
+            title: t.name,
+            subtitle: t.tag,
+            type: 'team',
+            slug,
+            imageUrl: t.logo_url
+          })
+        })
       }
       if (playersResponse.data) {
-        playersResponse.data.forEach(p => results.push({ id: p.id, title: p.game_nickname || p.name, type: 'player' }))
+        playersResponse.data.forEach(p => {
+          const displayNickname = p.nickname || p.game_nickname || p.name || 'Jugador'
+          const realName = p.name && p.name !== displayNickname ? p.name : undefined
+          const slug = getPlayerSlug(p) || p.id
+          results.push({
+            id: p.id,
+            title: displayNickname,
+            subtitle: realName,
+            type: 'player',
+            slug,
+            imageUrl: p.avatar_url
+          })
+        })
       }
       if (tournamentsResponse.data) {
-        tournamentsResponse.data.forEach(t => results.push({ id: t.id, title: t.name, type: 'tournament' }))
+        tournamentsResponse.data.forEach(t => {
+          const slug = getTournamentSlug(t) || t.id
+          results.push({
+            id: t.id,
+            title: t.name,
+            type: 'tournament',
+            slug
+          })
+        })
       }
 
       setResults(results)
@@ -95,7 +142,7 @@ export function GlobalSearch() {
       {/* Botón en el Header */}
       <button
         onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-muted-foreground transition-colors hover:border-white/20 hover:text-white shrink-0"
+        className="flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-muted-foreground transition-colors hover:border-white/20 hover:text-white shrink-0 cursor-pointer"
       >
         <Search className="h-4 w-4 shrink-0" />
         <span className="hidden lg:inline">Buscar...</span>
@@ -129,13 +176,13 @@ export function GlobalSearch() {
                   type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Busca jugadores, equipos o torneos..."
+                  placeholder="Busca jugadores por nickname, equipos o torneos..."
                   className="flex-1 bg-transparent font-display text-lg text-white outline-none placeholder:text-muted-foreground"
                 />
                 {isLoading && <Loader2 className="ml-3 h-5 w-5 animate-spin text-primary" />}
                 <button
                   onClick={() => setIsOpen(false)}
-                  className="ml-3 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-white/10 hover:text-white"
+                  className="ml-3 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-white/10 hover:text-white cursor-pointer"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -156,38 +203,55 @@ export function GlobalSearch() {
 
                 {results.length > 0 && (
                   <div className="flex flex-col gap-1">
-                    {results.map((result, idx) => (
-                      <motion.a
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: idx * 0.05 }}
-                        key={`${result.type}-${result.id}-${idx}`}
-                        href={`/${result.type === 'player' ? 'jugadores' : result.type === 'team' ? 'equipos' : 'torneos'}/${result.id}`}
-                        className="group flex items-center justify-between rounded-lg px-4 py-3 transition-colors hover:bg-white/5"
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className={cn(
-                            "flex h-10 w-10 shrink-0 items-center justify-center rounded-md border",
-                            result.type === 'player' ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-500' :
-                            result.type === 'team' ? 'border-blue-500/20 bg-blue-500/10 text-blue-500' :
-                            'border-purple-500/20 bg-purple-500/10 text-purple-500'
-                          )}>
-                            {result.type === 'player' && <Users className="h-5 w-5" />}
-                            {result.type === 'team' && <Shield className="h-5 w-5" />}
-                            {result.type === 'tournament' && <Trophy className="h-5 w-5" />}
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="font-600 text-white group-hover:text-primary transition-colors">
-                              {result.title}
-                            </span>
-                            <span className="text-xs font-500 uppercase tracking-wider text-muted-foreground">
-                              {result.type === 'player' ? 'Jugador' : result.type === 'team' ? 'Equipo' : 'Torneo'}
-                              {result.subtitle && ` • [${result.subtitle}]`}
-                            </span>
-                          </div>
-                        </div>
-                      </motion.a>
-                    ))}
+                    {results.map((result, idx) => {
+                      const destinationUrl = `/${result.type === 'player' ? 'jugadores' : result.type === 'team' ? 'equipos' : 'torneos'}/${result.slug || result.id}`
+                      return (
+                        <motion.div
+                          key={`${result.type}-${result.id}-${idx}`}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: idx * 0.05 }}
+                        >
+                          <Link
+                            href={destinationUrl}
+                            onClick={() => setIsOpen(false)}
+                            className="group flex items-center justify-between rounded-lg px-4 py-3 transition-colors hover:bg-white/5"
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className={cn(
+                                "flex h-10 w-10 shrink-0 items-center justify-center rounded-md border overflow-hidden",
+                                result.type === 'player' ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-500' :
+                                result.type === 'team' ? 'border-blue-500/20 bg-blue-500/10 text-blue-500' :
+                                'border-purple-500/20 bg-purple-500/10 text-purple-500'
+                              )}>
+                                {result.imageUrl ? (
+                                  <img
+                                    src={result.imageUrl}
+                                    alt={result.title}
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <>
+                                    {result.type === 'player' && <Users className="h-5 w-5" />}
+                                    {result.type === 'team' && <Shield className="h-5 w-5" />}
+                                    {result.type === 'tournament' && <Trophy className="h-5 w-5" />}
+                                  </>
+                                )}
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="font-600 text-white group-hover:text-primary transition-colors">
+                                  {result.title}
+                                </span>
+                                <span className="text-xs font-500 uppercase tracking-wider text-muted-foreground">
+                                  {result.type === 'player' ? 'Jugador' : result.type === 'team' ? 'Equipo' : 'Torneo'}
+                                  {result.subtitle && (result.type === 'team' ? ` • [${result.subtitle}]` : ` • ${result.subtitle}`)}
+                                </span>
+                              </div>
+                            </div>
+                          </Link>
+                        </motion.div>
+                      )
+                    })}
                   </div>
                 )}
               </div>

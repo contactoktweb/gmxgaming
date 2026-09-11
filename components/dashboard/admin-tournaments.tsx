@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Trophy, Calendar, Users, Edit, Plus, Trash2, CheckCircle2, Eye, X, AlertCircle, Gamepad2, Link, Save, Swords, ChevronDown } from 'lucide-react'
+import { Trophy, Calendar, Users, Edit, Plus, Trash2, CheckCircle2, Eye, X, AlertCircle, Gamepad2, Link, Save, Swords, ChevronDown, Loader2 } from 'lucide-react'
 import { GmxButton } from '@/components/gmx-button'
 import { createClient } from '@/utils/supabase/client'
 import { cn } from '@/lib/utils'
@@ -11,6 +11,7 @@ interface Tournament {
   id: string
   name: string
   game: string
+  type?: string
   status: 'upcoming' | 'ongoing' | 'finished'
   start_date: string
   end_date: string
@@ -18,6 +19,17 @@ interface Tournament {
   prizepool_distribution: any
   template_id: string
   templates?: { name: string, type: string, logo_url: string }
+}
+
+interface TournamentEditState {
+  name: string
+  game: string
+  type: string
+  status: 'upcoming' | 'ongoing' | 'finished'
+  start_date: string
+  end_date: string
+  prizepool_total: string
+  prizepool_distribution: string[]
 }
 
 interface Team {
@@ -48,6 +60,8 @@ export function AdminTournaments() {
   const [showSuccess, setShowSuccess] = useState(false)
   
   const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null)
+  const [editInfo, setEditInfo] = useState<TournamentEditState | null>(null)
+  const [isSavingInfo, setIsSavingInfo] = useState(false)
   const [activeTab, setActiveTab] = useState<'info' | 'teams' | 'matches'>('info')
   const [confirmAction, setConfirmAction] = useState<{ id: string, name: string } | null>(null)
   const [loading, setLoading] = useState(true)
@@ -155,6 +169,26 @@ export function AdminTournaments() {
       }
     }
   }, [selectedTournament, activeTab, availableTeams])
+
+  // Sincronizar datos de edición cuando se abre o cambia el torneo seleccionado
+  useEffect(() => {
+    if (selectedTournament) {
+      setEditInfo({
+        name: selectedTournament.name || '',
+        game: selectedTournament.game || 'Mobile Legends',
+        status: selectedTournament.status || 'upcoming',
+        start_date: selectedTournament.start_date ? selectedTournament.start_date.split('T')[0] : '',
+        end_date: selectedTournament.end_date ? selectedTournament.end_date.split('T')[0] : '',
+        prizepool_total: String(selectedTournament.prizepool_total ?? ''),
+        type: selectedTournament.type || selectedTournament.templates?.type || '',
+        prizepool_distribution: Array.isArray(selectedTournament.prizepool_distribution) && selectedTournament.prizepool_distribution.length > 0
+          ? selectedTournament.prizepool_distribution.map(String)
+          : ['']
+      })
+    } else {
+      setEditInfo(null)
+    }
+  }, [selectedTournament])
 
   useEffect(() => {
     if (selectedTournament || confirmAction) {
@@ -383,7 +417,79 @@ export function AdminTournaments() {
     if (!selectedTournament) return
     await supabase.from('tournaments').update({ status }).eq('id', selectedTournament.id)
     setSelectedTournament({ ...selectedTournament, status: status as any })
+    if (editInfo) {
+      setEditInfo({ ...editInfo, status: status as any })
+    }
     fetchBaseData()
+    toast.success('Estatus del torneo actualizado')
+  }
+
+  const handleSaveTournamentInfo = async () => {
+    if (!selectedTournament || !editInfo) return
+
+    if (!editInfo.name.trim()) {
+      toast.error('El nombre del torneo no puede estar vacío.')
+      return
+    }
+
+    if (editInfo.start_date && editInfo.end_date && editInfo.end_date < editInfo.start_date) {
+      toast.error('La fecha de fin no puede ser anterior a la fecha de inicio.')
+      return
+    }
+
+    setIsSavingInfo(true)
+    toast.loading('Guardando cambios del torneo...', { id: 'save-tournament' })
+
+    try {
+      const cleanDistribution = editInfo.prizepool_distribution
+        .map(v => v.trim())
+        .filter(v => v !== '')
+
+      const updates = {
+        name: editInfo.name.trim(),
+        game: editInfo.game,
+        status: editInfo.status,
+        start_date: editInfo.start_date ? new Date(editInfo.start_date + 'T00:00:00Z').toISOString() : null,
+        end_date: editInfo.end_date ? new Date(editInfo.end_date + 'T23:59:59Z').toISOString() : null,
+        prizepool_total: editInfo.prizepool_total.trim(),
+        type: editInfo.type.trim() || null,
+        prizepool_distribution: cleanDistribution.length > 0 ? cleanDistribution : [],
+      }
+
+      const { error } = await supabase
+        .from('tournaments')
+        .update(updates)
+        .eq('id', selectedTournament.id)
+
+      if (error) throw error
+
+      const updatedTournamentObj: Tournament = {
+        ...selectedTournament,
+        name: updates.name,
+        game: updates.game,
+        status: updates.status,
+        start_date: updates.start_date || '',
+        end_date: updates.end_date || '',
+        prizepool_total: updates.prizepool_total,
+        prizepool_distribution: cleanDistribution,
+        type: updates.type || undefined,
+        templates: selectedTournament.templates ? {
+          ...selectedTournament.templates,
+          name: updates.name,
+          type: updates.type || selectedTournament.templates.type
+        } : undefined
+      }
+
+      setSelectedTournament(updatedTournamentObj)
+      setTournaments(prev => prev.map(t => t.id === selectedTournament.id ? updatedTournamentObj : t))
+
+      toast.success('Datos del torneo actualizados exitosamente', { id: 'save-tournament' })
+    } catch (err: any) {
+      console.error('Error saving tournament:', err)
+      toast.error('Error al actualizar torneo: ' + (err?.message || 'Error inesperado'), { id: 'save-tournament' })
+    } finally {
+      setIsSavingInfo(false)
+    }
   }
 
   if (isCreating) {
@@ -626,8 +732,8 @@ export function AdminTournaments() {
                   className="w-12 h-12 rounded-lg object-cover"
                 />
                 <div>
-                  <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white">{selectedTournament.name}</h3>
-                  <p className="text-sm text-primary">{selectedTournament.game}</p>
+                  <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white">{editInfo?.name || selectedTournament.name}</h3>
+                  <p className="text-sm text-primary">{editInfo?.game || selectedTournament.game}</p>
                 </div>
               </div>
               <button onClick={() => setSelectedTournament(null)} className="text-muted-foreground hover:text-white p-2 rounded-full hover:bg-white/5">
@@ -660,59 +766,225 @@ export function AdminTournaments() {
             {/* Body */}
             <div data-lenis-prevent data-modal-scrollbody className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6 bg-background">
               
-              {activeTab === 'info' && (
-                <div className="space-y-8 animate-in fade-in">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="p-4 rounded-lg border border-border bg-surface">
-                      <p className="text-xs font-600 text-muted-foreground uppercase tracking-widest mb-1">Estatus</p>
-                      <div className="relative">
+              {activeTab === 'info' && editInfo && (
+                <div className="space-y-6 animate-in fade-in">
+                  
+                  {/* Grid de 4 tarjetas principales */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    
+                    {/* Estatus */}
+                    <div className="p-4 rounded-lg border border-border bg-surface flex flex-col justify-between">
+                      <p className="text-xs font-600 text-muted-foreground uppercase tracking-widest mb-1.5">Estatus</p>
+                      <div className="relative mt-auto">
                         <select 
-                          value={selectedTournament.status}
-                          onChange={(e) => handleUpdateStatus(e.target.value)}
-                          className="w-full appearance-none rounded-lg border border-border bg-background px-3 py-1.5 pr-8 text-xs font-600 uppercase text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer hover:border-primary/50 transition-colors"
+                          value={editInfo.status}
+                          onChange={(e) => {
+                            const newSt = e.target.value as any
+                            setEditInfo({ ...editInfo, status: newSt })
+                            handleUpdateStatus(newSt)
+                          }}
+                          className={cn(
+                            "w-full appearance-none rounded-lg border px-3 py-2 pr-8 text-xs font-700 uppercase focus:outline-none focus:ring-1 cursor-pointer transition-colors",
+                            editInfo.status === 'ongoing' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 focus:border-emerald-500" :
+                            editInfo.status === 'upcoming' ? "bg-blue-500/10 text-blue-400 border-blue-500/30 focus:border-blue-500" :
+                            "bg-white/5 text-muted-foreground border-white/10 focus:border-white/30"
+                          )}
                         >
-                          <option value="upcoming">Próximo</option>
-                          <option value="ongoing">En Curso</option>
-                          <option value="finished">Finalizado</option>
+                          <option value="upcoming" className="bg-surface text-blue-400">Próximo</option>
+                          <option value="ongoing" className="bg-surface text-emerald-400">En Curso</option>
+                          <option value="finished" className="bg-surface text-muted-foreground">Finalizado</option>
                         </select>
                         <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                       </div>
                     </div>
-                    <div className="p-4 rounded-lg border border-border bg-surface">
-                      <p className="text-xs font-600 text-muted-foreground uppercase tracking-widest mb-1">Fechas</p>
-                      <p className="text-sm font-500 text-white">{selectedTournament.start_date ? new Date(selectedTournament.start_date).toLocaleDateString() : 'N/A'} - {selectedTournament.end_date ? new Date(selectedTournament.end_date).toLocaleDateString() : 'N/A'}</p>
+
+                    {/* Fechas */}
+                    <div className="p-4 rounded-lg border border-border bg-surface flex flex-col justify-between">
+                      <p className="text-xs font-600 text-muted-foreground uppercase tracking-widest mb-1.5">Fechas</p>
+                      <div className="grid grid-cols-2 gap-2 mt-auto">
+                        <div>
+                          <span className="text-[10px] text-muted-foreground font-semibold uppercase block mb-0.5">Inicio</span>
+                          <input
+                            type="date"
+                            value={editInfo.start_date}
+                            onChange={(e) => setEditInfo({ ...editInfo, start_date: e.target.value })}
+                            className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs text-white focus:border-primary focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-muted-foreground font-semibold uppercase block mb-0.5">Fin</span>
+                          <input
+                            type="date"
+                            value={editInfo.end_date}
+                            min={editInfo.start_date || undefined}
+                            onChange={(e) => setEditInfo({ ...editInfo, end_date: e.target.value })}
+                            className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs text-white focus:border-primary focus:outline-none"
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <div className="p-4 rounded-lg border border-border bg-surface">
-                      <p className="text-xs font-600 text-muted-foreground uppercase tracking-widest mb-1">Prizepool</p>
-                      <p className="text-sm font-500 text-emerald-400">{selectedTournament.prizepool_total || 'N/A'}</p>
+
+                    {/* Prizepool */}
+                    <div className="p-4 rounded-lg border border-border bg-surface flex flex-col justify-between">
+                      <p className="text-xs font-600 text-muted-foreground uppercase tracking-widest mb-1.5">Prizepool Total</p>
+                      <div className="mt-auto">
+                        <input
+                          type="text"
+                          value={editInfo.prizepool_total}
+                          onChange={(e) => setEditInfo({ ...editInfo, prizepool_total: e.target.value })}
+                          placeholder="Ej: 1500"
+                          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-bold text-emerald-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                      </div>
                     </div>
-                    <div className="p-4 rounded-lg border border-border bg-surface">
-                      <p className="text-xs font-600 text-muted-foreground uppercase tracking-widest mb-1">Tipo</p>
-                      <div className="flex flex-wrap gap-1.5 mt-1">
-                        {selectedTournament.templates?.type ? (
-                          selectedTournament.templates.type.split(',').map((t: string, idx: number) => (
-                            <span key={idx} className="px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-xs font-600">
-                              {t.trim()}
-                            </span>
-                          ))
-                        ) : (
-                          <p className="text-sm font-500 text-white">N/A</p>
-                        )}
+
+                    {/* Tipo */}
+                    <div className="p-4 rounded-lg border border-border bg-surface flex flex-col justify-between">
+                      <p className="text-xs font-600 text-muted-foreground uppercase tracking-widest mb-1.5">Tipo de Torneo</p>
+                      <div className="mt-auto">
+                        <input
+                          type="text"
+                          list="tournament-types"
+                          value={editInfo.type}
+                          onChange={(e) => setEditInfo({ ...editInfo, type: e.target.value })}
+                          placeholder="Ej: Clasificatorio"
+                          className="w-full rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-bold text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary uppercase tracking-wider"
+                        />
+                        <datalist id="tournament-types">
+                          <option value="Clasificatorio" />
+                          <option value="Relámpago" />
+                          <option value="Invitacional" />
+                          <option value="Qualifier" />
+                          <option value="Abierto" />
+                          <option value="Liga" />
+                        </datalist>
                       </div>
                     </div>
                   </div>
 
-                  <div>
-                    <h4 className="text-sm font-600 text-primary uppercase tracking-widest mb-4">Distribución del Prizepool</h4>
+                  {/* Distribución del Prizepool */}
+                  <div className="rounded-xl border border-border bg-surface/60 p-5 space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-3">
+                      <div>
+                        <h4 className="text-xs font-700 uppercase tracking-wider text-primary flex items-center gap-2">
+                          <Trophy className="w-4 h-4" />
+                          Distribución del Prizepool
+                        </h4>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          Edita el monto o premio asignado a cada lugar del torneo.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditInfo({ ...editInfo, prizepool_distribution: [...editInfo.prizepool_distribution, ''] })}
+                        className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-primary hover:text-white transition-colors bg-primary/10 border border-primary/20 px-3 py-1.5 rounded-lg hover:bg-primary/20 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Agregar Puesto
+                      </button>
+                    </div>
+
                     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {(selectedTournament.prizepool_distribution || []).map((val: string, idx: number) => (
-                        <div key={idx} className="flex items-center gap-3 p-3 border border-border rounded bg-surface">
-                          <span className="w-8 h-8 flex items-center justify-center rounded bg-primary/20 text-primary font-700">{idx+1}º</span>
-                          <span className="text-white font-500">{val}</span>
+                      {editInfo.prizepool_distribution.map((val, idx) => (
+                        <div key={idx} className="flex items-center gap-2.5 p-2.5 border border-border rounded-lg bg-background hover:border-primary/50 transition-colors">
+                          <span className="w-8 h-8 shrink-0 flex items-center justify-center rounded bg-primary/20 text-primary font-extrabold text-xs">
+                            {idx + 1}º
+                          </span>
+                          <input
+                            type="text"
+                            value={val}
+                            placeholder={`Premio lugar ${idx + 1}`}
+                            onChange={(e) => {
+                              const next = [...editInfo.prizepool_distribution]
+                              next[idx] = e.target.value
+                              setEditInfo({ ...editInfo, prizepool_distribution: next })
+                            }}
+                            className="flex-1 rounded border border-border bg-surface px-3 py-1.5 text-sm font-semibold text-white focus:border-primary focus:outline-none"
+                          />
+                          {editInfo.prizepool_distribution.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const next = editInfo.prizepool_distribution.filter((_, i) => i !== idx)
+                                setEditInfo({ ...editInfo, prizepool_distribution: next })
+                              }}
+                              title="Eliminar este puesto"
+                              className="p-1.5 text-muted-foreground hover:text-red-400 transition-colors rounded hover:bg-white/5 cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       ))}
                     </div>
                   </div>
+
+                  {/* Identidad del Torneo (Nombre y Juego) */}
+                  <div className="rounded-xl border border-border bg-surface/60 p-5 space-y-4">
+                    <h4 className="text-xs font-700 uppercase tracking-wider text-muted-foreground flex items-center gap-2 border-b border-border/60 pb-3">
+                      <Gamepad2 className="w-4 h-4 text-primary" />
+                      Identidad del Torneo
+                    </h4>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-600 text-muted-foreground uppercase block mb-1">
+                          Nombre del Torneo <span className="text-red-400">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={editInfo.name}
+                          onChange={(e) => setEditInfo({ ...editInfo, name: e.target.value })}
+                          className="w-full rounded-lg border border-border bg-background px-3.5 py-2 text-sm text-white font-semibold focus:border-primary focus:outline-none uppercase"
+                          placeholder="Ej: ETERNAL GLORY 2026"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-600 text-muted-foreground uppercase block mb-1">
+                          Juego Oficial
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={editInfo.game}
+                            onChange={(e) => setEditInfo({ ...editInfo, game: e.target.value })}
+                            className="w-full appearance-none rounded-lg border border-border bg-background px-3.5 py-2 pr-9 text-sm text-white focus:border-primary focus:outline-none cursor-pointer font-medium"
+                          >
+                            <option value="Mobile Legends">Mobile Legends</option>
+                            <option value="Free Fire">Free Fire</option>
+                            <option value="Valorant">Valorant</option>
+                            <option value="League of Legends">League of Legends</option>
+                            <option value="Otro">Otro</option>
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Barra Fija de Guardar Cambios */}
+                  <div className="sticky bottom-0 bg-surface/95 backdrop-blur border border-border p-4 rounded-xl flex items-center justify-between gap-4 z-20 shadow-xl">
+                    <p className="text-xs text-muted-foreground hidden sm:block">
+                      Los cambios en fechas, prizepool, tipo y distribución se guardarán en la base de datos.
+                    </p>
+                    <button
+                      type="button"
+                      disabled={isSavingInfo}
+                      onClick={handleSaveTournamentInfo}
+                      className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider text-black bg-primary hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 disabled:opacity-50 cursor-pointer ml-auto"
+                    >
+                      {isSavingInfo ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Guardando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-4 h-4" />
+                          <span>Guardar Cambios del Torneo</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
                 </div>
               )}
 

@@ -749,6 +749,7 @@ export function AdminPlayers() {
           p.email.toLowerCase().includes(q) ||
           (p.discord && p.discord.toLowerCase().includes(q)) ||
           (p.rawDetails?.nickname && p.rawDetails.nickname.toLowerCase().includes(q)) ||
+          (p.rawDetails?.game_nickname && p.rawDetails.game_nickname.toLowerCase().includes(q)) ||
           (p.team && p.team.toLowerCase().includes(q)) ||
           (p.country && p.country.toLowerCase().includes(q))
         )
@@ -802,7 +803,7 @@ export function AdminPlayers() {
           <div className="flex items-center gap-3 flex-wrap">
             <input
               type="text"
-              placeholder="Buscar por nombre, email o discord..."
+              placeholder="Buscar por nickname, nombre, email o discord..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="w-full sm:w-60 rounded-md border border-border bg-background px-4 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
