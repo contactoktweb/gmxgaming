@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { X, Upload, Image as ImageIcon, Loader2, AlertCircle, HelpCircle, ShieldCheck, CheckCircle2 } from 'lucide-react'
+import { X, Upload, Image as ImageIcon, Loader2, AlertCircle, HelpCircle, ShieldCheck, CheckCircle2, AlertTriangle, Users } from 'lucide-react'
 import { GmxButton } from '@/components/gmx-button'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
 import { cn, formatNickname, formatPersonName } from '@/lib/utils'
+import { useDebounce } from '@/hooks/use-debounce'
 
 function FieldTooltip({ text }: { text: string }) {
   return (
@@ -77,7 +78,19 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
   const [tag, setTag] = useState('')
   const [hashtag, setHashtag] = useState('')
   const [country, setCountry] = useState('')
+  const [tipoEquipo, setTipoEquipo] = useState<'Varonil / Mixto' | 'Femenil'>('Varonil / Mixto')
+  const [originalTipoEquipo, setOriginalTipoEquipo] = useState<'Varonil / Mixto' | 'Femenil'>('Varonil / Mixto')
   const [selectedGames, setSelectedGames] = useState<string[]>(['Mobile Legends'])
+
+  // Male players detected in team roster (used to forbid Femenil category)
+  const [malePlayers, setMalePlayers] = useState<Array<{ id: string, name: string, nickname?: string }>>([])
+  
+  // Validation errors for duplicates
+  const [teamNameError, setTeamNameError] = useState('')
+  const [teamTagError, setTeamTagError] = useState('')
+
+  const debouncedName = useDebounce(name, 500)
+  const debouncedTag = useDebounce(tag, 500)
   
   // Files and URLs
   const [logoUrl, setLogoUrl] = useState('')
@@ -102,7 +115,107 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
   const [managerPhoneCode, setManagerPhoneCode] = useState('+52')
   const [managerPhoneNumber, setManagerPhoneNumber] = useState('')
 
-  // Load config and manager profile
+  // Validar unicidad del nombre del equipo al editar
+  useEffect(() => {
+    async function validateName() {
+      const clean = debouncedName.trim().toUpperCase()
+      if (!clean || !team || clean === (team.name || '').trim().toUpperCase()) {
+        setTeamNameError('')
+        return
+      }
+
+      try {
+        // Verificar si otro equipo ya tiene este nombre
+        const { data: existingTeams } = await supabase
+          .from('teams')
+          .select('id, name')
+          .neq('id', team.id)
+          .ilike('name', clean)
+
+        const match = existingTeams?.some(t => t.name?.trim().toUpperCase() === clean)
+        if (match) {
+          setTeamNameError('Este nombre ya se encuentra en uso por otro equipo.')
+          return
+        }
+
+        // Verificar si está en una solicitud pendiente de otro equipo
+        const { data: pendingVals } = await supabase
+          .from('validations')
+          .select('id, details')
+          .in('type', ['equipo', 'modificacion'])
+          .eq('status', 'pending')
+
+        const pendingMatch = pendingVals?.some(v => {
+          if (v.id === validation?.id) return false
+          if (v.details?.team_id === team.id || v.details?.id === team.id) return false
+          return v.details?.name?.trim().toUpperCase() === clean
+        })
+
+        if (pendingMatch) {
+          setTeamNameError('Este nombre ya está en uso en una solicitud pendiente.')
+          return
+        }
+
+        setTeamNameError('')
+      } catch (err) {
+        console.error('Error al validar nombre de equipo:', err)
+      }
+    }
+
+    validateName()
+  }, [debouncedName, team, validation, supabase])
+
+  // Validar unicidad del tag del equipo al editar
+  useEffect(() => {
+    async function validateTag() {
+      const clean = debouncedTag.trim().toUpperCase()
+      if (!clean || !team || clean === (team.tag || '').trim().toUpperCase()) {
+        setTeamTagError('')
+        return
+      }
+
+      try {
+        // Verificar si otro equipo ya tiene este tag
+        const { data: existingTags } = await supabase
+          .from('teams')
+          .select('id, tag')
+          .neq('id', team.id)
+          .ilike('tag', clean)
+
+        const match = existingTags?.some(t => t.tag?.trim().toUpperCase() === clean)
+        if (match) {
+          setTeamTagError('Este tag ya se encuentra en uso por otro equipo.')
+          return
+        }
+
+        // Verificar si está en una solicitud pendiente de otro equipo
+        const { data: pendingVals } = await supabase
+          .from('validations')
+          .select('id, details')
+          .in('type', ['equipo', 'modificacion'])
+          .eq('status', 'pending')
+
+        const pendingMatch = pendingVals?.some(v => {
+          if (v.id === validation?.id) return false
+          if (v.details?.team_id === team.id || v.details?.id === team.id) return false
+          return v.details?.tag?.trim().toUpperCase() === clean
+        })
+
+        if (pendingMatch) {
+          setTeamTagError('Este tag ya está en uso en una solicitud pendiente.')
+          return
+        }
+
+        setTeamTagError('')
+      } catch (err) {
+        console.error('Error al validar tag de equipo:', err)
+      }
+    }
+
+    validateTag()
+  }, [debouncedTag, team, validation, supabase])
+
+  // Load config, team data, manager profile, and contracted players
   useEffect(() => {
     if (!isOpen || !team) return
 
@@ -157,6 +270,83 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
         setHashtag(d?.hashtag || team.hashtag || '')
         setCountry(d?.country || team.country || '')
         
+        // Cargar Tipo de Equipo
+        let resolvedCategory: 'Varonil / Mixto' | 'Femenil' = 'Varonil / Mixto'
+        const rawCat = d?.tipoEquipo || d?.['item_meta[782]']
+        if (rawCat) {
+          resolvedCategory = rawCat.toLowerCase().includes('fem') ? 'Femenil' : 'Varonil / Mixto'
+        } else {
+          // Intentar resolver desde validaciones de alta del equipo
+          const { data: creationVal } = await supabase
+            .from('validations')
+            .select('details')
+            .eq('type', 'equipo')
+            .filter('details->>id', 'eq', team.id)
+            .limit(1)
+
+          const valCat = creationVal?.[0]?.details?.tipoEquipo || creationVal?.[0]?.details?.['item_meta[782]']
+          if (valCat) {
+            resolvedCategory = valCat.toLowerCase().includes('fem') ? 'Femenil' : 'Varonil / Mixto'
+          }
+        }
+        setTipoEquipo(resolvedCategory)
+        setOriginalTipoEquipo(resolvedCategory)
+
+        // 4. Buscar jugadores activos o en proceso de contrato en este equipo para comprobar géneros
+        const { data: contracts } = await supabase
+          .from('contracts')
+          .select(`
+            id,
+            player_id,
+            status,
+            profiles (
+              id,
+              name,
+              nickname
+            )
+          `)
+          .eq('team_id', team.id)
+          .not('status', 'in', '("completado","cancelado","rejected","terminado")')
+
+        const detectedMales: Array<{ id: string, name: string, nickname?: string }> = []
+
+        if (contracts && contracts.length > 0) {
+          const playerIds = contracts.map(c => c.player_id).filter(Boolean)
+          const playerValsMap: Record<string, any> = {}
+
+          if (playerIds.length > 0) {
+            const { data: playerVals } = await supabase
+              .from('validations')
+              .select('submitted_by, details')
+              .eq('type', 'jugador')
+              .or(`details->>user_id.in.(${playerIds.join(',')}),details->>id.in.(${playerIds.join(',')}),details->>player_id.in.(${playerIds.join(',')}),submitted_by.in.(${playerIds.join(',')})`)
+
+            playerVals?.forEach(pv => {
+              const uid = pv.details?.user_id || pv.details?.id || pv.details?.player_id || pv.submitted_by
+              if (uid) {
+                playerValsMap[uid] = pv.details
+              }
+            })
+          }
+
+          for (const c of contracts) {
+            const pDetails = playerValsMap[c.player_id]
+            const g = String(pDetails?.gender || pDetails?.genero || pDetails?.['item_meta[783]'] || '').trim().toLowerCase()
+            const isFemale = g.includes('fem') || g.includes('mujer')
+
+            // Si el jugador no está explícitamente registrado como femenino, es varonil
+            if (!isFemale) {
+              const profileObj: any = Array.isArray(c.profiles) ? c.profiles[0] : c.profiles
+              detectedMales.push({
+                id: c.player_id,
+                name: profileObj?.name || 'Jugador',
+                nickname: profileObj?.nickname
+              })
+            }
+          }
+        }
+        setMalePlayers(detectedMales)
+
         const initialGames = d?.games || team.games
         if (Array.isArray(initialGames) && initialGames.length > 0) {
           setSelectedGames(initialGames)
@@ -245,6 +435,22 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
       toast.error('Debes seleccionar el país del equipo.')
       return
     }
+    if (teamNameError) {
+      toast.error(teamNameError)
+      return
+    }
+    if (teamTagError) {
+      toast.error(teamTagError)
+      return
+    }
+
+    // Regla estricta: No se permite cambiar a Femenil si hay jugadores varoniles en la plantilla
+    if (tipoEquipo === 'Femenil' && malePlayers.length > 0) {
+      toast.error('Cambio a Femenil no permitido', {
+        description: `El equipo cuenta con ${malePlayers.length} jugador(es) varonil(es) en su plantilla activa. Debes tramitar su baja antes de solicitar el cambio a categoría Femenil.`
+      })
+      return
+    }
 
     setIsSubmitting(true)
     try {
@@ -285,6 +491,8 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
         tag: tag.trim().toUpperCase(),
         hashtag: hashtag.trim(),
         country,
+        tipoEquipo,
+        'item_meta[782]': tipoEquipo,
         logo_url: finalLogoUrl,
         jersey_url: finalJerseyUrl,
         games: selectedGames,
@@ -309,6 +517,7 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
         original_tag: team.tag || '',
         original_hashtag: team.hashtag || '',
         original_country: team.country || '',
+        original_tipoEquipo: originalTipoEquipo,
         original_logo: team.logo_url || '',
         original_jersey: team.jersey_url || '',
         original_games: team.games || [],
@@ -544,8 +753,16 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
                     value={name}
                     onChange={e => setName(e.target.value.toUpperCase().replace(/[^A-Z0-9\s]/g, ''))}
                     placeholder="EJ. GOD SQUAD"
-                    className="w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none uppercase font-500"
+                    className={cn(
+                      "w-full rounded-lg border bg-background px-3.5 py-2.5 text-sm text-white focus:outline-none uppercase font-500 transition-colors",
+                      teamNameError 
+                        ? "border-red-500 focus:border-red-500" 
+                        : "border-border focus:border-primary"
+                    )}
                   />
+                  {teamNameError && (
+                    <p className="text-xs font-500 text-red-400 mt-1">{teamNameError}</p>
+                  )}
                 </div>
 
                 {/* Tag */}
@@ -560,8 +777,16 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
                     value={tag}
                     onChange={e => setTag(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
                     placeholder="EJ. THK"
-                    className="w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none uppercase font-700 tracking-wider"
+                    className={cn(
+                      "w-full rounded-lg border bg-background px-3.5 py-2.5 text-sm text-white focus:outline-none uppercase font-700 tracking-wider transition-colors",
+                      teamTagError 
+                        ? "border-red-500 focus:border-red-500" 
+                        : "border-border focus:border-primary"
+                    )}
                   />
+                  {teamTagError && (
+                    <p className="text-xs font-500 text-red-400 mt-1">{teamTagError}</p>
+                  )}
                 </div>
 
                 {/* Hashtag */}
@@ -606,6 +831,83 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
                       </svg>
                     </div>
                   </div>
+                </div>
+
+                {/* Tipo de Equipo (Categoría) */}
+                <div className="space-y-2 sm:col-span-2 lg:col-span-3 pt-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-600 text-white uppercase tracking-wider flex items-center gap-1">
+                      Tipo de Equipo <span className="text-primary">*</span>
+                      <FieldTooltip text="Categoría competitiva del equipo. Las divisiones Femeniles no admiten jugadores varoniles." />
+                    </label>
+                    {malePlayers.length > 0 && (
+                      <span className="text-[11px] text-muted-foreground">
+                        {malePlayers.length} {malePlayers.length === 1 ? 'jugador varonil en plantilla' : 'jugadores varoniles en plantilla'}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-xl border border-border bg-deep/40 px-4 py-3.5">
+                    <label className={cn(
+                      "flex cursor-pointer items-center gap-2.5 text-sm font-500 transition-colors",
+                      tipoEquipo === 'Varonil / Mixto' ? "text-primary font-600" : "text-white hover:text-primary"
+                    )}>
+                      <input
+                        type="radio"
+                        name="edit_team_category"
+                        value="Varonil / Mixto"
+                        checked={tipoEquipo === 'Varonil / Mixto'}
+                        onChange={() => setTipoEquipo('Varonil / Mixto')}
+                        className="h-4 w-4 shrink-0 border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
+                      />
+                      Varonil / Mixto
+                    </label>
+
+                    <label className={cn(
+                      "flex cursor-pointer items-center gap-2.5 text-sm font-500 transition-colors",
+                      tipoEquipo === 'Femenil' ? "text-primary font-600" : "text-white hover:text-primary"
+                    )}>
+                      <input
+                        type="radio"
+                        name="edit_team_category"
+                        value="Femenil"
+                        checked={tipoEquipo === 'Femenil'}
+                        onChange={() => setTipoEquipo('Femenil')}
+                        className="h-4 w-4 shrink-0 border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
+                      />
+                      Femenil
+                    </label>
+                  </div>
+
+                  {/* Alerta interactiva si intenta cambiar a Femenil teniendo jugadores varoniles */}
+                  {tipoEquipo === 'Femenil' && malePlayers.length > 0 && (
+                    <div className="rounded-xl border border-red-500/50 bg-red-500/10 p-4 text-xs text-red-200 space-y-2.5 animate-in fade-in duration-200 shadow-lg">
+                      <div className="flex items-center gap-2 font-700 text-red-400 uppercase tracking-wider text-xs">
+                        <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+                        <span>No se permite el cambio a Equipo Femenil</span>
+                      </div>
+                      <p className="text-red-200/90 leading-relaxed text-xs">
+                        Un equipo de categoría <strong className="text-white font-600">Femenil</strong> no puede contar con ningún jugador varonil en su plantilla activa ni en solicitudes pendientes. Actualmente tienes <strong className="text-white font-600">{malePlayers.length} {malePlayers.length === 1 ? 'jugador varonil' : 'jugadores varoniles'}</strong> registrados:
+                      </p>
+                      <div className="flex flex-wrap gap-2 pt-0.5">
+                        {malePlayers.map(player => (
+                          <div 
+                            key={player.id || player.name}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-red-500/20 border border-red-500/40 text-white font-600 text-xs"
+                          >
+                            <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
+                            <span>{player.name}</span>
+                            {player.nickname && (
+                              <span className="text-red-300 font-normal">({player.nickname})</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-red-300/80 pt-1.5 border-t border-red-500/20 leading-relaxed">
+                        Para poder solicitar el cambio a categoría <strong className="text-white font-600">Femenil</strong>, primero debes tramitar la baja de todos los jugadores varoniles desde el panel de Mi Cuenta en la sección de <strong className="text-white font-600">Roster</strong>.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -874,13 +1176,21 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
               </button>
               <GmxButton
                 type="submit"
-                disabled={isSubmitting}
-                className="px-6 py-2.5"
+                disabled={isSubmitting || (tipoEquipo === 'Femenil' && malePlayers.length > 0) || !!teamNameError || !!teamTagError}
+                className={cn(
+                  "px-6 py-2.5",
+                  (tipoEquipo === 'Femenil' && malePlayers.length > 0) && "opacity-50 cursor-not-allowed bg-red-500/20 hover:bg-red-500/20 text-red-300 border-red-500/40"
+                )}
               >
                 {isSubmitting ? (
                   <span className="flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     <span>Enviando Solicitud...</span>
+                  </span>
+                ) : (tipoEquipo === 'Femenil' && malePlayers.length > 0) ? (
+                  <span className="flex items-center gap-2 text-red-300">
+                    <AlertCircle className="w-4 h-4" />
+                    <span>Bloqueado: Plantilla Varonil</span>
                   </span>
                 ) : validation?.status === 'pending' ? (
                   'Actualizar Solicitud'

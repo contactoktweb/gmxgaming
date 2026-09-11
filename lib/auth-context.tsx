@@ -173,9 +173,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = async (email: string, password?: string) => {
     if (!password) return { success: false, error: 'Contraseña requerida' }
 
+    const cleanEmail = email.trim().toLowerCase()
     setIsLoading(true)
     const { data, error } = await supabase.auth.signUp({
-      email,
+      email: cleanEmail,
       password,
       options: {
         emailRedirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/confirm`,
@@ -184,7 +185,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       setIsLoading(false)
-      return { success: false, error: translateAuthError(error.message) }
+      return { success: false, error: translateAuthError(error) }
+    }
+
+    // Si Supabase tiene protección de enumeración activa, retorna data.user con identities: []
+    // cuando el usuario ya existe en auth.users, sin arrojar error en el signUp.
+    if (data?.user && (!data.user.identities || data.user.identities.length === 0)) {
+      setIsLoading(false)
+      return {
+        success: false,
+        error: 'Este correo electrónico ya está registrado. Por favor inicia sesión o recupera tu contraseña.'
+      }
     }
 
     // Si Supabase ya devolvió sesión (email confirmations OFF), usar directamente
@@ -194,7 +205,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Si requiere confirmación de email, intentamos auto-login
     const { error: loginError } = await supabase.auth.signInWithPassword({
-      email,
+      email: cleanEmail,
       password,
     })
 

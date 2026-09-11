@@ -331,9 +331,42 @@ export function AltaContratoForm() {
       team_gender_category: isFemenil ? 'female' : 'mixed'
     }
 
-    const { error } = await supabase.from('contracts').insert(payload)
+    const { data: newContract, error } = await supabase.from('contracts').insert(payload).select().single()
 
     if (!error) {
+      // Registrar también en validations para seguimiento administrativo y auditoría
+      try {
+        const { data: playerProfile } = await supabase
+          .from('profiles')
+          .select('name, nickname')
+          .eq('id', user?.id)
+          .single()
+
+        const pName = playerProfile?.nickname || playerProfile?.name || user?.email || 'Jugador'
+        const tName = selectedTeam?.name || teamData?.name || 'Equipo'
+
+        await supabase.from('validations').insert({
+          type: 'contrato',
+          target_name: `${pName} ➔ ${tName} (Contrato)`,
+          submitted_by: pName,
+          status: 'pending',
+          details: {
+            contract_id: newContract?.id,
+            player_id: user?.id,
+            player_name: pName,
+            team_id: teamId,
+            team_name: tName,
+            roles: rolesToSave,
+            end_date: rawEndDate,
+            division: isFemenil ? 'Femenil' : 'Varonil / Mixto',
+            team_gender_category: isFemenil ? 'female' : 'mixed',
+            status: 'pending'
+          }
+        })
+      } catch (valErr) {
+        console.warn('Advertencia registrando validación de contrato:', valErr)
+      }
+
       setFormStatus('success')
     } else {
       setFormStatus('idle')

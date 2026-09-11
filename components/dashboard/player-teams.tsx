@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { toast } from 'sonner'
 import { GmxButton } from '@/components/gmx-button'
 import { cn, formatRoleTitle, formatRolesList, getTeamSlug } from '@/lib/utils'
+import { EditTeamModal } from '@/components/dashboard/edit-team-modal'
 
 const DEFAULT_COUNTRIES = [
   "Argentina", "Bolivia", "Chile", "Colombia", "Costa Rica", "Cuba", 
@@ -28,7 +29,6 @@ export function PlayerTeams() {
   const [loading, setLoading] = useState(true)
 
   const [editingTeam, setEditingTeam] = useState<any>(null)
-  const [savingTeam, setSavingTeam] = useState(false)
   const [requestingLeave, setRequestingLeave] = useState(false)
   const [processingContractId, setProcessingContractId] = useState<string | null>(null)
 
@@ -175,120 +175,7 @@ export function PlayerTeams() {
   }, [user])
 
   const handleOpenEdit = (team: any) => {
-    const val = teamValidations[team.id]
-    const isPending = val?.status === 'pending'
-    const isRejected = val?.status === 'rejected'
-    const details = (isPending || isRejected) ? val?.details : null
-
-    setEditingTeam({
-      id: team.id,
-      name: details?.name || team.name || '',
-      tag: details?.tag || team.tag || '',
-      country: details?.country || team.country || '',
-      logo_url: details?.logo_url || team.logo_url || '',
-      originalTeam: team,
-      validation: val
-    })
-  }
-
-  const handleUpdateTeam = async () => {
-    if (!editingTeam) return
-    setSavingTeam(true)
-
-    try {
-      // Todas las modificaciones de equipo enviadas desde el panel de líder pasan por aprobación
-      const payloadDetails = {
-        team_id: editingTeam.id,
-        manager_id: user?.id,
-        name: editingTeam.name,
-        tag: editingTeam.tag,
-        country: editingTeam.country,
-        logo_url: editingTeam.logo_url,
-        original_name: editingTeam.originalTeam?.name || '',
-        original_tag: editingTeam.originalTeam?.tag || '',
-        original_country: editingTeam.originalTeam?.country || '',
-        original_logo: editingTeam.originalTeam?.logo_url || ''
-      }
-
-      let valError = null
-      const existingVal = editingTeam.validation
-
-      if (existingVal?.id && existingVal.status === 'pending') {
-        // Actualizar solicitud existente
-        const { error } = await supabase.from('validations').update({
-          target_name: `${editingTeam.name} (Modificación de Equipo)`,
-          status: 'pending',
-          details: payloadDetails
-        }).eq('id', existingVal.id)
-        valError = error
-
-        if (!error) {
-          setTeamValidations(prev => ({
-            ...prev,
-            [editingTeam.id]: {
-              ...existingVal,
-              status: 'pending',
-              details: payloadDetails
-            }
-          }))
-        }
-      } else {
-        // Eliminar solicitudes antiguas ya procesadas (approved/rejected) para evitar conflictos
-        await supabase
-          .from('validations')
-          .delete()
-          .eq('type', 'modificacion')
-          .in('status', ['approved', 'rejected'])
-          .filter('details->>team_id', 'eq', editingTeam.id)
-
-        // Crear nueva solicitud de modificación
-        const { data, error } = await supabase.from('validations').insert({
-          type: 'modificacion',
-          target_name: `${editingTeam.name} (Modificación de Equipo)`,
-          submitted_by: user?.name || user?.email || 'Líder de Equipo',
-          status: 'pending',
-          details: payloadDetails
-        }).select().single()
-        valError = error
-
-        if (data) {
-          setTeamValidations(prev => ({
-            ...prev,
-            [editingTeam.id]: data
-          }))
-        }
-      }
-
-      if (valError) throw valError
-
-      toast.success(existingVal?.status === 'pending' ? 'Solicitud Actualizada' : 'Solicitud Enviada a Aprobación', {
-        description: 'Tus cambios fueron enviados a los administradores para su revisión.'
-      })
-      setEditingTeam(null)
-    } catch (err: any) {
-      console.error('Error updating team:', err)
-      toast.error('Error al guardar solicitud: ' + (err.message || 'Intenta de nuevo'))
-    } finally {
-      setSavingTeam(false)
-    }
-  }
-
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0] && editingTeam) {
-      const file = e.target.files[0]
-      toast.loading('Subiendo logo...', { id: 'logo-upload' })
-      const fileExt = file.name.split('.').pop()
-      const fileName = `team-logo-${editingTeam.id}-${Date.now()}.${fileExt}`
-      
-      const { error: uploadError, data } = await supabase.storage.from('teams').upload(fileName, file)
-      if (uploadError) {
-        toast.error('Error al subir la imagen', { id: 'logo-upload' })
-        return
-      }
-      const { data: publicUrlData } = supabase.storage.from('teams').getPublicUrl(data.path)
-      setEditingTeam({ ...editingTeam, logo_url: publicUrlData.publicUrl })
-      toast.success('Logo subido, no olvides guardar los cambios.', { id: 'logo-upload' })
-    }
+    setEditingTeam(team)
   }
 
   const handleApproveContract = async (contractId: string) => {
@@ -955,143 +842,26 @@ export function PlayerTeams() {
         </div>
       )}
 
-      {/* Modal de Edición de Equipo */}
+      {/* Modal Completo de Edición y Modificación de Equipo */}
       {editingTeam && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setEditingTeam(null)} />
-          <div className="relative w-full max-w-lg rounded-xl border border-border bg-surface shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden flex flex-col max-h-[90vh]">
-            
-            <div className="flex items-center justify-between border-b border-border p-6 bg-surface shrink-0">
-              <div>
-                <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
-                  <Settings className="w-5 h-5 text-primary" />
-                  {editingTeam.validation?.status === 'pending'
-                    ? 'Modificar Solicitud de Equipo'
-                    : editingTeam.validation?.status === 'rejected'
-                    ? 'Reenviar Solicitud de Equipo'
-                    : user?.role === 'admin'
-                    ? 'Editar Equipo'
-                    : 'Solicitud de Modificación de Equipo'}
-                </h3>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {editingTeam.validation?.status === 'pending'
-                    ? 'Modifica los datos de tu solicitud en curso.'
-                    : user?.role === 'admin'
-                    ? 'Actualiza los datos del equipo directamente.'
-                    : 'Tus cambios serán enviados al administrador para su aprobación.'}
-                </p>
-              </div>
-              <button onClick={() => setEditingTeam(null)} className="text-muted-foreground hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="p-6 space-y-6 overflow-y-auto flex-1">
-              
-              {/* Avisos Contextuales */}
-              {editingTeam.validation?.status === 'pending' && (
-                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-300 flex items-center gap-2.5">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
-                  <span>Se han cargado los datos de tu solicitud en revisión. Puedes ajustarlos y reenviarlos.</span>
-                </div>
-              )}
-
-              {editingTeam.validation?.status === 'rejected' && editingTeam.validation?.details?.rejection_reason && (
-                <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-xs text-red-200 flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 shrink-0 text-red-400 mt-0.5" />
-                  <div className="space-y-1">
-                    <span className="font-700 text-red-300 block uppercase tracking-wider">Motivo del Rechazo Anterior:</span>
-                    <p className="text-white/90 leading-relaxed">{editingTeam.validation.details.rejection_reason}</p>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex flex-col items-center">
-                <img 
-                  src={editingTeam.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
-                  alt={editingTeam.name} 
-                  className="w-24 h-24 rounded-full object-cover mb-4 border-2 border-border bg-background shadow-inner"
-                />
-                <label className="w-full">
-                  <span className="text-xs font-600 text-muted-foreground uppercase tracking-widest mb-2 block text-center">Actualizar Logo</span>
-                  <input 
-                    type="file" 
-                    accept="image/*" 
-                    onChange={handleLogoUpload}
-                    className="w-full text-xs text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
-                  />
-                </label>
-              </div>
-
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-600 text-muted-foreground uppercase tracking-widest">Nombre del Equipo</label>
-                  <input 
-                    type="text" 
-                    value={editingTeam.name || ''}
-                    onChange={e => setEditingTeam({...editingTeam, name: e.target.value.toUpperCase()})}
-                    className="w-full rounded-md border border-border bg-background px-4 py-3 text-sm text-white focus:border-primary focus:outline-none uppercase"
-                  />
-                </div>
-                
-                <div className="space-y-1.5">
-                  <label className="text-xs font-600 text-muted-foreground uppercase tracking-widest">Tag del Equipo</label>
-                  <input 
-                    type="text" 
-                    value={editingTeam.tag || ''}
-                    onChange={e => setEditingTeam({...editingTeam, tag: e.target.value.toUpperCase()})}
-                    className="w-full rounded-md border border-border bg-background px-4 py-3 text-sm text-white focus:border-primary focus:outline-none uppercase"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-600 text-muted-foreground uppercase tracking-widest">País</label>
-                  <div className="relative">
-                    <select 
-                      value={editingTeam.country || ''}
-                      onChange={e => setEditingTeam({...editingTeam, country: e.target.value})}
-                      className="w-full rounded-md border border-border bg-background px-4 py-3 text-sm text-white focus:border-primary focus:outline-none appearance-none"
-                    >
-                      <option value="" disabled>Selecciona un país</option>
-                      {countries.map(c => (
-                        <option key={c} value={c} className="bg-surface text-white">
-                          {c}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-muted-foreground">
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t border-border p-6 bg-surface shrink-0 flex justify-end gap-3">
-              <button 
-                onClick={() => setEditingTeam(null)}
-                className="px-6 py-2 rounded-md border border-border text-sm font-600 text-white hover:bg-white/5 transition-colors"
-              >
-                Cancelar
-              </button>
-              <GmxButton onClick={handleUpdateTeam} disabled={savingTeam} className="px-6 py-2">
-                {savingTeam ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : editingTeam.validation?.status === 'pending' ? (
-                  'Actualizar Solicitud'
-                ) : editingTeam.validation?.status === 'rejected' ? (
-                  'Reenviar Solicitud'
-                ) : user?.role === 'admin' ? (
-                  'Guardar Cambios'
-                ) : (
-                  'Solicitar Modificación'
-                )}
-              </GmxButton>
-            </div>
-          </div>
-        </div>
+        <EditTeamModal
+          team={editingTeam}
+          isOpen={!!editingTeam}
+          onClose={() => setEditingTeam(null)}
+          validation={teamValidations[editingTeam.id]}
+          onSuccess={(updatedDetails) => {
+            if (updatedDetails) {
+              setTeamValidations(prev => ({
+                ...prev,
+                [editingTeam.id]: {
+                  ...(teamValidations[editingTeam.id] || {}),
+                  status: 'pending',
+                  details: updatedDetails
+                }
+              }))
+            }
+          }}
+        />
       )}
 
       {/* Modal de Confirmación para Solicitar Baja del Equipo (Jugador) */}

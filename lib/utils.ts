@@ -229,7 +229,7 @@ export function translateAuthError(error: any): string {
   if (lower.includes('email not confirmed')) {
     return 'Debes confirmar tu correo electrónico antes de iniciar sesión. Revisa tu bandeja de entrada.'
   }
-  if (lower.includes('user already registered') || lower.includes('user already exists')) {
+  if (lower.includes('user already registered') || lower.includes('user already exists') || lower.includes('user_already_exists')) {
     return 'Este correo electrónico ya está registrado. Por favor inicia sesión o recupera tu contraseña.'
   }
   if (lower.includes('password should be at least 6 characters')) {

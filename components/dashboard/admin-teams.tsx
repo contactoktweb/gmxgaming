@@ -23,7 +23,8 @@ import {
   Share2,
   Trophy,
   Loader2,
-  Globe
+  Globe,
+  Ban
 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
@@ -129,6 +130,16 @@ export function AdminTeams() {
   const [filterRegion, setFilterRegion] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  // Quick Status Modal state
+  const [statusModalTeam, setStatusModalTeam] = useState<Team | null>(null)
+  const [quickNewStatus, setQuickNewStatus] = useState<string>('active')
+  const [isUpdatingQuickStatus, setIsUpdatingQuickStatus] = useState(false)
+
+  // Reiniciar seleccionados al cambiar cualquier filtro o búsqueda
+  useEffect(() => {
+    setSelectedIds(new Set())
+  }, [searchQuery, filterRegion, filterStatus])
 
   useEffect(() => {
     async function fetchTeams() {
@@ -249,13 +260,13 @@ export function AdminTeams() {
   }, [])
 
   useEffect(() => {
-    if (selectedTeam || confirmAction || terminatingContract || lightboxImage) {
+    if (selectedTeam || confirmAction || terminatingContract || lightboxImage || statusModalTeam) {
       window.__lenis?.stop()
     } else {
       window.__lenis?.start()
     }
     return () => { window.__lenis?.start() }
-  }, [selectedTeam, confirmAction, terminatingContract, lightboxImage])
+  }, [selectedTeam, confirmAction, terminatingContract, lightboxImage, statusModalTeam])
 
   const openTeamDetails = (team: Team) => {
     const raw = team.rawDetails || {}
@@ -299,6 +310,52 @@ export function AdminTeams() {
     }
   }
 
+  const handleQuickStatusUpdate = async () => {
+    if (!statusModalTeam) return
+    setIsUpdatingQuickStatus(true)
+    toast.loading('Actualizando estado del equipo...', { id: 'quick-status-team' })
+    try {
+      const { error } = await supabase
+        .from('teams')
+        .update({ status: quickNewStatus })
+        .eq('id', statusModalTeam.id)
+
+      if (error) throw error
+
+      setTeams(prev => prev.map(t => t.id === statusModalTeam.id ? { ...t, status: quickNewStatus } : t))
+      if (selectedTeam && selectedTeam.id === statusModalTeam.id) {
+        setSelectedTeam(prev => prev ? { ...prev, status: quickNewStatus } : null)
+      }
+      if (editingTeam && editingTeam.id === statusModalTeam.id) {
+        setEditingTeam(prev => prev ? { ...prev, status: quickNewStatus } : null)
+      }
+
+      // Sincronizar con la tabla validations si existe solicitud
+      try {
+        await supabase
+          .from('validations')
+          .update({ status: quickNewStatus === 'banned' ? 'rejected' : quickNewStatus })
+          .or(`details->>team_id.eq.${statusModalTeam.id},target_name.eq.${statusModalTeam.name}`)
+      } catch (vErr) {
+        console.warn('Sync validation warning:', vErr)
+      }
+
+      const statusLabels: Record<string, string> = {
+        active: 'Activo',
+        pending: 'En Revisión',
+        inactive: 'Inactivo',
+        banned: 'Baneado'
+      }
+      toast.success(`Estado de "${statusModalTeam.name}" actualizado a ${statusLabels[quickNewStatus] || quickNewStatus}`, { id: 'quick-status-team' })
+      setStatusModalTeam(null)
+    } catch (err: any) {
+      console.error('Error updating team status:', err)
+      toast.error('Error al actualizar estado: ' + (err?.message || 'Error inesperado'), { id: 'quick-status-team' })
+    } finally {
+      setIsUpdatingQuickStatus(false)
+    }
+  }
+
   const handleSaveTeam = async () => {
     if (!editingTeam || !selectedTeam) return
     const nameVal = editingTeam.name.trim()
@@ -332,6 +389,16 @@ export function AdminTeams() {
 
       const { error } = await supabase.from('teams').update(updates).eq('id', editingTeam.id)
       if (error) throw error
+
+      // Sincronizar con la tabla validations si existe solicitud
+      try {
+        await supabase
+          .from('validations')
+          .update({ status: updates.status === 'banned' ? 'rejected' : updates.status })
+          .or(`details->>team_id.eq.${editingTeam.id},target_name.eq.${editingTeam.name}`)
+      } catch (vErr) {
+        console.warn('Sync validation warning:', vErr)
+      }
 
       // Obtener información del nuevo manager
       const newManager = availableManagers.find(m => m.id === updates.manager_id)
@@ -641,9 +708,41 @@ export function AdminTeams() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filteredAndSortedTeams.map(team => (
-              <div key={team.id} className="group relative flex flex-col items-center rounded-lg border border-border bg-background p-6 text-center transition-colors hover:border-primary/50">
+              <div 
+                key={team.id} 
+                className={cn(
+                  "group relative flex flex-col items-center rounded-lg border bg-background p-6 text-center transition-colors",
+                  team.status === 'banned' 
+                    ? "border-red-500/50 bg-red-950/5 hover:border-red-500 shadow-sm shadow-red-950/20" 
+                    : "border-border hover:border-primary/50"
+                )}
+              >
                 
-                <div className="absolute right-3 top-3 flex items-center gap-1.5">
+                {team.status === 'banned' && (
+                  <div className="absolute -top-2.5 left-4 z-10">
+                    <span className="px-2 py-0.5 rounded bg-red-600 text-white font-extrabold text-[10px] tracking-wider uppercase shadow flex items-center gap-1">
+                      <Ban className="w-3 h-3" />
+                      Baneado
+                    </span>
+                  </div>
+                )}
+
+                <div className="absolute right-3 top-3 flex items-center gap-1.5 z-10">
+                  <button 
+                    onClick={() => {
+                      setStatusModalTeam(team)
+                      setQuickNewStatus(team.status)
+                    }}
+                    title="Cambiar Estado (Activo / Baneado / etc.)"
+                    className={cn(
+                      "p-2 transition-colors bg-surface border border-border rounded-md",
+                      team.status === 'banned' 
+                        ? "text-red-400 border-red-500/40 hover:bg-red-500/20" 
+                        : "text-muted-foreground hover:text-white hover:border-primary"
+                    )}
+                  >
+                    <Ban className="w-4 h-4" />
+                  </button>
                   <button 
                     onClick={() => openTeamDetails(team)}
                     title="Editar Información"
@@ -664,7 +763,10 @@ export function AdminTeams() {
                   <img 
                     src={team.logo || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
                     alt={team.name} 
-                    className="h-20 w-20 rounded-full object-cover ring-4 ring-surface bg-surface"
+                    className={cn(
+                      "h-20 w-20 rounded-full object-cover ring-4 ring-surface bg-surface",
+                      team.status === 'banned' ? "grayscale opacity-70 ring-red-500/30" : ""
+                    )}
                   />
                   {team.tag && (
                     <span className="absolute -bottom-1 -right-1 px-1.5 py-0.5 rounded bg-primary text-black font-extrabold text-[10px] tracking-wider uppercase shadow">
@@ -673,7 +775,10 @@ export function AdminTeams() {
                   )}
                 </div>
 
-                <h3 className="mb-1 font-display text-lg font-700 uppercase text-white group-hover:text-primary transition-colors">
+                <h3 className={cn(
+                  "mb-1 font-display text-lg font-700 uppercase transition-colors",
+                  team.status === 'banned' ? "text-red-400 line-through" : "text-white group-hover:text-primary"
+                )}>
                   {team.name}
                 </h3>
                 
@@ -689,18 +794,26 @@ export function AdminTeams() {
                 </div>
 
                 <div className="mt-auto flex w-full items-center justify-between border-t border-border pt-4">
-                  <div className="flex items-center gap-1.5 text-sm font-500 text-white">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStatusModalTeam(team)
+                      setQuickNewStatus(team.status)
+                    }}
+                    title="Clic para cambiar estado"
+                    className="flex items-center gap-1.5 text-sm font-500 text-white hover:opacity-80 transition-opacity cursor-pointer group/btn"
+                  >
                     <Users className="h-4 w-4 text-primary" />
                     {team.status === 'active' ? (
-                       <span className="text-emerald-500 font-semibold text-xs uppercase">Activo</span>
+                       <span className="text-emerald-500 font-semibold text-xs uppercase group-hover/btn:underline">Activo</span>
                     ) : team.status === 'pending' ? (
-                       <span className="text-amber-400 font-semibold text-xs uppercase">En Revisión</span>
+                       <span className="text-amber-400 font-semibold text-xs uppercase group-hover/btn:underline">En Revisión</span>
                     ) : team.status === 'banned' ? (
-                       <span className="text-red-500 font-semibold text-xs uppercase">Baneado</span>
+                       <span className="text-red-500 font-semibold text-xs uppercase group-hover/btn:underline">Baneado</span>
                     ) : (
-                       <span className="text-yellow-500 font-semibold text-xs uppercase">Inactivo</span>
+                       <span className="text-yellow-500 font-semibold text-xs uppercase group-hover/btn:underline">Inactivo</span>
                     )}
-                  </div>
+                  </button>
                   <button 
                     onClick={() => openTeamDetails(team)} 
                     className="text-xs font-600 text-primary hover:text-white transition-colors flex items-center gap-1.5"
@@ -813,17 +926,37 @@ export function AdminTeams() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <span className={cn(
-                        "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border",
-                        editingTeam.status === 'active' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
-                        editingTeam.status === 'pending' ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' :
-                        editingTeam.status === 'banned' ? 'bg-red-500/10 text-red-400 border-red-500/30' :
-                        'bg-yellow-500/10 text-yellow-400 border-yellow-500/30'
-                      )}>
-                        {editingTeam.status === 'active' ? 'Activo' : editingTeam.status === 'pending' ? 'En Revisión' : editingTeam.status === 'banned' ? 'Baneado' : 'Inactivo'}
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                      <span className="text-xs font-700 uppercase tracking-wider text-muted-foreground">
+                        Estado:
                       </span>
+                      <div className="relative">
+                        <select
+                          value={editingTeam.status}
+                          onChange={(e) => setEditingTeam({ ...editingTeam, status: e.target.value })}
+                          className={cn(
+                            "appearance-none rounded-lg border px-3 py-1.5 pr-8 text-xs font-bold uppercase tracking-wider focus:outline-none focus:ring-1 cursor-pointer transition-colors",
+                            editingTeam.status === 'active' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 focus:border-emerald-500' :
+                            editingTeam.status === 'pending' ? 'bg-amber-500/10 text-amber-400 border-amber-500/30 focus:border-amber-500' :
+                            editingTeam.status === 'banned' ? 'bg-red-500/10 text-red-400 border-red-500/30 focus:border-red-500' :
+                            'bg-yellow-500/10 text-yellow-400 border-yellow-500/30 focus:border-yellow-500'
+                          )}
+                        >
+                          <option value="active" className="bg-surface text-emerald-400 font-semibold">Activo</option>
+                          <option value="pending" className="bg-surface text-amber-400 font-semibold">En Revisión</option>
+                          <option value="inactive" className="bg-surface text-yellow-400 font-semibold">Inactivo</option>
+                          <option value="banned" className="bg-surface text-red-400 font-semibold">Baneado</option>
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                      </div>
                     </div>
+
+                    {editingTeam.status === 'banned' && (
+                      <div className="w-full mt-2 rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-xs text-red-400 flex items-center gap-2">
+                        <Ban className="w-4 h-4 shrink-0 text-red-400" />
+                        <span>Este equipo se encuentra en estado <strong>Baneado</strong>. No podrá participar en torneos ni competiciones oficiales.</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* SECCIÓN 1: Identidad y Configuración General */}
@@ -901,15 +1034,27 @@ export function AdminTeams() {
                           <select
                             value={editingTeam.status}
                             onChange={(e) => setEditingTeam({ ...editingTeam, status: e.target.value })}
-                            className="w-full appearance-none rounded-lg border border-border bg-surface px-3.5 py-2 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer font-semibold"
+                            className={cn(
+                              "w-full appearance-none rounded-lg border bg-surface px-3.5 py-2 pr-9 text-sm focus:outline-none focus:ring-1 cursor-pointer font-semibold transition-colors",
+                              editingTeam.status === 'active' ? 'text-emerald-400 border-emerald-500/30 focus:border-emerald-500' :
+                              editingTeam.status === 'pending' ? 'text-amber-400 border-amber-500/30 focus:border-amber-500' :
+                              editingTeam.status === 'banned' ? 'text-red-400 border-red-500/30 focus:border-red-500' :
+                              'text-yellow-400 border-yellow-500/30 focus:border-yellow-500'
+                            )}
                           >
-                            <option value="active" className="text-emerald-400">Activo (Visible en competiciones)</option>
-                            <option value="pending" className="text-amber-400">En Revisión / Pendiente</option>
-                            <option value="inactive" className="text-yellow-400">Inactivo</option>
-                            <option value="banned" className="text-red-400">Baneado</option>
+                            <option value="active" className="bg-surface text-emerald-400 font-semibold">Activo (Visible en competiciones)</option>
+                            <option value="pending" className="bg-surface text-amber-400 font-semibold">En Revisión / Pendiente</option>
+                            <option value="inactive" className="bg-surface text-yellow-400 font-semibold">Inactivo</option>
+                            <option value="banned" className="bg-surface text-red-400 font-semibold">Baneado</option>
                           </select>
                           <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         </div>
+                        {editingTeam.status === 'banned' && (
+                          <p className="text-[11px] text-red-400 mt-1.5 flex items-center gap-1 font-500">
+                            <Ban className="w-3.5 h-3.5 shrink-0" />
+                            Equipo sancionado / baneado de la plataforma.
+                          </p>
+                        )}
                       </div>
 
                       <div>
@@ -1082,10 +1227,37 @@ export function AdminTeams() {
                   </div>
 
                   {/* Barra de Guardar */}
-                  <div className="sticky bottom-0 bg-surface/95 backdrop-blur border border-border p-4 rounded-xl flex items-center justify-between gap-4 z-20 shadow-xl">
-                    <div className="text-xs text-muted-foreground">
-                      Los cambios se aplicarán inmediatamente en la base de datos de GMX Gaming.
+                  <div className="sticky bottom-0 bg-surface/95 backdrop-blur border border-border p-4 rounded-xl flex flex-wrap items-center justify-between gap-4 z-20 shadow-xl">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-700 uppercase tracking-wider text-muted-foreground whitespace-nowrap">
+                          Estado:
+                        </span>
+                        <div className="relative">
+                          <select
+                            value={editingTeam.status}
+                            onChange={(e) => setEditingTeam({ ...editingTeam, status: e.target.value })}
+                            className={cn(
+                              "appearance-none rounded-lg border px-3 py-2 pr-8 text-xs font-bold uppercase tracking-wider focus:outline-none focus:ring-1 cursor-pointer transition-colors font-sans",
+                              editingTeam.status === 'active' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 focus:border-emerald-500" :
+                              editingTeam.status === 'pending' ? "bg-amber-500/10 text-amber-400 border-amber-500/30 focus:border-amber-500" :
+                              editingTeam.status === 'banned' ? "bg-red-500/10 text-red-400 border-red-500/30 focus:border-red-500" :
+                              "bg-yellow-500/10 text-yellow-400 border-yellow-500/30 focus:border-yellow-500"
+                            )}
+                          >
+                            <option value="active" className="bg-surface text-emerald-400 font-semibold">Activo</option>
+                            <option value="pending" className="bg-surface text-amber-400 font-semibold">En Revisión</option>
+                            <option value="inactive" className="bg-surface text-yellow-400 font-semibold">Inactivo</option>
+                            <option value="banned" className="bg-surface text-red-400 font-semibold">Baneado</option>
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                        </div>
+                      </div>
+                      <span className="text-xs text-muted-foreground hidden lg:inline">
+                        Los cambios se aplicarán inmediatamente en la base de datos de GMX Gaming.
+                      </span>
                     </div>
+
                     <button
                       type="button"
                       disabled={isSavingTeam}
@@ -1395,6 +1567,63 @@ export function AdminTeams() {
                   ELIMINAR <Trash2 className="w-4 h-4" />
                 </span>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Status Modal */}
+      {statusModalTeam && (
+        <div className="fixed inset-0 z-[1010] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setStatusModalTeam(null)} />
+          <div className="relative w-full max-w-md rounded-xl border border-border bg-surface p-6 sm:p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+            <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white mb-2 flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-primary" />
+              Modificar Estado del Equipo
+            </h3>
+            <p className="text-xs text-muted-foreground mb-6">
+              Modificando al equipo: <strong className="text-white font-semibold">{statusModalTeam.name}</strong>
+            </p>
+
+            <div className="space-y-4 mb-8">
+              <label className="text-xs font-700 uppercase tracking-wider text-primary block">Nuevo Estado</label>
+              <div className="relative">
+                <select
+                  value={quickNewStatus}
+                  onChange={(e) => setQuickNewStatus(e.target.value)}
+                  className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-3 pr-10 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer font-500"
+                >
+                  <option value="active">Activo (Visible en competiciones)</option>
+                  <option value="pending">En Revisión / Pendiente</option>
+                  <option value="inactive">Inactivo</option>
+                  <option value="banned">Baneado</option>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              </div>
+
+              {quickNewStatus === 'banned' && (
+                <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-xs text-red-400 flex items-start gap-2">
+                  <Ban className="w-4 h-4 shrink-0 text-red-400 mt-0.5" />
+                  <span>El equipo quedará baneado y no podrá participar ni inscribirse en torneos oficiales de GMX Gaming.</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <button 
+                type="button"
+                onClick={() => setStatusModalTeam(null)}
+                className="flex-1 rounded-lg border border-border bg-transparent px-4 py-3 font-display text-xs font-600 uppercase tracking-widest text-muted-foreground transition-colors hover:text-white hover:border-primary/50"
+              >
+                CANCELAR
+              </button>
+              <GmxButton 
+                onClick={handleQuickStatusUpdate} 
+                disabled={isUpdatingQuickStatus}
+                className="flex-1 px-4 py-3"
+              >
+                {isUpdatingQuickStatus ? 'GUARDANDO...' : 'CONFIRMAR CAMBIO'}
+              </GmxButton>
             </div>
           </div>
         </div>

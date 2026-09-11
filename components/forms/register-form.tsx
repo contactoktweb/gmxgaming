@@ -54,6 +54,8 @@ function RegisterFormContent() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (isLoading || isGoogleLoading) return
+
     setIsLoading(true)
     setError('')
     setEmailNotConfirmed(false)
@@ -69,15 +71,17 @@ function RegisterFormContent() {
     if (result.success) {
       if (result.emailNotConfirmed) {
         setEmailNotConfirmed(true)
+        setIsLoading(false)
         setTimeout(() => {
           router.push('/micuenta')
-        }, 2000)
+        }, 3500)
       } else {
         router.push('/micuenta')
       }
     } else {
       setError(translateAuthError(result.error) || 'Error al crear la cuenta. Por favor intenta de nuevo.')
       setIsLoading(false)
+      setEmailNotConfirmed(false)
     }
   }
 

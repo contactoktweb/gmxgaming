@@ -146,12 +146,56 @@ function FormContent() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (formStatus === 'loading') return
+
     if (nicknameError) {
       alert('Por favor, elige un Nickname diferente.')
       return
     }
 
     setFormStatus('loading')
+
+    // Re-verificar síncronamente antes de procesar archivos
+    try {
+      if (user?.id) {
+        const { data: currentProfile } = await supabase
+          .from('profiles')
+          .select('is_player, player_status')
+          .eq('id', user.id)
+          .single()
+
+        if (currentProfile?.is_player && (currentProfile.player_status === 'active' || currentProfile.player_status === 'approved' || currentProfile.player_status === 'pending')) {
+          alert('Ya cuentas con un registro de jugador activo o en proceso de revisión.')
+          setFormStatus('idle')
+          return
+        }
+      }
+
+      const cleanNick = nickname.trim().toUpperCase()
+      if (cleanNick) {
+        const { data: profileWithNick } = await supabase
+          .from('profiles')
+          .select('id')
+          .or(`nickname.ilike.${cleanNick},game_nickname.ilike.${cleanNick}`)
+          .neq('id', user?.id || '')
+          .limit(1)
+
+        const { data: gameWithNick } = await supabase
+          .from('player_game_info')
+          .select('id')
+          .ilike('game_nickname', cleanNick)
+          .neq('profile_id', user?.id || '')
+          .limit(1)
+
+        if ((profileWithNick && profileWithNick.length > 0) || (gameWithNick && gameWithNick.length > 0)) {
+          alert('El nickname ingresado ya está en uso por otro jugador. Por favor elige otro.')
+          setFormStatus('idle')
+          return
+        }
+      }
+    } catch (verifErr) {
+      console.error('Error al verificar datos del jugador antes de enviar:', verifErr)
+    }
     
     const form = e.currentTarget
     const formData = new FormData(form)
@@ -425,7 +469,7 @@ function FormContent() {
           <GmxButton href="/micuenta" className="w-full sm:w-auto px-8">
             IR A MI CUENTA
           </GmxButton>
-          <GmxButton href="/" variant="outline" className="w-full sm:w-auto px-8">
+          <GmxButton href="/" variant="secondary" className="w-full sm:w-auto px-8">
             VOLVER AL INICIO
           </GmxButton>
         </div>
@@ -795,14 +839,21 @@ function FormContent() {
       <div className="pt-8 text-center sm:text-left border-t border-border mt-8">
         <button
           type="submit"
-          disabled={!!nicknameError}
+          disabled={formStatus === 'loading' || !!nicknameError}
           className={cn(
-            "group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden px-8 py-5 font-display text-[15px] font-600 uppercase tracking-[0.18em] text-white transition-colors duration-300 clip-corner sm:w-auto mt-4",
-            nicknameError ? "bg-muted cursor-not-allowed" : "bg-primary hover:bg-primary-dark"
+            "group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden px-8 py-5 font-display text-[15px] font-600 uppercase tracking-[0.18em] text-white transition-colors duration-300 clip-corner sm:w-auto mt-4 disabled:opacity-50 disabled:cursor-not-allowed",
+            nicknameError ? "bg-muted" : "bg-primary hover:bg-primary-dark"
           )}
         >
           <span className="relative z-10 flex items-center gap-2">
-            ENVIAR REGISTRO DE JUGADOR
+            {formStatus === 'loading' ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                ENVIANDO REGISTRO...
+              </>
+            ) : (
+              'ENVIAR REGISTRO DE JUGADOR'
+            )}
           </span>
         </button>
       </div>

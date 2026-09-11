@@ -39,9 +39,15 @@ export function AltaEquipoForm() {
   const [selectedGames, setSelectedGames] = useState<string[]>(['Mobile Legends'])
   const [loadingConfig, setLoadingConfig] = useState(true)
   const [blockMessage, setBlockMessage] = useState<string | null>(null)
+  const [existingTeamInfo, setExistingTeamInfo] = useState<{ type: 'pending' | 'active', teamName: string } | null>(null)
 
   // Validation state
   const [teamName, setTeamName] = useState('')
+  const [teamTag, setTeamTag] = useState('')
+  const [teamNameError, setTeamNameError] = useState('')
+  const [teamTagError, setTeamTagError] = useState('')
+  const [debouncedTeamName, setDebouncedTeamName] = useState('')
+  const [debouncedTeamTag, setDebouncedTeamTag] = useState('')
   
   // Manager info state (Mayúsculas y sin caracteres especiales)
   const [managerFirstName, setManagerFirstName] = useState('')
@@ -52,6 +58,119 @@ export function AltaEquipoForm() {
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [jerseyFile, setJerseyFile] = useState<File | null>(null)
 
+  // Debounce para validaciones en tiempo real
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedTeamName(teamName)
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [teamName])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedTeamTag(teamTag)
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [teamTag])
+
+  // Validar nombre de equipo en tiempo real
+  useEffect(() => {
+    async function validateTeamName() {
+      const clean = debouncedTeamName.trim().toUpperCase()
+      if (!clean) {
+        setTeamNameError('')
+        return
+      }
+
+      try {
+        // 1. Verificar en tabla teams
+        const { data: existingTeams } = await supabase
+          .from('teams')
+          .select('id, name')
+          .ilike('name', clean)
+
+        const exactMatch = existingTeams?.some(
+          t => t.name?.trim().toUpperCase() === clean
+        )
+
+        if (exactMatch) {
+          setTeamNameError('Ya existe un equipo registrado con este nombre.')
+          return
+        }
+
+        // 2. Verificar en tabla validations solicitudes pendientes
+        const { data: pendingVals } = await supabase
+          .from('validations')
+          .select('id, details')
+          .eq('type', 'equipo')
+          .eq('status', 'pending')
+
+        const pendingMatch = pendingVals?.some(
+          v => v.details?.name?.trim().toUpperCase() === clean
+        )
+
+        if (pendingMatch) {
+          setTeamNameError('Ya existe una solicitud pendiente con este nombre de equipo.')
+          return
+        }
+
+        setTeamNameError('')
+      } catch (err) {
+        console.error('Error al validar nombre de equipo:', err)
+      }
+    }
+
+    validateTeamName()
+  }, [debouncedTeamName, supabase])
+
+  // Validar tag de equipo en tiempo real
+  useEffect(() => {
+    async function validateTeamTag() {
+      const clean = debouncedTeamTag.trim().toUpperCase()
+      if (!clean) {
+        setTeamTagError('')
+        return
+      }
+
+      try {
+        const { data: existingTags } = await supabase
+          .from('teams')
+          .select('id, tag')
+          .ilike('tag', clean)
+
+        const exactMatch = existingTags?.some(
+          t => t.tag?.trim().toUpperCase() === clean
+        )
+
+        if (exactMatch) {
+          setTeamTagError('Este tag ya se encuentra en uso por otro equipo.')
+          return
+        }
+
+        const { data: pendingVals } = await supabase
+          .from('validations')
+          .select('id, details')
+          .eq('type', 'equipo')
+          .eq('status', 'pending')
+
+        const pendingMatch = pendingVals?.some(
+          v => v.details?.tag?.trim().toUpperCase() === clean
+        )
+
+        if (pendingMatch) {
+          setTeamTagError('Este tag ya está en uso en una solicitud pendiente.')
+          return
+        }
+
+        setTeamTagError('')
+      } catch (err) {
+        console.error('Error al validar tag de equipo:', err)
+      }
+    }
+
+    validateTeamTag()
+  }, [debouncedTeamTag, supabase])
+
   useEffect(() => {
     async function loadConfig() {
       if (!user) {
@@ -61,6 +180,48 @@ export function AltaEquipoForm() {
       }
 
       setBlockMessage(null)
+
+      try {
+        // Verificar si el usuario ya tiene un equipo registrado o pendiente
+        const { data: userTeams } = await supabase
+          .from('teams')
+          .select('id, name, status')
+          .eq('manager_id', user.id)
+
+        if (userTeams && userTeams.length > 0) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single()
+
+          const isAdmin = profile?.role === 'admin'
+
+          if (!isAdmin) {
+            const pendingTeam = userTeams.find(t => t.status === 'pending')
+            if (pendingTeam) {
+              setExistingTeamInfo({
+                type: 'pending',
+                teamName: pendingTeam.name
+              })
+              setLoadingConfig(false)
+              return
+            }
+
+            const activeTeam = userTeams.find(t => t.status === 'active' || t.status === 'approved')
+            if (activeTeam) {
+              setExistingTeamInfo({
+                type: 'active',
+                teamName: activeTeam.name
+              })
+              setLoadingConfig(false)
+              return
+            }
+          }
+        }
+      } catch (userTeamErr) {
+        console.warn('Error verificando equipos del usuario:', userTeamErr)
+      }
 
       const { data } = await supabase.from('app_settings').select('*')
       if (data && data.length > 0) {
@@ -89,7 +250,7 @@ export function AltaEquipoForm() {
       setLoadingConfig(false)
     }
     loadConfig()
-  }, [user])
+  }, [user, supabase])
 
   const handleTeamNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // Solo mayúsculas, sin caracteres especiales
@@ -102,6 +263,11 @@ export function AltaEquipoForm() {
     const text = e.clipboardData.getData('text')
     const val = text.toUpperCase().replace(/[^A-Z0-9\s]/g, '')
     setTeamName(val)
+  }
+
+  const handleTeamTagChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '')
+    setTeamTag(val)
   }
 
   // Auto-scroll al inicio cuando el registro se completa con éxito
@@ -118,8 +284,84 @@ export function AltaEquipoForm() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (formStatus === 'loading') return
+
+    const cleanTeamName = teamName.trim().toUpperCase()
+    const cleanTag = teamTag.trim().toUpperCase()
+
+    if (!cleanTeamName) {
+      alert('Por favor ingresa el nombre del equipo.')
+      return
+    }
+
+    if (!cleanTag) {
+      alert('Por favor ingresa el tag del equipo.')
+      return
+    }
+
+    if (teamNameError || teamTagError) {
+      alert('Por favor corrige los errores antes de enviar el formulario.')
+      return
+    }
+
     setFormStatus('loading')
-    
+
+    // Verificación síncrona de duplicados antes de procesar archivos o insertar
+    try {
+      // 1. Verificar nombre de equipo
+      const { data: dupTeams } = await supabase
+        .from('teams')
+        .select('id, name')
+        .ilike('name', cleanTeamName)
+
+      const nameMatch = dupTeams?.some(t => t.name?.trim().toUpperCase() === cleanTeamName)
+      if (nameMatch) {
+        setTeamNameError('Ya existe un equipo registrado con este nombre.')
+        alert(`El equipo "${cleanTeamName}" ya se encuentra registrado. No se puede registrar el mismo equipo dos veces.`)
+        setFormStatus('idle')
+        return
+      }
+
+      // 2. Verificar tag de equipo
+      const { data: dupTags } = await supabase
+        .from('teams')
+        .select('id, tag')
+        .ilike('tag', cleanTag)
+
+      const tagMatch = dupTags?.some(t => t.tag?.trim().toUpperCase() === cleanTag)
+      if (tagMatch) {
+        setTeamTagError('Este tag ya se encuentra en uso por otro equipo.')
+        alert(`El tag "${cleanTag}" ya se encuentra registrado por otro equipo.`)
+        setFormStatus('idle')
+        return
+      }
+
+      // 3. Verificar si el usuario ya tiene un equipo (si no es admin)
+      if (user?.id) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single()
+
+        if (prof?.role !== 'admin') {
+          const { data: userTeams } = await supabase
+            .from('teams')
+            .select('id, name, status')
+            .eq('manager_id', user.id)
+            .in('status', ['pending', 'active', 'approved'])
+
+          if (userTeams && userTeams.length > 0) {
+            alert(`Ya cuentas con un equipo registrado o en proceso de revisión (${userTeams[0].name}). No se permite registrar otro equipo.`)
+            setFormStatus('idle')
+            return
+          }
+        }
+      }
+    } catch (verifErr) {
+      console.error('Error verificando duplicados del equipo:', verifErr)
+    }
+
     const form = e.currentTarget
     const formData = new FormData(form)
 
@@ -129,7 +371,7 @@ export function AltaEquipoForm() {
     try {
       if (logoFile) {
         const fileExt = logoFile.name.split('.').pop()
-        const fileName = `${Date.now()}_logo_${teamName.replace(/\s+/g, '_')}.${fileExt}`
+        const fileName = `${Date.now()}_logo_${cleanTeamName.replace(/\s+/g, '_')}.${fileExt}`
         const { error: uploadError, data } = await supabase.storage.from('teams').upload(fileName, logoFile)
         if (!uploadError && data) {
           const { data: publicUrlData } = supabase.storage.from('teams').getPublicUrl(data.path)
@@ -139,7 +381,7 @@ export function AltaEquipoForm() {
 
       if (jerseyFile) {
         const fileExt = jerseyFile.name.split('.').pop()
-        const fileName = `${Date.now()}_jersey_${teamName.replace(/\s+/g, '_')}.${fileExt}`
+        const fileName = `${Date.now()}_jersey_${cleanTeamName.replace(/\s+/g, '_')}.${fileExt}`
         const { error: uploadError, data } = await supabase.storage.from('teams').upload(fileName, jerseyFile)
         if (!uploadError && data) {
           const { data: publicUrlData } = supabase.storage.from('teams').getPublicUrl(data.path)
@@ -152,8 +394,8 @@ export function AltaEquipoForm() {
 
     const payload = {
       manager_id: user?.id,
-      name: teamName,
-      tag: formData.get('item_meta[tag]'),
+      name: cleanTeamName,
+      tag: cleanTag,
       hashtag: formData.get('item_meta[hashtag]'),
       country: formData.get('item_meta[623]'),
       logo_url: urlLogo,
@@ -169,7 +411,31 @@ export function AltaEquipoForm() {
       status: 'pending' // Admin must approve
     }
     
-    const { error: teamError } = await supabase.from('teams').insert(payload)
+    const { data: insertedTeam, error: teamError } = await supabase
+      .from('teams')
+      .insert(payload)
+      .select('id')
+      .single()
+
+    if (!teamError && insertedTeam?.id) {
+      try {
+        await supabase.from('validations').insert({
+          type: 'equipo',
+          target_name: cleanTeamName,
+          submitted_by: user?.id,
+          status: 'pending',
+          details: {
+            ...payload,
+            tipoEquipo: (formData.get('item_meta[782]') as string) || 'Varonil / Mixto',
+            'item_meta[782]': (formData.get('item_meta[782]') as string) || 'Varonil / Mixto',
+            id: insertedTeam.id,
+            team_id: insertedTeam.id
+          }
+        })
+      } catch (valErr) {
+        console.warn('Error al registrar validación de equipo:', valErr)
+      }
+    }
 
     const fullName = `${managerFirstName.trim()} ${managerLastName.trim()}`.trim().toUpperCase()
     const cleanNick = managerNickname.trim().toUpperCase()
@@ -191,7 +457,7 @@ export function AltaEquipoForm() {
       }
     } else {
       setFormStatus('idle')
-      alert('Error al enviar el registro del equipo.')
+      alert('Error al enviar el registro del equipo. Por favor intenta de nuevo.')
     }
   }
   
@@ -222,6 +488,43 @@ export function AltaEquipoForm() {
     )
   }
 
+  if (existingTeamInfo) {
+    const isPending = existingTeamInfo.type === 'pending'
+    return (
+      <div className="mx-auto w-full max-w-2xl rounded-xl border border-border bg-surface p-8 sm:p-12 text-center shadow-2xl space-y-6">
+        <div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-2xl ${
+          isPending ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-primary/10 text-primary border border-primary/20'
+        }`}>
+          <ShieldAlert className="h-8 w-8" />
+        </div>
+        <div>
+          <h2 className="font-display text-2xl sm:text-3xl font-700 uppercase tracking-tight text-white">
+            {isPending ? 'Solicitud de Equipo en Revisión' : 'Ya Tienes un Equipo Registrado'}
+          </h2>
+          <p className="mt-3 text-muted-foreground text-sm max-w-md mx-auto leading-relaxed">
+            {isPending ? (
+              <>
+                Tu solicitud de registro para el equipo <span className="font-600 text-white">&quot;{existingTeamInfo.teamName}&quot;</span> ya se encuentra en proceso de revisión por los administradores de GMX Gaming.
+              </>
+            ) : (
+              <>
+                Ya eres el manager de <span className="font-600 text-white">&quot;{existingTeamInfo.teamName}&quot;</span>. Puedes gestionar tus jugadores, contratos y detalles desde tu panel en Mi Cuenta.
+              </>
+            )}
+          </p>
+        </div>
+        <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-4">
+          <GmxButton href="/micuenta" className="w-full sm:w-auto px-8">
+            IR A MI CUENTA
+          </GmxButton>
+          <GmxButton href="/" variant="secondary" className="w-full sm:w-auto px-8">
+            VOLVER AL INICIO
+          </GmxButton>
+        </div>
+      </div>
+    )
+  }
+
   if (formStatus === 'success') {
     return (
       <div className="mx-auto w-full max-w-2xl rounded-xl border border-border bg-surface p-8 sm:p-12 text-center shadow-2xl animate-in fade-in zoom-in-95 duration-500">
@@ -238,7 +541,7 @@ export function AltaEquipoForm() {
           <GmxButton href="/micuenta" className="w-full sm:w-auto px-8">
             IR A MI CUENTA
           </GmxButton>
-          <GmxButton href="/" variant="outline" className="w-full sm:w-auto px-8">
+          <GmxButton href="/" variant="secondary" className="w-full sm:w-auto px-8">
             VOLVER AL INICIO
           </GmxButton>
         </div>
@@ -291,9 +594,17 @@ export function AltaEquipoForm() {
               value={teamName}
               onChange={handleTeamNameChange}
               onPaste={handleTeamNamePaste}
-              className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary uppercase"
+              className={cn(
+                "w-full rounded-md border bg-background px-4 py-3 text-white transition-colors focus:outline-none focus:ring-1 uppercase",
+                teamNameError
+                  ? "border-red-500 focus:border-red-500 focus:ring-red-500"
+                  : "border-border focus:border-primary focus:ring-primary"
+              )}
               placeholder="Ej. GMX GAMING"
             />
+            {teamNameError && (
+              <p className="text-xs font-500 text-red-400 mt-1">{teamNameError}</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -306,9 +617,19 @@ export function AltaEquipoForm() {
               id="item_meta_tag"
               name="item_meta[tag]"
               required
-              className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary uppercase"
+              value={teamTag}
+              onChange={handleTeamTagChange}
+              className={cn(
+                "w-full rounded-md border bg-background px-4 py-3 text-white transition-colors focus:outline-none focus:ring-1 uppercase",
+                teamTagError
+                  ? "border-red-500 focus:border-red-500 focus:ring-red-500"
+                  : "border-border focus:border-primary focus:ring-primary"
+              )}
               placeholder="Ej. GMX"
             />
+            {teamTagError && (
+              <p className="text-xs font-500 text-red-400 mt-1">{teamTagError}</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -653,10 +974,18 @@ export function AltaEquipoForm() {
       <div className="pt-8 text-center sm:text-left">
         <button
           type="submit"
-          className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden bg-primary px-8 py-5 font-display text-[15px] font-600 uppercase tracking-[0.18em] text-white transition-colors duration-300 clip-corner hover:bg-primary-dark sm:w-auto"
+          disabled={formStatus === 'loading' || !!teamNameError || !!teamTagError}
+          className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden bg-primary px-8 py-5 font-display text-[15px] font-600 uppercase tracking-[0.18em] text-white transition-colors duration-300 clip-corner hover:bg-primary-dark sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <span className="relative z-10 flex items-center gap-2">
-            ENVIAR REGISTRO
+            {formStatus === 'loading' ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                ENVIANDO REGISTRO...
+              </>
+            ) : (
+              'ENVIAR REGISTRO'
+            )}
           </span>
         </button>
       </div>

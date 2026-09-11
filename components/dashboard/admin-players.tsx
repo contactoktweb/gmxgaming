@@ -84,6 +84,9 @@ export interface Player {
   id: string
   name: string
   email: string
+  phone?: string
+  birthDate?: string
+  gender?: string
   contractTimeLeft: string
   team: string
   status: 'active' | 'inactive' | 'banned'
@@ -133,6 +136,11 @@ export function AdminPlayers() {
   // Selection for Export
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
+  // Reiniciar seleccionados al cambiar cualquier filtro o búsqueda
+  useEffect(() => {
+    setSelectedIds(new Set())
+  }, [searchQuery, filterTeam, filterStatus, filterCountry])
+
   useEffect(() => {
     async function init() {
       setLoading(true)
@@ -162,17 +170,44 @@ export function AdminPlayers() {
         toast.error("Error al cargar jugadores: " + error.message)
       }
 
-      // Fetch baja_contrato validations for audit trail & justification
-      const { data: bajaValidations } = await supabase
+      // Fetch all validations to link audit trail, justifications, and player data (email, phone, birth_date, gender)
+      const { data: allValidations } = await supabase
         .from('validations')
         .select('*')
-        .eq('type', 'baja_contrato')
+        .order('created_at', { ascending: false })
 
       const valMap: Record<string, any> = {}
-      if (bajaValidations) {
-        bajaValidations.forEach((v: any) => {
-          const cId = v.details?.contract_id
-          if (cId) valMap[cId] = v
+      const playerDetailsLookup: Record<string, { email: string; phone: string; birthDate: string; gender: string; details: any }> = {}
+
+      if (allValidations) {
+        allValidations.forEach((v: any) => {
+          if (v.type === 'baja_contrato') {
+            const cId = v.details?.contract_id
+            if (cId) valMap[cId] = v
+          }
+
+          const uId = v.details?.user_id || v.details?.id || (v.type === 'jugador' ? v.id : null)
+          const d = v.details || {}
+
+          const emailVal = d.email || d['item_meta[676]'] || (v.submitted_by && v.submitted_by.includes('@') ? v.submitted_by : '')
+          const phoneVal = d.phone || d.whatsapp || d.telefono || d.celular || d['item_meta[685]'] || ''
+          const birthVal = d.birth_date || d.fecha_nacimiento || d['item_meta[675]'] || d['item_meta[683]'] || ''
+          const genderVal = d.gender || d.genero || d['item_meta[783]'] || ''
+
+          const merge = (key: string) => {
+            if (!key) return
+            if (!playerDetailsLookup[key]) {
+              playerDetailsLookup[key] = { email: '', phone: '', birthDate: '', gender: '', details: {} }
+            }
+            const current = playerDetailsLookup[key]
+            if (!current.email && emailVal) current.email = emailVal
+            if (!current.phone && phoneVal) current.phone = phoneVal
+            if (!current.birthDate && birthVal) current.birthDate = birthVal
+            if (!current.gender && genderVal) current.gender = genderVal
+            current.details = { ...d, ...current.details }
+          }
+
+          if (uId) merge(uId)
         })
       }
 
@@ -234,10 +269,50 @@ export function AdminPlayers() {
 
           const playerCountry = p.country || (p.player_game_info && p.player_game_info[0]?.country_account) || extractCountry(p.closest_airport) || activeContractRaw?.teams?.country || 'México'
 
+          const extra = playerDetailsLookup[p.id] || { email: '', phone: '', birthDate: '', gender: '', details: {} }
+
+          // Búsqueda por nickname o nombre si falta algún campo
+          if ((!extra.email || !extra.phone || !extra.birthDate || !extra.gender) && allValidations) {
+            const pNick = (p.nickname || '').toLowerCase().trim()
+            const pName = (p.name || '').toLowerCase().trim()
+
+            for (const v of allValidations) {
+              const tName = (v.target_name || '').toLowerCase().trim()
+              const sub = (v.submitted_by || '').toLowerCase().trim()
+              const vNick = (v.details?.nickname || '').toLowerCase().trim()
+              const vName = (v.details?.name || '').toLowerCase().trim()
+
+              const isMatch = (pNick && (tName.includes(pNick) || sub === pNick || vNick === pNick)) ||
+                              (pName && (tName.includes(pName) || sub === pName || vName === pName))
+
+              if (isMatch) {
+                const d = v.details || {}
+                const emailVal = d.email || d['item_meta[676]'] || (v.submitted_by && v.submitted_by.includes('@') ? v.submitted_by : '')
+                const phoneVal = d.phone || d.whatsapp || d.telefono || d.celular || d['item_meta[685]'] || ''
+                const birthVal = d.birth_date || d.fecha_nacimiento || d['item_meta[675]'] || d['item_meta[683]'] || ''
+                const genderVal = d.gender || d.genero || d['item_meta[783]'] || ''
+
+                if (!extra.email && emailVal) extra.email = emailVal
+                if (!extra.phone && phoneVal) extra.phone = phoneVal
+                if (!extra.birthDate && birthVal) extra.birthDate = birthVal
+                if (!extra.gender && genderVal) extra.gender = genderVal
+                extra.details = { ...d, ...extra.details }
+              }
+            }
+          }
+
+          const playerEmail = (p.email && p.email !== 'Sin correo') ? p.email : (extra.email || '')
+          const playerPhone = extra.phone || ''
+          const playerBirthDate = extra.birthDate || ''
+          const playerGender = extra.gender || 'Masculino'
+
           return {
             id: p.id,
             name: p.name,
-            email: p.email || 'Sin correo',
+            email: playerEmail || 'Sin correo',
+            phone: playerPhone,
+            birthDate: playerBirthDate,
+            gender: playerGender,
             contractTimeLeft,
             team,
             status: p.player_status || 'inactive',
@@ -248,6 +323,11 @@ export function AdminPlayers() {
             is_featured: p.is_featured || false,
             rawDetails: {
               ...p,
+              ...extra.details,
+              email: playerEmail,
+              phone: playerPhone,
+              birth_date: playerBirthDate,
+              gender: playerGender,
               country: playerCountry
             },
             activeContract,
@@ -309,6 +389,10 @@ export function AdminPlayers() {
       nickname: player.rawDetails?.nickname || '',
       game_nickname: player.rawDetails?.game_nickname || '',
       discord_handle: player.discord || player.rawDetails?.discord_handle || '',
+      email: (player.email && player.email !== 'Sin correo') ? player.email : (player.rawDetails?.email || ''),
+      phone: player.phone || player.rawDetails?.phone || '',
+      birth_date: player.birthDate || player.rawDetails?.birth_date || '',
+      gender: player.gender || player.rawDetails?.gender || 'Masculino',
       country: player.country || 'México',
       player_status: player.status || 'active',
       is_featured: Boolean(player.is_featured),
@@ -351,6 +435,10 @@ export function AdminPlayers() {
     const nickVal = formatNickname(editingDetails.nickname || '').trim()
     const gameNickVal = formatNickname(editingDetails.game_nickname || '').trim()
     const countryVal = editingDetails.country?.trim() || 'México'
+    const emailVal = editingDetails.email?.trim() || ''
+    const phoneVal = editingDetails.phone?.trim() || ''
+    const birthVal = editingDetails.birth_date?.trim() || ''
+    const genderVal = editingDetails.gender?.trim() || 'Masculino'
 
     const updates = {
       name: nameVal,
@@ -376,16 +464,73 @@ export function AdminPlayers() {
 
     const { error } = await supabase.from('profiles').update(updates).eq('id', selectedPlayer.id)
     if (!error) {
+      // Sincronizar en tabla validations para mantener email, phone, birth_date, gender
+      try {
+        const { data: userVal } = await supabase
+          .from('validations')
+          .select('*')
+          .eq('type', 'jugador')
+          .or(`details->>user_id.eq.${selectedPlayer.id},id.eq.${selectedPlayer.id},details->>id.eq.${selectedPlayer.id}`)
+          .limit(1)
+
+        if (userVal && userVal.length > 0) {
+          await supabase.from('validations').update({
+            submitted_by: emailVal || userVal[0].submitted_by,
+            details: {
+              ...userVal[0].details,
+              email: emailVal,
+              phone: phoneVal,
+              birth_date: birthVal,
+              gender: genderVal,
+              nickname: nickVal,
+              name: nameVal,
+              country: countryVal
+            }
+          }).eq('id', userVal[0].id)
+        } else {
+          await supabase.from('validations').insert({
+            type: 'jugador',
+            target_name: nickVal || nameVal || selectedPlayer.name,
+            submitted_by: emailVal || nameVal,
+            status: updates.player_status || 'active',
+            details: {
+              user_id: selectedPlayer.id,
+              name: nameVal,
+              nickname: nickVal,
+              email: emailVal,
+              phone: phoneVal,
+              birth_date: birthVal,
+              gender: genderVal,
+              country: countryVal
+            }
+          })
+        }
+      } catch (vErr) {
+        console.warn('Error sincronizando validations:', vErr)
+      }
+
       toast.success('Datos del jugador actualizados correctamente.')
       setPlayers(prev => prev.map(p => p.id === selectedPlayer.id ? { 
         ...p, 
         name: nameVal,
+        email: emailVal || p.email,
+        phone: phoneVal,
+        birthDate: birthVal,
+        gender: genderVal,
         avatar: updates.avatar_url || p.avatar,
         discord: updates.discord_handle,
         country: countryVal,
         status: updates.player_status,
         is_featured: updates.is_featured,
-        rawDetails: { ...p.rawDetails, ...updates, country: countryVal }
+        rawDetails: { 
+          ...p.rawDetails, 
+          ...updates, 
+          email: emailVal,
+          phone: phoneVal,
+          birth_date: birthVal,
+          gender: genderVal,
+          country: countryVal 
+        }
       } : p))
       setSelectedPlayer(null)
     } else {
@@ -537,23 +682,29 @@ export function AdminPlayers() {
       ...list.map(p => {
         const d = p.rawDetails || {}
         // Email: evitar que salga el placeholder 'Sin correo'
-        const emailVal = (p.email && p.email !== 'Sin correo') ? p.email : (d.email || '')
+        const emailVal = (p.email && p.email !== 'Sin correo') ? p.email : (d.email && d.email !== 'Sin correo' ? d.email : '')
+        // Teléfono: buscar en p y d con fallbacks
+        const phoneVal = p.phone || d.phone || d.whatsapp || d.telefono || d.celular || d['item_meta[685]'] || ''
+        // Fecha de Nacimiento: buscar en p y d con fallbacks
+        const birthVal = p.birthDate || d.birth_date || d.fecha_nacimiento || d['item_meta[675]'] || d['item_meta[683]'] || ''
+        // Género: buscar en p y d con fallbacks
+        const genderVal = p.gender || d.gender || d.genero || d['item_meta[783]'] || ''
         // País: usar el campo directo del jugador, fallback a rawDetails
         const countryVal = p.country || d.country || ''
         // Avatar/foto del jugador — campo directo mapeado
         const avatarVal = p.avatar || d.avatar_url || ''
         return [
           `"${(p.name || '').replace(/"/g, '""')}"`,
-          `"${(d.nickname || '').replace(/"/g, '""')}"`,
+          `"${(d.nickname || p.rawDetails?.nickname || '').replace(/"/g, '""')}"`,
           `"${(p.discord || '').replace(/"/g, '""')}"`,
           `"${emailVal.replace(/"/g, '""')}"`,
           `"${countryVal.replace(/"/g, '""')}"`,
           `"${(p.status || '').replace(/"/g, '""')}"`,
           `"${(p.team || '').replace(/"/g, '""')}"`,
           `"${(p.contractTimeLeft || '').replace(/"/g, '""')}"`,
-          `"${(d.phone || '').replace(/"/g, '""')}"`,
-          `"${(d.birth_date || '').replace(/"/g, '""')}"`,
-          `"${(d.gender || '').replace(/"/g, '""')}"`,
+          `"${phoneVal.replace(/"/g, '""')}"`,
+          `"${birthVal.replace(/"/g, '""')}"`,
+          `"${genderVal.replace(/"/g, '""')}"`,
           `"${avatarVal}"`,
           `"${(d.id_photo_url || '')}"`,
           `"${(d.passport_photo_url || '')}"`,
@@ -919,6 +1070,49 @@ export function AdminPlayers() {
                           className="w-full rounded-lg border border-border bg-surface px-3.5 py-2 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                           placeholder="ej. usuario#1234 o usuario"
                         />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-600 text-muted-foreground uppercase">Correo Electrónico (Email)</label>
+                        <input
+                          type="email"
+                          value={editingDetails.email || ''}
+                          onChange={(e) => setEditingDetails({ ...editingDetails, email: e.target.value })}
+                          className="w-full rounded-lg border border-border bg-surface px-3.5 py-2 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                          placeholder="correo@ejemplo.com"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-600 text-muted-foreground uppercase">Teléfono / WhatsApp</label>
+                        <input
+                          type="tel"
+                          value={editingDetails.phone || ''}
+                          onChange={(e) => setEditingDetails({ ...editingDetails, phone: e.target.value })}
+                          className="w-full rounded-lg border border-border bg-surface px-3.5 py-2 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                          placeholder="+52 55 1234 5678"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-600 text-muted-foreground uppercase">Fecha de Nacimiento</label>
+                        <input
+                          type="date"
+                          value={editingDetails.birth_date || ''}
+                          onChange={(e) => setEditingDetails({ ...editingDetails, birth_date: e.target.value })}
+                          className="w-full rounded-lg border border-border bg-surface px-3.5 py-2 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-600 text-muted-foreground uppercase">Género</label>
+                        <div className="relative">
+                          <select
+                            value={editingDetails.gender || 'Masculino'}
+                            onChange={(e) => setEditingDetails({ ...editingDetails, gender: e.target.value })}
+                            className="w-full appearance-none rounded-lg border border-border bg-surface px-3.5 py-2 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer font-500"
+                          >
+                            <option value="Masculino">Masculino</option>
+                            <option value="Femenino">Femenino</option>
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        </div>
                       </div>
                     </div>
                   </div>

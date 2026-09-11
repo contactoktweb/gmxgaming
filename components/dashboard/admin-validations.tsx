@@ -7,6 +7,7 @@ import { GmxButton } from '@/components/gmx-button'
 import { createClient } from '@/utils/supabase/client'
 import { toast } from 'sonner'
 import { cn, formatNickname, formatPersonName } from '@/lib/utils'
+import { useDebounce } from '@/hooks/use-debounce'
 
 const FIELD_LABELS: Record<string, string> = {
   name: 'Nombre Completo',
@@ -38,7 +39,21 @@ const FIELD_LABELS: Record<string, string> = {
   social_fb: 'Facebook',
   status: 'Estado del Registro',
   player_status: 'Estado como Jugador',
-  player_game_info: 'Datos de Juego / Cuenta'
+  player_game_info: 'Datos de Juego / Cuenta',
+  tipoequipo: 'Tipo de Equipo',
+  tipo_equipo: 'Tipo de Equipo',
+  contract_id: 'ID de Contrato',
+  player_name: 'Nombre del Jugador',
+  team_name: 'Equipo',
+  admin_name: 'Administrador',
+  admin_nickname: 'Nickname del Administrador',
+  justification: 'Justificación / Motivo de Baja',
+  conclusion_date: 'Fecha de Conclusión / Baja',
+  end_date: 'Fecha Límite del Contrato',
+  start_date: 'Fecha de Inicio del Contrato',
+  division: 'División',
+  roles: 'Roles en el Equipo',
+  team_gender_category: 'Categoría del Equipo'
 }
 
 const EXCLUDED_FIELDS = new Set([
@@ -47,6 +62,9 @@ const EXCLUDED_FIELDS = new Set([
   'manager_id',
   'profile_id',
   'team_id',
+  'contract_id',
+  'admin_id',
+  'player_id',
   'created_at',
   'updated_at',
   'cover_url',
@@ -59,6 +77,8 @@ const EXCLUDED_FIELDS = new Set([
   'original_name',
   'original_tag',
   'original_country',
+  'original_tipoequipo',
+  'original_tipo_equipo',
   'original_logo',
   'original_avatar',
   'original_bio'
@@ -126,6 +146,7 @@ function getModificationDiffs(details: any): DiffField[] {
     checkField('tag', 'original_tag', 'Tag / Siglas del Equipo', 'text')
     checkField('hashtag', 'original_hashtag', 'Hashtag del Equipo', 'text')
     checkField('country', 'original_country', 'País de Residencia / Sede', 'text')
+    checkField('tipoEquipo', 'original_tipoEquipo', 'Tipo de Equipo', 'text')
     const origLogoKey = details.original_logo !== undefined ? 'original_logo' : 'original_logo_url'
     checkField('logo_url', origLogoKey, 'Logo del Equipo', 'image')
     const origJerseyKey = details.original_jersey !== undefined ? 'original_jersey' : 'original_jersey_url'
@@ -196,7 +217,7 @@ function getModificationDiffs(details: any): DiffField[] {
   return diffs
 }
 
-export type ValidationType = 'all' | 'jugador' | 'equipo' | 'modificacion' | 'baja_contrato' | string
+export type ValidationType = 'all' | 'jugador' | 'equipo' | 'contrato' | 'modificacion' | 'baja_contrato' | string
 
 interface PendingRequest {
   id: string
@@ -219,9 +240,11 @@ export function AdminValidations() {
   const [activeTab, setActiveTab] = useState<ValidationType>('all')
   const [searchQuery, setSearchQuery] = useState('')
 
-  // Pagination state (default: 5 per page)
+  // Pagination & Search state (default: 10 per page)
   const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage, setItemsPerPage] = useState(5)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
+  const [totalCount, setTotalCount] = useState(0)
+  const debouncedSearch = useDebounce(searchQuery, 400)
 
   const handleTabChange = (tab: ValidationType) => {
     setActiveTab(tab)
@@ -250,148 +273,76 @@ export function AdminValidations() {
   // Edit details logic
   const [editingDetails, setEditingDetails] = useState<any>(null)
 
+  // Petición paginada directa al servidor según la página y filtros activos
   const fetchValidations = async () => {
     setLoading(true)
-    
-    // 1. Fetch players
-    const { data: pendingPlayers } = await supabase
-      .from('profiles')
-      .select('*, player_game_info(*)')
-      .eq('is_player', true)
+    try {
+      const from = (currentPage - 1) * itemsPerPage
+      const to = from + itemsPerPage - 1
 
-    // 2. Fetch teams
-    const { data: pendingTeams } = await supabase
-      .from('teams')
-      .select('*')
+      let query = supabase
+        .from('validations')
+        .select('*', { count: 'exact' })
 
-    // 3. Fetch profile modification requests from profiles
-    const { data: pendingModifications } = await supabase
-      .from('profiles')
-      .select('*, player_game_info(*)')
-      .eq('edit_requested', true)
-
-    // 4. Fetch validations records
-    const { data: dbValidations } = await supabase
-      .from('validations')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    const formattedRequests: PendingRequest[] = []
-    const processedIds = new Set<string>()
-    const processedEntityKeys = new Set<string>()
-
-    // 1. Procesar dbValidations primero (Fuente de la verdad con detalles y valores originales completos)
-    if (dbValidations) {
-      dbValidations.forEach(v => {
-        const entityId = v.details?.user_id || v.details?.team_id || v.details?.id
-        const entityKey = entityId ? `${v.type}_${entityId}` : null
-
-        // Evitar duplicar solicitudes del mismo tipo para la misma entidad (tomando la más reciente primero)
-        if (entityKey && processedEntityKeys.has(entityKey)) {
-          return
+      // Filtro por tipo de validación si no es 'all'
+      if (activeTab !== 'all') {
+        if (activeTab === 'contrato' || activeTab === 'contratos') {
+          query = query.in('type', ['contrato', 'contratos', 'baja_contrato'])
+        } else {
+          query = query.eq('type', activeTab)
         }
-        if (processedIds.has(v.id)) {
-          return
-        }
+      }
 
-        processedIds.add(v.id)
-        if (entityKey) {
-          processedEntityKeys.add(entityKey)
-        }
-        if (entityId) {
-          processedIds.add(entityId)
-        }
+      // Filtro por búsqueda
+      if (debouncedSearch.trim()) {
+        const q = debouncedSearch.trim()
+        query = query.or(`target_name.ilike.%${q}%,submitted_by.ilike.%${q}%`)
+      }
 
-        formattedRequests.push({
-          id: v.id,
-          type: v.type as any,
-          target_name: v.target_name,
-          created_at: v.created_at,
-          updated_at: v.updated_at || v.created_at,
-          status: v.status,
-          submitted_by: v.submitted_by,
-          details: v.details || {}
-        })
-      })
+      // Paginación por rango en Supabase
+      query = query
+        .order('created_at', { ascending: false })
+        .range(from, to)
+
+      const { data: dbValidations, count, error } = await query
+
+      if (error) {
+        console.error('Error fetching validations:', error)
+        toast.error('Error al cargar validaciones')
+        return
+      }
+
+      const total = count || 0
+      setTotalCount(total)
+
+      // Si la página actual excede el total, regresar a la primera página
+      if (currentPage > 1 && from >= total && total > 0) {
+        setCurrentPage(1)
+        return
+      }
+
+      const formattedRequests: PendingRequest[] = (dbValidations || []).map(v => ({
+        id: v.id,
+        type: v.type as any,
+        target_name: v.target_name,
+        created_at: v.created_at,
+        updated_at: v.updated_at || v.created_at,
+        status: v.status,
+        submitted_by: v.submitted_by,
+        details: v.details || {}
+      }))
+
+      setRequests(formattedRequests)
+    } catch (err) {
+      console.error('Error in fetchValidations:', err)
+    } finally {
+      setLoading(false)
     }
-
-    // 2. Fallback para modificaciones en profiles que no tengan registro en validations
-    if (pendingModifications) {
-      pendingModifications.forEach(m => {
-        const entityKey = `modificacion_${m.id}`
-        if (!processedEntityKeys.has(entityKey) && !processedIds.has(m.id)) {
-          processedIds.add(m.id)
-          processedEntityKeys.add(entityKey)
-          formattedRequests.push({
-            id: m.id,
-            type: 'modificacion',
-            target_name: `${m.name || m.nickname || 'Usuario'} (Cambio de Perfil)`,
-            created_at: m.created_at,
-            updated_at: m.updated_at || m.created_at,
-            status: 'pending',
-            submitted_by: m.name || 'Usuario',
-            details: m
-          })
-        }
-      })
-    }
-
-    // 3. Fallback para jugadores en profiles sin registro en validations
-    if (pendingPlayers) {
-      pendingPlayers.forEach(p => {
-        const entityKey = `jugador_${p.id}`
-        if (!processedEntityKeys.has(entityKey) && !processedIds.has(p.id)) {
-          processedIds.add(p.id)
-          processedEntityKeys.add(entityKey)
-          formattedRequests.push({
-            id: p.id,
-            type: 'jugador',
-            target_name: p.nickname || p.name || 'Jugador',
-            created_at: p.created_at,
-            updated_at: p.updated_at || p.created_at,
-            status: p.player_status,
-            submitted_by: p.name,
-            details: p
-          })
-        }
-      })
-    }
-
-    // 4. Fallback para equipos sin registro en validations
-    if (pendingTeams) {
-      pendingTeams.forEach(t => {
-        const entityKey = `equipo_${t.id}`
-        if (!processedEntityKeys.has(entityKey) && !processedIds.has(t.id)) {
-          processedIds.add(t.id)
-          processedEntityKeys.add(entityKey)
-          formattedRequests.push({
-            id: t.id,
-            type: 'equipo',
-            target_name: t.name,
-            created_at: t.created_at,
-            updated_at: t.updated_at || t.created_at,
-            status: t.status,
-            submitted_by: t.manager_id,
-            details: t
-          })
-        }
-      })
-    }
-
-    // Ordenar: primero por updated_at (última acción), luego por created_at
-    formattedRequests.sort((a, b) => {
-      const aTime = a.updated_at || a.created_at
-      const bTime = b.updated_at || b.created_at
-      return new Date(bTime).getTime() - new Date(aTime).getTime()
-    })
-
-    setRequests(formattedRequests)
-    setLoading(false)
   }
 
   useEffect(() => {
     fetchValidations()
-  }, [])
+  }, [currentPage, itemsPerPage, activeTab, debouncedSearch])
 
   useEffect(() => {
     if (selectedRequest || confirmAction) {
@@ -424,9 +375,11 @@ export function AdminValidations() {
       } else if (requestToUpdate?.type === 'modificacion') {
         await supabase.from('profiles').update({ edit_requested: false }).eq('id', confirmAction.id)
         await supabase.from('validations').delete().eq('id', confirmAction.id)
+      } else if (requestToUpdate?.type === 'contrato' || requestToUpdate?.type === 'baja_contrato') {
+        await supabase.from('validations').delete().eq('id', confirmAction.id)
       }
       
-      setRequests(prev => prev.filter(req => req.id !== confirmAction.id))
+      await fetchValidations()
       toast.success('Solicitud eliminada')
     } else {
       const requestToUpdate = requests.find(req => req.id === confirmAction.id)
@@ -712,24 +665,41 @@ export function AdminValidations() {
               }).eq('type', 'modificacion').eq('status', 'pending').filter('details->>user_id', 'eq', userId)
             }
           }
+        } else if (requestToUpdate.type === 'contrato') {
+          const contractId = requestToUpdate.details?.contract_id
+          if (contractId) {
+            if (isApproved) {
+              await supabase.from('contracts').update({
+                status: 'active',
+                start_date: new Date().toISOString()
+              }).eq('id', contractId)
+            } else {
+              await supabase.from('contracts').update({
+                status: 'rejected'
+              }).eq('id', contractId)
+            }
+          }
+          await supabase.from('validations').update({
+            status: newStatus,
+            details: {
+              ...requestToUpdate.details,
+              rejection_reason: isApproved ? null : reason,
+              status: newStatus
+            }
+          }).eq('id', confirmAction.id)
+        } else if (requestToUpdate.type === 'baja_contrato') {
+          await supabase.from('validations').update({
+            status: newStatus,
+            details: {
+              ...requestToUpdate.details,
+              rejection_reason: isApproved ? null : reason,
+              status: newStatus
+            }
+          }).eq('id', confirmAction.id)
         }
       }
 
-      // Move the actioned request to the top by giving it the latest timestamp
-      const actionTimestamp = new Date().toISOString()
-      setRequests(prev => {
-        const updated = prev.map(req =>
-          req.id === confirmAction.id
-            ? { ...req, status: newStatus, updated_at: actionTimestamp }
-            : req
-        )
-        // Sort: most recently updated first, then most recently created
-        return updated.sort((a, b) => {
-          const aTime = a.updated_at || a.created_at
-          const bTime = b.updated_at || b.created_at
-          return new Date(bTime).getTime() - new Date(aTime).getTime()
-        })
-      })
+      await fetchValidations()
 
       if (isApproved) {
         toast.success('Solicitud aprobada correctamente')
@@ -774,6 +744,9 @@ export function AdminValidations() {
           error = err;
         }
         await supabase.from('validations').update({ details: editingDetails }).eq('id', selectedRequest.id)
+      } else if (selectedRequest.type === 'contrato' || selectedRequest.type === 'baja_contrato') {
+        const { error: err } = await supabase.from('validations').update({ details: editingDetails }).eq('id', selectedRequest.id)
+        error = err;
       }
         
       if (!error) {
@@ -790,6 +763,8 @@ export function AdminValidations() {
             } else if (req.type === 'equipo') {
               targetName = editingDetails.name;
               if (editingDetails.status) newStatus = editingDetails.status;
+            } else if (req.type === 'contrato' || req.type === 'baja_contrato') {
+              if (editingDetails.status) newStatus = editingDetails.status;
             }
             
             return { ...req, target_name: targetName, details: editingDetails, status: newStatus }
@@ -797,6 +772,7 @@ export function AdminValidations() {
           return req
         }))
         setSelectedRequest({ ...selectedRequest, target_name: editingDetails.nickname || editingDetails.name || selectedRequest.target_name, details: editingDetails, status: editingDetails.status || editingDetails.player_status || selectedRequest.status })
+        await fetchValidations()
         toast.success('Cambios guardados correctamente.')
       } else {
         console.error(error)
@@ -813,26 +789,19 @@ export function AdminValidations() {
       case 'jugador': return <UserCheck className="w-5 h-5 text-emerald-400" />
       case 'equipo': return <ShieldCheck className="w-5 h-5 text-blue-400" />
       case 'modificacion': return <Edit3 className="w-5 h-5 text-amber-400" />
+      case 'contrato':
+      case 'contratos':
+      case 'baja_contrato': return <ScrollText className="w-5 h-5 text-purple-400" />
       default: return <FileText className="w-5 h-5 text-muted-foreground" />
     }
   }
 
-  const filteredRequests = requests.filter(req => {
-    if (activeTab !== 'all' && req.type !== activeTab) return false
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase()
-      return req.target_name.toLowerCase().includes(q) || req.submitted_by?.toLowerCase().includes(q)
-    }
-    return true
-  })
-
-  // Pagination calculations (loads 5 by 5 by default)
-  const totalItems = filteredRequests.length
+  // Pagination calculations (Server-side paginated via Supabase range)
+  const totalItems = totalCount
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage))
   const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages)
-  const startIndex = (safeCurrentPage - 1) * itemsPerPage
-  const endIndex = Math.min(startIndex + itemsPerPage, totalItems)
-  const paginatedRequests = filteredRequests.slice(startIndex, endIndex)
+  const startIndex = totalItems === 0 ? 0 : (safeCurrentPage - 1) * itemsPerPage
+  const endIndex = totalItems === 0 ? 0 : Math.min(startIndex + requests.length, totalItems)
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -857,18 +826,24 @@ export function AdminValidations() {
         </div>
 
         <div className="flex flex-wrap gap-2 mb-6 border-b border-border pb-4">
-          {['all', 'jugador', 'equipo', 'modificacion'].map(tab => (
+          {[
+            { id: 'all', label: 'Todas' },
+            { id: 'jugador', label: 'Jugadores' },
+            { id: 'equipo', label: 'Equipos' },
+            { id: 'contrato', label: 'Contratos' },
+            { id: 'modificacion', label: 'Modificaciones' }
+          ].map(tab => (
             <button
-              key={tab}
-              onClick={() => handleTabChange(tab as ValidationType)}
+              key={tab.id}
+              onClick={() => handleTabChange(tab.id as ValidationType)}
               className={cn(
                 "px-4 py-2 rounded-md font-display text-sm font-600 uppercase tracking-wider transition-colors",
-                activeTab === tab 
+                activeTab === tab.id 
                   ? "bg-primary text-white" 
                   : "bg-background border border-border text-muted-foreground hover:text-white"
               )}
             >
-              {tab === 'all' ? 'Todas' : tab === 'jugador' ? 'Jugadores' : tab === 'equipo' ? 'Equipos' : 'Modificaciones'}
+              {tab.label}
             </button>
           ))}
         </div>
@@ -877,7 +852,7 @@ export function AdminValidations() {
           <div className="flex justify-center items-center py-12">
             <p className="text-muted-foreground animate-pulse">Cargando validaciones...</p>
           </div>
-        ) : filteredRequests.length === 0 ? (
+        ) : requests.length === 0 ? (
           <div className="text-center py-12 border border-dashed border-border rounded-lg bg-background/50">
             <p className="text-muted-foreground">No hay solicitudes que coincidan con los filtros.</p>
           </div>
@@ -895,12 +870,12 @@ export function AdminValidations() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {paginatedRequests.map(req => (
+                {requests.map(req => (
                   <tr key={req.id} className="transition-colors hover:bg-white/5">
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2 uppercase font-500 text-xs">
                         {getTypeIcon(req.type)}
-                        {req.type}
+                        {req.type === 'baja_contrato' ? 'Baja Contrato' : req.type === 'contrato' ? 'Contrato' : req.type}
                       </div>
                     </td>
                     <td className="px-4 py-4 font-500 text-white">{req.target_name}</td>
@@ -1002,10 +977,10 @@ export function AdminValidations() {
                   aria-label="Cantidad por página"
                   className="rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer transition-colors"
                 >
-                  <option value={5}>5 por página</option>
                   <option value={10}>10 por página</option>
                   <option value={20}>20 por página</option>
                   <option value={50}>50 por página</option>
+                  <option value={5}>5 por página</option>
                 </select>
               </div>
 
