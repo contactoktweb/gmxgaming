@@ -205,19 +205,34 @@ CREATE TABLE IF NOT EXISTS public.casters (
   created_at timestamptz DEFAULT now()
 );
 
--- 10. TABLA ADMIN_SETTINGS (Configuraciones dinámicas)
+-- 10. TABLAS DE CONFIGURACIONES DINÁMICAS (app_settings y admin_settings)
+CREATE TABLE IF NOT EXISTS public.app_settings (
+  id text PRIMARY KEY,
+  value jsonb NOT NULL,
+  created_at timestamptz DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS public.admin_settings (
   id text PRIMARY KEY,
   value jsonb NOT NULL,
   created_at timestamptz DEFAULT now()
 );
 
--- Configuración inicial por defecto
+-- Configuración inicial por defecto en app_settings y admin_settings
+INSERT INTO public.app_settings (id, value)
+VALUES 
+  ('enabled_countries', '["Argentina", "Bolivia", "Chile", "Colombia", "Costa Rica", "Cuba", "Ecuador", "El Salvador", "Guatemala", "Honduras", "México", "Nicaragua", "Panamá", "Paraguay", "Perú", "Puerto Rico", "República Dominicana", "Uruguay", "Venezuela"]'::jsonb),
+  ('enabled_games', '["Mobile Legends"]'::jsonb),
+  ('tournament_types', '["Relámpago", "Clasificatorio", "Liga", "Exhibición"]'::jsonb),
+  ('sponsors', '[]'::jsonb)
+ON CONFLICT (id) DO NOTHING;
+
 INSERT INTO public.admin_settings (id, value)
 VALUES 
   ('enabled_countries', '["Argentina", "Bolivia", "Chile", "Colombia", "Costa Rica", "Cuba", "Ecuador", "El Salvador", "Guatemala", "Honduras", "México", "Nicaragua", "Panamá", "Paraguay", "Perú", "Puerto Rico", "República Dominicana", "Uruguay", "Venezuela"]'::jsonb),
   ('enabled_games', '["Mobile Legends"]'::jsonb),
-  ('tournament_types', '["Relámpago", "Clasificatorio", "Liga", "Exhibición"]'::jsonb)
+  ('tournament_types', '["Relámpago", "Clasificatorio", "Liga", "Exhibición"]'::jsonb),
+  ('sponsors', '[]'::jsonb)
 ON CONFLICT (id) DO UPDATE SET value = EXCLUDED.value;
 
 -- ==============================================================================
@@ -234,6 +249,7 @@ ALTER TABLE public.matches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.media ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.casters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.admin_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
 
 -- Políticas de lectura pública
 DROP POLICY IF EXISTS "Public Read Profiles" ON public.profiles;
@@ -268,6 +284,9 @@ CREATE POLICY "Public Read Casters" ON public.casters FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Public Read Settings" ON public.admin_settings;
 CREATE POLICY "Public Read Settings" ON public.admin_settings FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Public Read App Settings" ON public.app_settings;
+CREATE POLICY "Public Read App Settings" ON public.app_settings FOR SELECT USING (true);
 
 -- Políticas de escritura (inserción y actualización)
 DROP POLICY IF EXISTS "Users Update Own Profile" ON public.profiles;
@@ -311,6 +330,9 @@ CREATE POLICY "Admin Manage Casters" ON public.casters FOR ALL USING (true);
 
 DROP POLICY IF EXISTS "Admin Manage Settings" ON public.admin_settings;
 CREATE POLICY "Admin Manage Settings" ON public.admin_settings FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Admin Manage App Settings" ON public.app_settings;
+CREATE POLICY "Admin Manage App Settings" ON public.app_settings FOR ALL USING (true);
 
 DROP POLICY IF EXISTS "Admin Manage Tournaments" ON public.tournaments;
 CREATE POLICY "Admin Manage Tournaments" ON public.tournaments FOR ALL USING (true);
