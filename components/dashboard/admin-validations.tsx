@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Check, X, UserCheck, ShieldCheck, ScrollText, Eye, FileText, Image as ImageIcon, AlertCircle, Maximize2, ZoomIn, Search, Trash2, Save, Edit3, UserCog, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
+import { Check, X, UserCheck, ShieldCheck, ScrollText, Eye, FileText, Image as ImageIcon, AlertCircle, Maximize2, ZoomIn, Search, Trash2, Save, Edit3, UserCog, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Trophy } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { GmxButton } from '@/components/gmx-button'
 import { createClient } from '@/utils/supabase/client'
@@ -53,7 +53,12 @@ const FIELD_LABELS: Record<string, string> = {
   start_date: 'Fecha de Inicio del Contrato',
   division: 'División',
   roles: 'Roles en el Equipo',
-  team_gender_category: 'Categoría del Equipo'
+  team_gender_category: 'Categoría del Equipo',
+  tournament_name: 'Torneo',
+  tournament_logo: 'Logo del Torneo',
+  team_tag: 'Tag del Equipo',
+  manager_name: 'Manager / Solicitante',
+  manager_email: 'Correo del Manager'
 }
 
 const EXCLUDED_FIELDS = new Set([
@@ -63,6 +68,7 @@ const EXCLUDED_FIELDS = new Set([
   'profile_id',
   'team_id',
   'contract_id',
+  'tournament_id',
   'admin_id',
   'player_id',
   'created_at',
@@ -217,7 +223,7 @@ function getModificationDiffs(details: any): DiffField[] {
   return diffs
 }
 
-export type ValidationType = 'all' | 'jugador' | 'equipo' | 'contrato' | 'modificacion' | 'baja_contrato' | string
+export type ValidationType = 'all' | 'jugador' | 'equipo' | 'contrato' | 'modificacion' | 'baja_contrato' | 'inscripcion_torneo' | string
 
 interface PendingRequest {
   id: string
@@ -375,7 +381,7 @@ export function AdminValidations() {
       } else if (requestToUpdate?.type === 'modificacion') {
         await supabase.from('profiles').update({ edit_requested: false }).eq('id', confirmAction.id)
         await supabase.from('validations').delete().eq('id', confirmAction.id)
-      } else if (requestToUpdate?.type === 'contrato' || requestToUpdate?.type === 'baja_contrato') {
+      } else if (requestToUpdate?.type === 'contrato' || requestToUpdate?.type === 'baja_contrato' || requestToUpdate?.type === 'inscripcion_torneo') {
         await supabase.from('validations').delete().eq('id', confirmAction.id)
       }
       
@@ -723,6 +729,26 @@ export function AdminValidations() {
               status: newStatus
             }
           }).eq('id', confirmAction.id)
+        } else if (requestToUpdate.type === 'inscripcion_torneo') {
+          const tournamentId = requestToUpdate.details?.tournament_id
+          const teamId = requestToUpdate.details?.team_id
+          if (tournamentId && teamId && isApproved) {
+            const { error: insertTeamError } = await supabase.from('tournament_teams').insert({
+              tournament_id: tournamentId,
+              team_id: teamId
+            })
+            if (insertTeamError) {
+              console.warn('Advertencia al insertar en tournament_teams:', insertTeamError)
+            }
+          }
+          await supabase.from('validations').update({
+            status: newStatus,
+            details: {
+              ...requestToUpdate.details,
+              rejection_reason: isApproved ? null : reason,
+              status: newStatus
+            }
+          }).eq('id', confirmAction.id)
         }
       }
 
@@ -819,6 +845,7 @@ export function AdminValidations() {
       case 'contrato':
       case 'contratos':
       case 'baja_contrato': return <ScrollText className="w-5 h-5 text-purple-400" />
+      case 'inscripcion_torneo': return <Trophy className="w-5 h-5 text-yellow-400" />
       default: return <FileText className="w-5 h-5 text-muted-foreground" />
     }
   }
@@ -858,7 +885,8 @@ export function AdminValidations() {
             { id: 'jugador', label: 'Jugadores' },
             { id: 'equipo', label: 'Equipos' },
             { id: 'contrato', label: 'Contratos' },
-            { id: 'modificacion', label: 'Modificaciones' }
+            { id: 'modificacion', label: 'Modificaciones' },
+            { id: 'inscripcion_torneo', label: 'Torneos' }
           ].map(tab => (
             <button
               key={tab.id}
@@ -902,7 +930,7 @@ export function AdminValidations() {
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2 uppercase font-500 text-xs">
                         {getTypeIcon(req.type)}
-                        {req.type === 'baja_contrato' ? 'Baja Contrato' : req.type === 'contrato' ? 'Contrato' : req.type}
+                        {req.type === 'baja_contrato' ? 'Baja Contrato' : req.type === 'contrato' ? 'Contrato' : req.type === 'inscripcion_torneo' ? 'Inscripción Torneo' : req.type}
                       </div>
                     </td>
                     <td className="px-4 py-4 font-500 text-white">{req.target_name}</td>
@@ -1139,7 +1167,83 @@ export function AdminValidations() {
 
             {/* Body con Scroll (Solo Visualización) */}
             <div data-lenis-prevent data-modal-scrollbody className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6">
-              {selectedRequest.type === 'modificacion' ? (
+              {selectedRequest.type === 'inscripcion_torneo' ? (
+                <div className="space-y-6">
+                  {/* Card con datos del torneo y equipo */}
+                  <div className="p-5 rounded-xl border border-border bg-background space-y-4">
+                    <div className="flex items-center justify-between border-b border-border pb-3">
+                      <span className="text-xs font-700 uppercase tracking-wider text-primary">Torneo de Destino</span>
+                      <span className="text-xs font-600 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                        {selectedRequest.details?.game || 'Torneo'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      {selectedRequest.details?.tournament_logo && (
+                        <img 
+                          src={selectedRequest.details.tournament_logo} 
+                          alt="Torneo" 
+                          className="w-14 h-14 rounded-xl object-cover bg-surface border border-border"
+                        />
+                      )}
+                      <div>
+                        <h4 className="font-display text-lg font-700 uppercase text-white">
+                          {selectedRequest.details?.tournament_name || selectedRequest.target_name}
+                        </h4>
+                        <p className="text-xs text-muted-foreground font-mono">
+                          ID Torneo: {selectedRequest.details?.tournament_id}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-5 rounded-xl border border-border bg-background space-y-4">
+                    <div className="flex items-center justify-between border-b border-border pb-3">
+                      <span className="text-xs font-700 uppercase tracking-wider text-primary">Equipo Solicitante</span>
+                      {selectedRequest.details?.team_tag && (
+                        <span className="text-xs font-mono font-600 px-2.5 py-0.5 rounded bg-surface border border-border text-white">
+                          [{selectedRequest.details.team_tag}]
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <img 
+                        src={selectedRequest.details?.team_logo || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
+                        alt="Equipo" 
+                        className="w-14 h-14 rounded-full object-cover bg-surface border border-border"
+                      />
+                      <div>
+                        <h4 className="font-display text-lg font-700 uppercase text-white">
+                          {selectedRequest.details?.team_name}
+                        </h4>
+                        <p className="text-xs text-muted-foreground font-mono">
+                          ID Equipo: {selectedRequest.details?.team_id}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-5 rounded-xl border border-border bg-background space-y-2">
+                    <span className="text-xs font-700 uppercase tracking-wider text-primary block">Datos del Manager</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                      <div>
+                        <span className="text-[11px] text-muted-foreground uppercase block">Nombre / Nickname:</span>
+                        <p className="text-sm font-600 text-white">{selectedRequest.details?.manager_name || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-muted-foreground uppercase block">Correo Electrónico:</span>
+                        <p className="text-sm font-600 text-white">{selectedRequest.details?.manager_email || 'N/A'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {selectedRequest.details?.rejection_reason && (
+                    <div className="p-4 rounded-xl border border-red-500/20 bg-red-500/10">
+                      <span className="text-xs font-700 uppercase tracking-wider text-red-400 block mb-1">Motivo del Rechazo:</span>
+                      <p className="text-sm text-red-200">{selectedRequest.details.rejection_reason}</p>
+                    </div>
+                  )}
+                </div>
+              ) : selectedRequest.type === 'modificacion' ? (
                 <div className="space-y-6">
                   {(() => {
                     const diffs = getModificationDiffs(editingDetails)

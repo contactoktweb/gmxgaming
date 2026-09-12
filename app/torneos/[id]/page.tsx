@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
+import { useAuth } from '@/lib/auth-context'
 import { Preloader } from '@/components/preloader'
 import { SmoothScroll } from '@/components/smooth-scroll'
 import { CustomCursor } from '@/components/custom-cursor'
@@ -10,18 +11,24 @@ import { SiteHeader } from '@/components/site-header'
 import { BackToTop } from '@/components/back-to-top'
 import { SiteFooter } from '@/components/sections/site-footer'
 import { Reveal } from '@/components/anim'
+import { GmxButton } from '@/components/gmx-button'
+import { TournamentInscriptionModal } from '@/components/tournaments/tournament-inscription-modal'
 import { Calendar, Users, Trophy, Gamepad2, Swords, DollarSign } from 'lucide-react'
 import Link from 'next/link'
+import { toast } from 'sonner'
 import { cn, getTeamSlug, slugify } from '@/lib/utils'
 
 export default function TournamentDetailsPage() {
   const params = useParams()
+  const router = useRouter()
+  const { user } = useAuth()
   const [ready, setReady] = useState(false)
   
   const [tournament, setTournament] = useState<any>(null)
   const [teams, setTeams] = useState<any[]>([])
   const [matches, setMatches] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [isInscriptionModalOpen, setIsInscriptionModalOpen] = useState(false)
 
   useEffect(() => {
     async function fetchData() {
@@ -107,6 +114,27 @@ export default function TournamentDetailsPage() {
     fetchData()
   }, [params.id])
 
+  const refreshTournamentTeams = async () => {
+    if (!tournament?.id) return
+    const supabase = createClient()
+    const teamsRes = await supabase
+      .from('tournament_teams')
+      .select('teams(id, name, logo_url, tag)')
+      .eq('tournament_id', tournament.id)
+    if (teamsRes.data) {
+      setTeams(teamsRes.data.map((t: any) => t.teams).filter(Boolean))
+    }
+  }
+
+  const handleInscriptionClick = () => {
+    if (!user) {
+      toast.info('Debes registrarte o iniciar sesión para inscribir a tu equipo.')
+      router.push('/crear-cuenta')
+      return
+    }
+    setIsInscriptionModalOpen(true)
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex justify-center items-center">
@@ -183,6 +211,25 @@ export default function TournamentDetailsPage() {
                   <span className="font-500">{teams.length} Equipos</span>
                 </div>
               </div>
+
+              {tournament.description && (
+                <p className="text-muted-foreground text-sm max-w-2xl mt-4 leading-relaxed text-center md:text-left">
+                  {tournament.description}
+                </p>
+              )}
+
+              {/* Botón de inscripción disponible mientras el torneo no haya iniciado */}
+              {tournament.status === 'upcoming' && (
+                <div className="mt-8 flex justify-center md:justify-start">
+                  <GmxButton
+                    onClick={handleInscriptionClick}
+                    className="px-8 py-3.5 text-sm flex items-center gap-2.5 shadow-[0_0_25px_rgba(255,45,32,0.35)] hover:shadow-[0_0_35px_rgba(255,45,32,0.5)] transition-shadow"
+                  >
+                    <Trophy className="w-4 h-4 text-white" />
+                    INSCRIBIRME AL TORNEO
+                  </GmxButton>
+                </div>
+              )}
             </div>
           </Reveal>
 
@@ -303,6 +350,16 @@ export default function TournamentDetailsPage() {
           
         </div>
       </main>
+
+      {tournament && (
+        <TournamentInscriptionModal
+          isOpen={isInscriptionModalOpen}
+          onClose={() => setIsInscriptionModalOpen(false)}
+          tournament={tournament}
+          alreadyInscribedTeamIds={teams.map(t => t.id)}
+          onInscriptionSuccess={refreshTournamentTeams}
+        />
+      )}
 
       <SiteFooter />
     </>
