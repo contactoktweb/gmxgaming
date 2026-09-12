@@ -83,9 +83,9 @@ export function GlobalSearch() {
           .limit(5),
         supabase
           .from('profiles')
-          .select('id, nickname, game_nickname, avatar_url, is_player')
+          .select('id, nickname, avatar_url, is_player')
           .eq('is_player', true)
-          .or(`nickname.ilike.${searchTerms},game_nickname.ilike.${searchTerms}`)
+          .ilike('nickname', searchTerms)
           .limit(5),
         supabase
           .from('tournaments')

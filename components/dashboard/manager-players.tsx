@@ -111,11 +111,11 @@ export function ManagerPlayers() {
         if (adminIds.length > 0) {
           const { data: adminProfiles } = await supabase
             .from('profiles')
-            .select('id, nickname, game_nickname, name')
+            .select('id, nickname, name')
             .in('id', adminIds)
           if (adminProfiles) {
             adminProfiles.forEach((p: any) => {
-              adminNickMap[p.id] = p.nickname || p.game_nickname || p.name
+              adminNickMap[p.id] = p.nickname || p.name
             })
           }
         }

@@ -114,7 +114,7 @@ function FormContent() {
       
       const { data: profileWithNick } = await supabase.from('profiles')
         .select('id')
-        .or(`nickname.ilike.${cleanNick},game_nickname.ilike.${cleanNick}`)
+        .ilike('nickname', cleanNick)
         .neq('id', user?.id || '')
         .limit(1)
       
@@ -192,7 +192,7 @@ function FormContent() {
         const { data: profileWithNick } = await supabase
           .from('profiles')
           .select('id')
-          .or(`nickname.ilike.${cleanNick},game_nickname.ilike.${cleanNick}`)
+          .ilike('nickname', cleanNick)
           .neq('id', user?.id || '')
           .limit(1)
 
@@ -287,7 +287,6 @@ function FormContent() {
       const corePayload: Record<string, any> = {
         name: fullName,
         nickname: cleanNick,
-        game_nickname: cleanNick,
         discord_handle: formData.get('item_meta[684]') || null,
         closest_airport: countryValue,
         is_player: true,

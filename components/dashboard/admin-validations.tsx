@@ -597,11 +597,10 @@ export function AdminValidations() {
             if (isApproved) {
               const updates: any = { edit_requested: false }
               if (details.name !== undefined && details.name !== '') updates.name = formatPersonName(details.name).trim()
-              if (details.nickname !== undefined && details.nickname !== '') updates.nickname = formatNickname(details.nickname).trim()
-              if (details.game_nickname !== undefined && details.game_nickname !== '') {
-                updates.game_nickname = formatNickname(details.game_nickname).trim()
-              } else if (updates.nickname) {
-                updates.game_nickname = updates.nickname
+              if (details.nickname !== undefined && details.nickname !== '') {
+                updates.nickname = formatNickname(details.nickname).trim()
+              } else if (details.game_nickname !== undefined && details.game_nickname !== '') {
+                updates.nickname = formatNickname(details.game_nickname).trim()
               }
               if (details.discord_handle !== undefined) updates.discord_handle = details.discord_handle
               if (details.avatar_url !== undefined && details.avatar_url !== '') updates.avatar_url = details.avatar_url

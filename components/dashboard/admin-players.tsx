@@ -474,8 +474,7 @@ export function AdminPlayers() {
 
     const updates = {
       name: nameVal,
-      nickname: nickVal,
-      game_nickname: gameNickVal,
+      nickname: nickVal || gameNickVal,
       discord_handle: editingDetails.discord_handle?.trim() || null,
       closest_airport: countryVal,
       player_status: editingDetails.player_status || 'active',
@@ -496,6 +495,13 @@ export function AdminPlayers() {
 
     const { error } = await supabase.from('profiles').update(updates).eq('id', selectedPlayer.id)
     if (!error) {
+      if (gameNickVal) {
+        try {
+          await supabase.from('player_game_info').update({ game_nickname: gameNickVal }).eq('profile_id', selectedPlayer.id)
+        } catch (gErr) {
+          console.warn('Error actualizando game_nickname en player_game_info:', gErr)
+        }
+      }
       // Sincronizar en tabla validations para mantener email, phone, birth_date, gender
       try {
         const { data: userVal } = await supabase
