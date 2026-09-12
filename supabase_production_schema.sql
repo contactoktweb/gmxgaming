@@ -44,6 +44,31 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   created_at timestamptz DEFAULT now()
 );
 
+-- 1.1 TRIGGER AUTOMÁTICO: CREACIÓN Y SINCRONIZACIÓN DE PERFIL AL REGISTRARSE (Google y Correo)
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.profiles (id, name, avatar_url, role, is_player, player_status)
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1), 'Usuario'),
+    COALESCE(NEW.raw_user_meta_data->>'avatar_url', NEW.raw_user_meta_data->>'picture', NULL),
+    'user',
+    false,
+    'none'
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    name = COALESCE(public.profiles.name, EXCLUDED.name),
+    avatar_url = COALESCE(public.profiles.avatar_url, EXCLUDED.avatar_url);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
 -- 2. TABLA PLAYER_GAME_INFO (Cuentas de Juego)
 CREATE TABLE IF NOT EXISTS public.player_game_info (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
