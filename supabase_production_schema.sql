@@ -107,6 +107,7 @@ CREATE TABLE IF NOT EXISTS public.teams (
   region text,
   description text,
   gender_category text DEFAULT 'mixed', -- 'mixed', 'female'
+  games text[] DEFAULT '{"Mobile Legends"}',
   status text DEFAULT 'pending', -- 'pending', 'active', 'rejected', 'inactive', 'banned'
   foundation_date timestamptz DEFAULT now(),
   

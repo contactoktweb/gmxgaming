@@ -103,33 +103,19 @@ export function Players() {
           })
           setPlayers(formatted)
         } else {
-          // Fallback visual con datos de muestra para que nunca quede vacía la sección
-          setPlayers(PLAYERS.map(p => ({
-            id: p.name,
-            name: p.name,
-            nickname: p.name,
-            game: p.game,
-            team: p.team,
-            img: p.img
-          })))
+          // Si no hay jugadores registrados en la base de datos, ocultar la sección por completo
+          setPlayers([])
         }
       } catch (err) {
         console.error('Error cargando jugadores en home:', err)
-        setPlayers(PLAYERS.map(p => ({
-          id: p.name,
-          name: p.name,
-          nickname: p.name,
-          game: p.game,
-          team: p.team,
-          img: p.img
-        })))
+        setPlayers([])
       }
       setLoading(false)
     }
     loadFeaturedPlayers()
   }, [])
 
-  if (!loading && players.length === 0) return null
+  if (loading || players.length === 0) return null
 
   return (
     <section className="relative bg-background py-12 lg:py-16">

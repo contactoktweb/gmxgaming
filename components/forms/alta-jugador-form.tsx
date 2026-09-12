@@ -10,6 +10,7 @@ import { cn, formatNickname, formatPersonName } from '@/lib/utils'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
 import { useDebounce } from '@/hooks/use-debounce'
+import { toast } from 'sonner'
 
 function FieldTooltip({ text }: { text: string }) {
   return (
@@ -148,30 +149,41 @@ function FormContent() {
     e.preventDefault()
     if (formStatus === 'loading') return
 
+    const cleanNick = nickname.trim().toUpperCase()
+
     if (nicknameError) {
-      alert('Por favor, elige un Nickname diferente.')
+      toast.error('Por favor, elige un Nickname diferente.')
+      return
+    }
+
+    if (!cleanNick) {
+      toast.error('Por favor ingresa tu nickname.')
+      return
+    }
+
+    if (!firstName.trim() || !lastName.trim()) {
+      toast.error('Por favor ingresa tu nombre y apellidos.')
       return
     }
 
     setFormStatus('loading')
 
-    // Re-verificar síncronamente antes de procesar archivos
     try {
+      // Re-verificar síncronamente antes de procesar archivos
       if (user?.id) {
         const { data: currentProfile } = await supabase
           .from('profiles')
           .select('is_player, player_status')
           .eq('id', user.id)
-          .single()
+          .maybeSingle()
 
         if (currentProfile?.is_player && (currentProfile.player_status === 'active' || currentProfile.player_status === 'approved' || currentProfile.player_status === 'pending')) {
-          alert('Ya cuentas con un registro de jugador activo o en proceso de revisión.')
+          toast.error('Ya cuentas con un registro de jugador activo o en proceso de revisión.')
           setFormStatus('idle')
           return
         }
       }
 
-      const cleanNick = nickname.trim().toUpperCase()
       if (cleanNick) {
         const { data: profileWithNick } = await supabase
           .from('profiles')
@@ -188,227 +200,221 @@ function FormContent() {
           .limit(1)
 
         if ((profileWithNick && profileWithNick.length > 0) || (gameWithNick && gameWithNick.length > 0)) {
-          alert('El nickname ingresado ya está en uso por otro jugador. Por favor elige otro.')
+          toast.error('El nickname ingresado ya está en uso por otro jugador. Por favor elige otro.')
           setFormStatus('idle')
           return
         }
       }
-    } catch (verifErr) {
-      console.error('Error al verificar datos del jugador antes de enviar:', verifErr)
-    }
-    
-    const form = e.currentTarget
-    const formData = new FormData(form)
 
-    let urlFoto = 'https://placehold.co/400x400/png?text=FOTO+JUGADOR'
-    let urlIdentidad = 'https://placehold.co/600x400/png?text=INE'
-    let urlPasaporte = null
+      const form = e.currentTarget
+      const formData = new FormData(form)
 
-    try {
-      // 1. Upload Fotografía
-      if (fotoFile) {
-        const fileExt = fotoFile.name.split('.').pop()
-        const fileName = `${Date.now()}_foto_${nickname}.${fileExt}`
-        const { error: uploadError, data } = await supabase.storage.from('avatars').upload(fileName, fotoFile)
-        if (!uploadError && data) {
-          const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(data.path)
-          urlFoto = publicUrlData.publicUrl
-        }
-      }
-
-      // 2. Upload Documento Identidad
-      if (identidadFile) {
-        const fileExt = identidadFile.name.split('.').pop()
-        const fileName = `${Date.now()}_ine_${nickname}.${fileExt}`
-        const { error: uploadError, data } = await supabase.storage.from('documents').upload(fileName, identidadFile)
-        if (!uploadError && data) {
-          const { data: publicUrlData } = supabase.storage.from('documents').getPublicUrl(data.path)
-          urlIdentidad = publicUrlData.publicUrl
-        }
-      }
-
-      // 3. Upload Pasaporte
-      if (pasaporteFile) {
-        const fileExt = pasaporteFile.name.split('.').pop()
-        const fileName = `${Date.now()}_pasaporte_${nickname}.${fileExt}`
-        const { error: uploadError, data } = await supabase.storage.from('documents').upload(fileName, pasaporteFile)
-        if (!uploadError && data) {
-          const { data: publicUrlData } = supabase.storage.from('documents').getPublicUrl(data.path)
-          urlPasaporte = publicUrlData.publicUrl
-        }
-      }
-    } catch (err) {
-      console.error('Error uploading files:', err)
-      // Continue anyway, or show error? Best to continue with placeholders or fail?
-      // Since it's prod, we should continue or show error. We'll proceed with whatever uploaded.
-    }
-    
-    const fullName = `${firstName.trim()} ${lastName.trim()}`.trim().toUpperCase()
-    const cleanNick = nickname.trim().toUpperCase()
-
-    if (!firstName.trim() || !lastName.trim()) {
-      alert('Por favor ingresa tu nombre y apellidos.')
-      setFormStatus('idle')
-      return
-    }
-
-    if (!cleanNick) {
-      alert('Por favor ingresa tu nickname.')
-      setFormStatus('idle')
-      return
-    }
-
-    // Validar formato de correo electrónico
-    const emailValue = (formData.get('item_meta[676]') as string || '').trim()
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailValue || !emailRegex.test(emailValue)) {
-      alert('Por favor ingresa un correo electrónico válido.')
-      setFormStatus('idle')
-      return
-    }
-
-    // Validar fecha de nacimiento (no puede ser en el futuro)
-    const birthDateValue = formData.get('item_meta[675]') as string
-    if (birthDateValue) {
-      const birthDate = new Date(birthDateValue)
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      if (birthDate > today) {
-        alert('La fecha de nacimiento no puede ser una fecha futura.')
+      // Validar formato de correo electrónico
+      const emailValue = (formData.get('item_meta[676]') as string || '').trim()
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailValue || !emailRegex.test(emailValue)) {
+        toast.error('Por favor ingresa un correo electrónico válido.')
         setFormStatus('idle')
         return
       }
-    }
 
-    // Payload principal — campos garantizados que existen en la tabla profiles
-    const countryValue = (formData.get('item_meta[722]') as string) || (formData.get('item_meta[677]') as string) || 'México'
-    const corePayload: Record<string, any> = {
-      name: fullName,
-      nickname: cleanNick,
-      game_nickname: cleanNick,
-      discord_handle: formData.get('item_meta[684]') || null,
-      closest_airport: countryValue,
-      is_player: true,
-      player_status: 'pending',
-    }
-
-    // Campos opcionales — se agregan solo si tienen valor
-    const socialLinks: Record<string, any> = {}
-    const socialMap: Record<string, string> = {
-      social_ig: 'social_instagram',
-      social_tiktok: 'social_tiktok',
-      social_yt: 'social_youtube',
-      social_fb: 'social_facebook',
-      social_twitch: 'social_twitch',
-      social_kick: 'social_kick',
-      social_x: 'social_x',
-    }
-    Object.entries(socialMap).forEach(([dbField, formField]) => {
-      const val = formData.get(formField)
-      if (val) socialLinks[dbField] = val
-    })
-
-    if (urlFoto) corePayload.avatar_url = urlFoto
-    if (urlIdentidad) corePayload.id_photo_url = urlIdentidad
-    if (urlPasaporte) corePayload.passport_photo_url = urlPasaporte
-
-    // Fusionar con redes sociales
-    const fullPayload = { ...corePayload, ...socialLinks }
-
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .update(fullPayload)
-      .eq('id', user?.id)
-
-    if (profileError) {
-      console.error('Error al actualizar perfil:', profileError)
-      // Si el error es de columna inexistente, intentar solo los campos core
-      if (profileError.code === '42703' || profileError.message?.includes('column')) {
-        const { error: coreErr } = await supabase
-          .from('profiles')
-          .update(corePayload)
-          .eq('id', user?.id)
-        if (coreErr) {
+      // Validar fecha de nacimiento (no puede ser en el futuro)
+      const birthDateValue = formData.get('item_meta[675]') as string
+      if (birthDateValue) {
+        const birthDate = new Date(birthDateValue)
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        if (birthDate > today) {
+          toast.error('La fecha de nacimiento no puede ser una fecha futura.')
           setFormStatus('idle')
-          alert('Error al guardar tu perfil: ' + coreErr.message)
           return
         }
-      } else {
-        setFormStatus('idle')
-        alert('Error al enviar tu solicitud: ' + profileError.message)
-        return
       }
-    }
 
-    let gameInfoError = null
+      let urlFoto = 'https://placehold.co/400x400/png?text=FOTO+JUGADOR'
+      let urlIdentidad = 'https://placehold.co/600x400/png?text=INE'
+      let urlPasaporte = null
+      const safeNick = cleanNick.replace(/[^a-zA-Z0-9_-]/g, '') || 'jugador'
 
-    // Insert Game Info if applicable (e.g. Mobile Legends)
-    if (formData.get('item_meta[697]')) {
-      const gamePayload = {
-        profile_id: user?.id,
-        game: (formData.get('selected_game') as string) || selectedGame || 'Mobile Legends',
-        game_id: formData.get('item_meta[697]'),
-        server: formData.get('item_meta[784]'),
-        game_nickname: cleanNick,
-        country_account: formData.get('item_meta[722]')
+      try {
+        // 1. Upload Fotografía
+        if (fotoFile) {
+          const fileExt = fotoFile.name.split('.').pop()?.toLowerCase() || 'png'
+          const fileName = `${Date.now()}_foto_${safeNick}.${fileExt}`
+          const { error: uploadError, data } = await supabase.storage.from('avatars').upload(fileName, fotoFile)
+          if (!uploadError && data) {
+            const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(data.path)
+            urlFoto = publicUrlData.publicUrl
+          } else if (uploadError) {
+            console.warn('Advertencia subiendo foto:', uploadError)
+          }
+        }
+
+        // 2. Upload Documento Identidad
+        if (identidadFile) {
+          const fileExt = identidadFile.name.split('.').pop()?.toLowerCase() || 'png'
+          const fileName = `${Date.now()}_ine_${safeNick}.${fileExt}`
+          const { error: uploadError, data } = await supabase.storage.from('documents').upload(fileName, identidadFile)
+          if (!uploadError && data) {
+            const { data: publicUrlData } = supabase.storage.from('documents').getPublicUrl(data.path)
+            urlIdentidad = publicUrlData.publicUrl
+          } else if (uploadError) {
+            console.warn('Advertencia subiendo INE/identidad:', uploadError)
+          }
+        }
+
+        // 3. Upload Pasaporte
+        if (pasaporteFile) {
+          const fileExt = pasaporteFile.name.split('.').pop()?.toLowerCase() || 'png'
+          const fileName = `${Date.now()}_pasaporte_${safeNick}.${fileExt}`
+          const { error: uploadError, data } = await supabase.storage.from('documents').upload(fileName, pasaporteFile)
+          if (!uploadError && data) {
+            const { data: publicUrlData } = supabase.storage.from('documents').getPublicUrl(data.path)
+            urlPasaporte = publicUrlData.publicUrl
+          } else if (uploadError) {
+            console.warn('Advertencia subiendo pasaporte:', uploadError)
+          }
+        }
+      } catch (err) {
+        console.error('Error procesando archivos del jugador:', err)
       }
-      const { error: gErr } = await supabase.from('player_game_info').insert(gamePayload)
-      if (gErr) {
-        console.warn('Error al guardar info de juego (no bloquea el registro):', gErr)
-      }
-    }
+      
+      const fullName = `${firstName.trim()} ${lastName.trim()}`.trim().toUpperCase()
 
-    // Registrar en tabla validations para que aparezca en el panel de aprobaciones del admin
-    try {
-      // Verificar si ya existe un registro previo en validations para este jugador
-      const { data: existingVal } = await supabase
-        .from('validations')
-        .select('id')
-        .eq('type', 'jugador')
-        .filter('details->>user_id', 'eq', user?.id)
-        .limit(1)
-
-      const validationDetails = {
-        user_id: user?.id,
+      // Payload principal — campos garantizados que existen en la tabla profiles
+      const countryValue = (formData.get('item_meta[722]') as string) || (formData.get('item_meta[677]') as string) || 'México'
+      const corePayload: Record<string, any> = {
         name: fullName,
         nickname: cleanNick,
-        email: emailValue,
-        birth_date: birthDateValue || null,
-        gender: (formData.get('item_meta[783]') as string) || null,
-        country: (formData.get('item_meta[677]') as string) || null,
-        discord: (formData.get('item_meta[684]') as string) || null,
-        phone: (formData.get('item_meta[685]') as string) || null,
-        avatar_url: urlFoto,
-        id_photo_url: urlIdentidad,
-        passport_photo_url: urlPasaporte || null,
-        game: (formData.get('selected_game') as string) || selectedGame || null,
-        game_id: (formData.get('item_meta[697]') as string) || null,
-        ...socialLinks,
+        game_nickname: cleanNick,
+        discord_handle: formData.get('item_meta[684]') || null,
+        closest_airport: countryValue,
+        is_player: true,
+        player_status: 'pending',
       }
 
-      if (existingVal && existingVal.length > 0) {
-        // Actualizar el registro existente
-        await supabase.from('validations').update({
-          status: 'pending',
-          target_name: cleanNick,
-          submitted_by: fullName,
-          details: validationDetails,
-        }).eq('id', existingVal[0].id)
-      } else {
-        // Crear un registro nuevo
-        await supabase.from('validations').insert({
-          type: 'jugador',
-          target_name: cleanNick,
-          submitted_by: fullName,
-          status: 'pending',
-          details: validationDetails,
-        })
+      // Campos opcionales — se agregan solo si tienen valor
+      const socialLinks: Record<string, any> = {}
+      const socialMap: Record<string, string> = {
+        social_ig: 'social_instagram',
+        social_tiktok: 'social_tiktok',
+        social_yt: 'social_youtube',
+        social_fb: 'social_facebook',
+        social_twitch: 'social_twitch',
+        social_kick: 'social_kick',
+        social_x: 'social_x',
       }
-    } catch (valErr) {
-      console.warn('Advertencia al registrar en validations (no bloquea el alta):', valErr)
+      Object.entries(socialMap).forEach(([dbField, formField]) => {
+        const val = formData.get(formField)
+        if (val) socialLinks[dbField] = val
+      })
+
+      if (urlFoto) corePayload.avatar_url = urlFoto
+      if (urlIdentidad) corePayload.id_photo_url = urlIdentidad
+      if (urlPasaporte) corePayload.passport_photo_url = urlPasaporte
+
+      // Fusionar con redes sociales
+      const fullPayload = { ...corePayload, ...socialLinks }
+
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update(fullPayload)
+        .eq('id', user?.id)
+
+      if (profileError) {
+        console.error('Error al actualizar perfil:', profileError)
+        // Si el error es de columna inexistente, intentar solo los campos core
+        if (profileError.code === '42703' || profileError.message?.includes('column')) {
+          const { error: coreErr } = await supabase
+            .from('profiles')
+            .update(corePayload)
+            .eq('id', user?.id)
+          if (coreErr) {
+            setFormStatus('idle')
+            toast.error('Error al guardar tu perfil: ' + coreErr.message)
+            return
+          }
+        } else {
+          setFormStatus('idle')
+          toast.error('Error al enviar tu solicitud: ' + profileError.message)
+          return
+        }
+      }
+
+      // Guardar información de juego (Mobile Legends u otro)
+      if (formData.get('item_meta[697]')) {
+        try {
+          const gamePayload = {
+            profile_id: user?.id,
+            game: (formData.get('selected_game') as string) || selectedGame || 'Mobile Legends',
+            game_id: formData.get('item_meta[697]'),
+            server: formData.get('item_meta[784]'),
+            game_nickname: cleanNick,
+            country_account: formData.get('item_meta[722]')
+          }
+          await supabase.from('player_game_info').insert(gamePayload)
+        } catch (gErr) {
+          console.warn('Error al guardar info de juego (no bloquea el registro):', gErr)
+        }
+      }
+
+      // Registrar en tabla validations para el panel de aprobaciones del admin
+      try {
+        const { data: existingVal } = await supabase
+          .from('validations')
+          .select('id')
+          .eq('type', 'jugador')
+          .filter('details->>user_id', 'eq', user?.id)
+          .limit(1)
+
+        const validationDetails = {
+          user_id: user?.id,
+          name: fullName,
+          nickname: cleanNick,
+          email: emailValue,
+          birth_date: birthDateValue || null,
+          gender: (formData.get('item_meta[783]') as string) || null,
+          country: (formData.get('item_meta[677]') as string) || null,
+          discord: (formData.get('item_meta[684]') as string) || null,
+          phone: (formData.get('item_meta[685]') as string) || null,
+          avatar_url: urlFoto,
+          id_photo_url: urlIdentidad,
+          passport_photo_url: urlPasaporte || null,
+          game: (formData.get('selected_game') as string) || selectedGame || null,
+          game_id: (formData.get('item_meta[697]') as string) || null,
+          ...socialLinks,
+        }
+
+        if (existingVal && existingVal.length > 0) {
+          await supabase.from('validations').update({
+            status: 'pending',
+            target_name: cleanNick,
+            submitted_by: fullName,
+            details: validationDetails,
+          }).eq('id', existingVal[0].id)
+        } else {
+          await supabase.from('validations').insert({
+            type: 'jugador',
+            target_name: cleanNick,
+            submitted_by: fullName,
+            status: 'pending',
+            details: validationDetails,
+          })
+        }
+      } catch (valErr) {
+        console.warn('Advertencia al registrar en validations (no bloquea el alta):', valErr)
+      }
+
+      toast.success('¡Registro de jugador enviado con éxito!')
+      setFormStatus('success')
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      }
+    } catch (err: any) {
+      console.error('Error inesperado al enviar alta de jugador:', err)
+      toast.error('Error inesperado al procesar registro: ' + (err?.message || 'Por favor intenta de nuevo.'))
+      setFormStatus('idle')
     }
-
-    setFormStatus('success')
   }
 
   if (loadingConfig && formStatus !== 'already_registered') {

@@ -6,6 +6,7 @@ import { GmxButton } from '@/components/gmx-button'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 function FieldTooltip({ text }: { text: string }) {
   return (
@@ -255,100 +256,136 @@ export function AltaContratoForm() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (selectedRoles.length === 0) {
-      alert('Debes seleccionar al menos un rol en el equipo.')
+      toast.error('Debes seleccionar al menos un rol en el equipo.')
       return
     }
 
     setFormStatus('loading')
     
-    const form = e.currentTarget
-    const formData = new FormData(form)
+    try {
+      const form = e.currentTarget
+      const formData = new FormData(form)
 
-    const teamId = formData.get('item_meta[879]') as string
-    const rawEndDate = formData.get('item_meta[882]') as string
+      const teamId = formData.get('item_meta[879]') as string
+      const rawEndDate = formData.get('item_meta[882]') as string
 
-    // Validar que la fecha sea mayor al día de hoy
-    if (!rawEndDate) {
-      setDateError('Por favor selecciona la fecha de duración del contrato.')
-      alert('Por favor selecciona la fecha de duración del contrato.')
-      setFormStatus('idle')
-      return
-    }
-
-    if (rawEndDate <= todayStr) {
-      setDateError('La fecha del contrato debe ser posterior al día de hoy.')
-      alert('La duración del contrato debe ser una fecha posterior al día de hoy. No se permiten fechas anteriores ni el día actual.')
-      setFormStatus('idle')
-      return
-    }
-
-    // Verificar que el equipo seleccionado exista y esté disponible
-    const { data: teamData, error: teamFetchError } = await supabase
-      .from('teams')
-      .select('id, name, manager_id, status')
-      .eq('id', teamId)
-      .single()
-
-    if (teamFetchError || !teamData) {
-      setFormStatus('idle')
-      alert('El equipo seleccionado no existe o no está disponible.')
-      return
-    }
-
-    const selectedTeam = teams.find(t => t.id === teamId)
-
-    // Construir roles a guardar
-    const rolesToSave = [...selectedRoles]
-    const linea = formData.get('item_meta_linea')
-    if (selectedRoles.includes('JUGADOR(A)') && linea) {
-      rolesToSave.push(`Línea: ${linea}`)
-    }
-
-    const isFemenil = selectedTeam?.category === 'Femenil'
-
-    if (playerGender === 'Masculino') {
-      if (isFemenil) {
+      // Validar que la fecha sea mayor al día de hoy
+      if (!rawEndDate) {
+        setDateError('Por favor selecciona la fecha de duración del contrato.')
+        toast.error('Por favor selecciona la fecha de duración del contrato.')
         setFormStatus('idle')
-        alert('Los jugadores varoniles no pueden registrar contratos en la división Femenil.')
         return
       }
-      if (hasVaronilContract) {
+
+      if (rawEndDate <= todayStr) {
+        setDateError('La fecha del contrato debe ser posterior al día de hoy.')
+        toast.error('La duración del contrato debe ser una fecha posterior al día de hoy. No se permiten fechas anteriores ni el día actual.')
         setFormStatus('idle')
-        alert('Ya cuentas con un contrato activo en la división Varonil / Mixto. Los jugadores varoniles solo pueden tener 1 contrato activo. Cuando tu contrato sea dado de baja, podrás registrar uno nuevo.')
         return
       }
-    } else {
-      if (isFemenil && hasFemenilContract) {
+
+      // Verificar que el equipo seleccionado exista y esté disponible
+      const { data: teamData, error: teamFetchError } = await supabase
+        .from('teams')
+        .select('id, name, manager_id, status')
+        .eq('id', teamId)
+        .maybeSingle()
+
+      if (teamFetchError || !teamData) {
+        toast.error('El equipo seleccionado no existe o no está disponible.')
         setFormStatus('idle')
-        alert('Ya cuentas con un contrato activo en la división Femenil. Las jugadoras solo pueden tener 1 contrato en Femenil y 1 en Varonil / Mixto.')
         return
       }
-      if (!isFemenil && hasVaronilContract) {
+
+      const selectedTeam = teams.find(t => t.id === teamId)
+
+      // Construir roles a guardar
+      const rolesToSave = [...selectedRoles]
+      const linea = formData.get('item_meta_linea')
+      if (selectedRoles.includes('JUGADOR(A)') && linea) {
+        rolesToSave.push(`Línea: ${linea}`)
+      }
+
+      const isFemenil = selectedTeam?.category === 'Femenil'
+
+      if (playerGender === 'Masculino') {
+        if (isFemenil) {
+          toast.error('Los jugadores varoniles no pueden registrar contratos en la división Femenil.')
+          setFormStatus('idle')
+          return
+        }
+        if (hasVaronilContract) {
+          toast.error('Ya cuentas con un contrato activo en la división Varonil / Mixto.')
+          setFormStatus('idle')
+          return
+        }
+      } else {
+        if (isFemenil && hasFemenilContract) {
+          toast.error('Ya cuentas con un contrato activo en la división Femenil.')
+          setFormStatus('idle')
+          return
+        }
+        if (!isFemenil && hasVaronilContract) {
+          toast.error('Ya cuentas con un contrato activo en la división Varonil / Mixto.')
+          setFormStatus('idle')
+          return
+        }
+      }
+
+      const payload = {
+        player_id: user?.id,
+        team_id: teamId,
+        roles: rolesToSave,
+        end_date: formData.get('item_meta[882]'),
+        status: 'pending_manager',
+        team_gender_category: isFemenil ? 'female' : 'mixed'
+      }
+
+      let newContractId: string | null = null
+      let insertError: any = null
+
+      const firstAttempt = await supabase
+        .from('contracts')
+        .insert(payload)
+        .select('id')
+
+      if (firstAttempt.error) {
+        console.warn('Primer intento de contrato falló, probando sin columna team_gender_category:', firstAttempt.error)
+        const fallbackPayload = {
+          player_id: user?.id,
+          team_id: teamId,
+          roles: rolesToSave,
+          end_date: formData.get('item_meta[882]'),
+          status: 'pending_manager'
+        }
+        const secondAttempt = await supabase
+          .from('contracts')
+          .insert(fallbackPayload)
+          .select('id')
+
+        if (secondAttempt.error) {
+          insertError = secondAttempt.error
+        } else {
+          newContractId = secondAttempt.data?.[0]?.id || null
+        }
+      } else {
+        newContractId = firstAttempt.data?.[0]?.id || null
+      }
+
+      if (insertError) {
+        console.error('Error insertando contrato:', insertError)
+        toast.error('Error al enviar el contrato: ' + insertError.message)
         setFormStatus('idle')
-        alert('Ya cuentas con un contrato activo en la división Varonil / Mixto. Las jugadoras solo pueden tener 1 contrato en Femenil y 1 en Varonil / Mixto.')
         return
       }
-    }
 
-    const payload = {
-      player_id: user?.id,
-      team_id: teamId,
-      roles: rolesToSave,
-      end_date: formData.get('item_meta[882]'),
-      status: 'pending_manager',
-      team_gender_category: isFemenil ? 'female' : 'mixed'
-    }
-
-    const { data: newContract, error } = await supabase.from('contracts').insert(payload).select().single()
-
-    if (!error) {
-      // Registrar también en validations para seguimiento administrativo y auditoría
+      // Registrar en validations para panel administrativo
       try {
         const { data: playerProfile } = await supabase
           .from('profiles')
           .select('name, nickname')
           .eq('id', user?.id)
-          .single()
+          .maybeSingle()
 
         const pName = playerProfile?.nickname || playerProfile?.name || user?.email || 'Jugador'
         const tName = selectedTeam?.name || teamData?.name || 'Equipo'
@@ -359,7 +396,7 @@ export function AltaContratoForm() {
           submitted_by: pName,
           status: 'pending',
           details: {
-            contract_id: newContract?.id,
+            contract_id: newContractId,
             player_id: user?.id,
             player_name: pName,
             team_id: teamId,
@@ -372,14 +409,15 @@ export function AltaContratoForm() {
           }
         })
       } catch (valErr) {
-        console.warn('Advertencia registrando validación de contrato:', valErr)
+        console.warn('Advertencia registrando validación de contrato (no bloqueante):', valErr)
       }
 
+      toast.success('¡Contrato enviado a revisión exitosamente!')
       setFormStatus('success')
-    } else {
+    } catch (err: any) {
+      console.error('Error inesperado enviando contrato:', err)
+      toast.error('Error inesperado al enviar contrato: ' + (err?.message || 'Por favor intenta de nuevo.'))
       setFormStatus('idle')
-      alert('Error al enviar el contrato: ' + error.message)
-      console.error(error)
     }
   }
 

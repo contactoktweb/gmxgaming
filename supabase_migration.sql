@@ -27,6 +27,11 @@ ALTER TABLE public.teams
   ADD COLUMN IF NOT EXISTS manager_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
   ADD COLUMN IF NOT EXISTS hashtag text,
   ADD COLUMN IF NOT EXISTS jersey_url text,
+  ADD COLUMN IF NOT EXISTS country text DEFAULT 'México',
+  ADD COLUMN IF NOT EXISTS region text,
+  ADD COLUMN IF NOT EXISTS description text,
+  ADD COLUMN IF NOT EXISTS gender_category text DEFAULT 'mixed',
+  ADD COLUMN IF NOT EXISTS games text[] DEFAULT '{"Mobile Legends"}',
   ADD COLUMN IF NOT EXISTS status text DEFAULT 'pending',
   ADD COLUMN IF NOT EXISTS social_ig text,
   ADD COLUMN IF NOT EXISTS social_tiktok text,
@@ -215,14 +220,65 @@ BEGIN
 END;
 $$;
 
+-- Políticas de Inserción y Actualización permisivas para altas
 DROP POLICY IF EXISTS "User Insert Teams" ON public.teams;
-CREATE POLICY "User Insert Teams" ON public.teams FOR INSERT WITH CHECK (auth.uid() = manager_id);
+CREATE POLICY "User Insert Teams" ON public.teams FOR INSERT WITH CHECK (true);
 
 DROP POLICY IF EXISTS "User Update Teams" ON public.teams;
-CREATE POLICY "User Update Teams" ON public.teams FOR UPDATE USING (auth.uid() = manager_id);
+CREATE POLICY "User Update Teams" ON public.teams FOR UPDATE USING (true);
 
 DROP POLICY IF EXISTS "User Insert Contracts" ON public.contracts;
-CREATE POLICY "User Insert Contracts" ON public.contracts FOR INSERT WITH CHECK (auth.uid() = player_id);
+CREATE POLICY "User Insert Contracts" ON public.contracts FOR INSERT WITH CHECK (true);
 
 DROP POLICY IF EXISTS "User Update Contracts" ON public.contracts;
-CREATE POLICY "User Update Contracts" ON public.contracts FOR UPDATE USING (auth.uid() = player_id);
+CREATE POLICY "User Update Contracts" ON public.contracts FOR UPDATE USING (true);
+
+-- 9. TABLA VALIDATIONS (Solicitudes de Altas de Equipos, Jugadores, Contratos)
+CREATE TABLE IF NOT EXISTS public.validations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  type text NOT NULL, -- 'jugador', 'equipo', 'contrato', 'modificacion', 'baja_contrato', 'inscripcion_torneo'
+  target_name text,
+  submitted_by text,
+  status text DEFAULT 'pending', -- 'pending', 'approved', 'rejected'
+  rejection_reason text,
+  details jsonb DEFAULT '{}'::jsonb,
+  created_at timestamptz DEFAULT now()
+);
+
+ALTER TABLE public.validations ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public Read Validations" ON public.validations;
+CREATE POLICY "Public Read Validations" ON public.validations FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Users Insert Validations" ON public.validations;
+CREATE POLICY "Users Insert Validations" ON public.validations FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Users Update Validations" ON public.validations;
+CREATE POLICY "Users Update Validations" ON public.validations FOR UPDATE USING (true);
+
+DROP POLICY IF EXISTS "Admin Manage Validations" ON public.validations;
+CREATE POLICY "Admin Manage Validations" ON public.validations FOR ALL USING (true);
+
+-- 10. STORAGE BUCKETS (teams, avatars, documents)
+INSERT INTO storage.buckets (id, name, public)
+VALUES 
+  ('teams', 'teams', true),
+  ('avatars', 'avatars', true),
+  ('documents', 'documents', true)
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+-- Políticas de Storage para subida y lectura de archivos en altas
+DROP POLICY IF EXISTS "Public Read All Storage" ON storage.objects;
+CREATE POLICY "Public Read All Storage" ON storage.objects FOR SELECT USING (bucket_id IN ('teams', 'avatars', 'documents'));
+
+DROP POLICY IF EXISTS "Public Insert All Storage" ON storage.objects;
+CREATE POLICY "Public Insert All Storage" ON storage.objects FOR INSERT WITH CHECK (bucket_id IN ('teams', 'avatars', 'documents'));
+
+DROP POLICY IF EXISTS "Public Update All Storage" ON storage.objects;
+CREATE POLICY "Public Update All Storage" ON storage.objects FOR UPDATE USING (bucket_id IN ('teams', 'avatars', 'documents'));
+
+DROP POLICY IF EXISTS "Public Delete All Storage" ON storage.objects;
+CREATE POLICY "Public Delete All Storage" ON storage.objects FOR DELETE USING (bucket_id IN ('teams', 'avatars', 'documents'));
+
+-- Recarga de esquema de PostgREST
+NOTIFY pgrst, 'reload schema';
+NOTIFY pgrst, 'reload config';

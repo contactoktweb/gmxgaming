@@ -8,6 +8,7 @@ import { FileUpload } from '@/components/forms/file-upload'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
 import { cn, formatNickname, formatPersonName } from '@/lib/utils'
+import { toast } from 'sonner'
 
 function FieldTooltip({ text }: { text: string }) {
   return (
@@ -290,23 +291,22 @@ export function AltaEquipoForm() {
     const cleanTag = teamTag.trim().toUpperCase()
 
     if (!cleanTeamName) {
-      alert('Por favor ingresa el nombre del equipo.')
+      toast.error('Por favor ingresa el nombre del equipo.')
       return
     }
 
     if (!cleanTag) {
-      alert('Por favor ingresa el tag del equipo.')
+      toast.error('Por favor ingresa el tag del equipo.')
       return
     }
 
     if (teamNameError || teamTagError) {
-      alert('Por favor corrige los errores antes de enviar el formulario.')
+      toast.error('Por favor corrige los errores antes de enviar el formulario.')
       return
     }
 
     setFormStatus('loading')
 
-    // Verificación síncrona de duplicados antes de procesar archivos o insertar
     try {
       // 1. Verificar nombre de equipo
       const { data: dupTeams } = await supabase
@@ -317,7 +317,7 @@ export function AltaEquipoForm() {
       const nameMatch = dupTeams?.some(t => t.name?.trim().toUpperCase() === cleanTeamName)
       if (nameMatch) {
         setTeamNameError('Ya existe un equipo registrado con este nombre.')
-        alert(`El equipo "${cleanTeamName}" ya se encuentra registrado. No se puede registrar el mismo equipo dos veces.`)
+        toast.error(`El equipo "${cleanTeamName}" ya se encuentra registrado. No se puede registrar dos veces.`)
         setFormStatus('idle')
         return
       }
@@ -331,7 +331,7 @@ export function AltaEquipoForm() {
       const tagMatch = dupTags?.some(t => t.tag?.trim().toUpperCase() === cleanTag)
       if (tagMatch) {
         setTeamTagError('Este tag ya se encuentra en uso por otro equipo.')
-        alert(`El tag "${cleanTag}" ya se encuentra registrado por otro equipo.`)
+        toast.error(`El tag "${cleanTag}" ya se encuentra registrado por otro equipo.`)
         setFormStatus('idle')
         return
       }
@@ -352,76 +352,128 @@ export function AltaEquipoForm() {
             .in('status', ['pending', 'active', 'approved'])
 
           if (userTeams && userTeams.length > 0) {
-            alert(`Ya cuentas con un equipo registrado o en proceso de revisión (${userTeams[0].name}). No se permite registrar otro equipo.`)
+            toast.error(`Ya cuentas con un equipo registrado (${userTeams[0].name}). No se permite registrar otro equipo.`)
             setFormStatus('idle')
             return
           }
         }
       }
-    } catch (verifErr) {
-      console.error('Error verificando duplicados del equipo:', verifErr)
-    }
 
-    const form = e.currentTarget
-    const formData = new FormData(form)
+      const form = e.currentTarget
+      const formData = new FormData(form)
 
-    let urlLogo = 'https://placehold.co/400x400/png?text=LOGO+EQUIPO'
-    let urlJersey = 'https://placehold.co/400x400/png?text=JERSEY'
+      let urlLogo = 'https://placehold.co/400x400/png?text=LOGO+EQUIPO'
+      let urlJersey = 'https://placehold.co/400x400/png?text=JERSEY'
+      const safePrefix = cleanTeamName.replace(/[^a-zA-Z0-9_-]/g, '') || 'team'
 
-    try {
-      if (logoFile) {
-        const fileExt = logoFile.name.split('.').pop()
-        const fileName = `${Date.now()}_logo_${cleanTeamName.replace(/\s+/g, '_')}.${fileExt}`
-        const { error: uploadError, data } = await supabase.storage.from('teams').upload(fileName, logoFile)
-        if (!uploadError && data) {
-          const { data: publicUrlData } = supabase.storage.from('teams').getPublicUrl(data.path)
-          urlLogo = publicUrlData.publicUrl
+      try {
+        if (logoFile) {
+          const fileExt = logoFile.name.split('.').pop()?.toLowerCase() || 'png'
+          const fileName = `${Date.now()}_logo_${safePrefix}.${fileExt}`
+          const { error: uploadError, data } = await supabase.storage.from('teams').upload(fileName, logoFile)
+          if (!uploadError && data) {
+            const { data: publicUrlData } = supabase.storage.from('teams').getPublicUrl(data.path)
+            urlLogo = publicUrlData.publicUrl
+          } else if (uploadError) {
+            console.warn('Advertencia subiendo logo del equipo:', uploadError)
+          }
         }
+
+        if (jerseyFile) {
+          const fileExt = jerseyFile.name.split('.').pop()?.toLowerCase() || 'png'
+          const fileName = `${Date.now()}_jersey_${safePrefix}.${fileExt}`
+          const { error: uploadError, data } = await supabase.storage.from('teams').upload(fileName, jerseyFile)
+          if (!uploadError && data) {
+            const { data: publicUrlData } = supabase.storage.from('teams').getPublicUrl(data.path)
+            urlJersey = publicUrlData.publicUrl
+          } else if (uploadError) {
+            console.warn('Advertencia subiendo jersey del equipo:', uploadError)
+          }
+        }
+      } catch (err) {
+        console.error('Error procesando archivos del equipo:', err)
       }
 
-      if (jerseyFile) {
-        const fileExt = jerseyFile.name.split('.').pop()
-        const fileName = `${Date.now()}_jersey_${cleanTeamName.replace(/\s+/g, '_')}.${fileExt}`
-        const { error: uploadError, data } = await supabase.storage.from('teams').upload(fileName, jerseyFile)
-        if (!uploadError && data) {
-          const { data: publicUrlData } = supabase.storage.from('teams').getPublicUrl(data.path)
-          urlJersey = publicUrlData.publicUrl
-        }
+      const tipoEquipoVal = (formData.get('item_meta[782]') as string) || 'Varonil / Mixto'
+      const genderCategory = tipoEquipoVal.toLowerCase().includes('fem') ? 'female' : 'mixed'
+      const selectedGamesList = formData.getAll('item_meta[633][]')
+
+      // Intento 1: Inserción completa
+      const fullPayload: Record<string, any> = {
+        manager_id: user?.id,
+        name: cleanTeamName,
+        tag: cleanTag,
+        hashtag: formData.get('item_meta[hashtag]') || null,
+        country: formData.get('item_meta[623]') || 'México',
+        logo_url: urlLogo,
+        jersey_url: urlJersey,
+        social_ig: formData.get('social_instagram') || null,
+        social_tiktok: formData.get('social_tiktok') || null,
+        social_yt: formData.get('social_youtube') || null,
+        social_fb: formData.get('social_facebook') || null,
+        social_twitch: formData.get('social_twitch') || null,
+        social_kick: formData.get('social_kick') || null,
+        social_x: formData.get('social_x') || null,
+        gender_category: genderCategory,
+        games: selectedGamesList.length > 0 ? selectedGamesList : ['Mobile Legends'],
+        status: 'pending'
       }
-    } catch (err) {
-      console.error('Error uploading team files:', err)
-    }
 
-    const tipoEquipoVal = (formData.get('item_meta[782]') as string) || 'Varonil / Mixto'
-    const genderCategory = tipoEquipoVal.toLowerCase().includes('fem') ? 'female' : 'mixed'
+      let insertedId: string | null = null
+      let insertError: any = null
 
-    const payload = {
-      manager_id: user?.id,
-      name: cleanTeamName,
-      tag: cleanTag,
-      hashtag: formData.get('item_meta[hashtag]'),
-      country: formData.get('item_meta[623]'),
-      logo_url: urlLogo,
-      jersey_url: urlJersey,
-      games: formData.getAll('item_meta[633][]'),
-      social_ig: formData.get('social_instagram'),
-      social_tiktok: formData.get('social_tiktok'),
-      social_yt: formData.get('social_youtube'),
-      social_fb: formData.get('social_facebook'),
-      social_twitch: formData.get('social_twitch'),
-      social_kick: formData.get('social_kick'),
-      social_x: formData.get('social_x'),
-      gender_category: genderCategory,
-      status: 'pending' // Admin must approve
-    }
-    
-    const { data: insertedTeam, error: teamError } = await supabase
-      .from('teams')
-      .insert(payload)
-      .select('id')
-      .single()
+      const firstAttempt = await supabase
+        .from('teams')
+        .insert(fullPayload)
+        .select('id')
 
-    if (!teamError && insertedTeam?.id) {
+      if (firstAttempt.error) {
+        console.warn('Primer intento de alta de equipo falló, probando sin columna games:', firstAttempt.error)
+        const noGamesPayload = { ...fullPayload }
+        delete noGamesPayload.games
+
+        const secondAttempt = await supabase
+          .from('teams')
+          .insert(noGamesPayload)
+          .select('id')
+
+        if (secondAttempt.error) {
+          console.warn('Segundo intento falló, probando con columnas esenciales:', secondAttempt.error)
+          const corePayload = {
+            manager_id: user?.id,
+            name: cleanTeamName,
+            tag: cleanTag,
+            logo_url: urlLogo,
+            jersey_url: urlJersey,
+            country: formData.get('item_meta[623]') || 'México',
+            status: 'pending'
+          }
+
+          const thirdAttempt = await supabase
+            .from('teams')
+            .insert(corePayload)
+            .select('id')
+
+          if (thirdAttempt.error) {
+            insertError = thirdAttempt.error
+          } else {
+            insertedId = thirdAttempt.data?.[0]?.id || null
+          }
+        } else {
+          insertedId = secondAttempt.data?.[0]?.id || null
+        }
+      } else {
+        insertedId = firstAttempt.data?.[0]?.id || null
+      }
+
+      if (insertError) {
+        console.error('Error insertando equipo:', insertError)
+        toast.error('Error al registrar equipo: ' + (insertError.message || 'Verifica la información e intenta de nuevo.'))
+        setFormStatus('idle')
+        return
+      }
+
+      // Registrar validación para panel administrativo
       try {
         await supabase.from('validations').insert({
           type: 'equipo',
@@ -429,39 +481,47 @@ export function AltaEquipoForm() {
           submitted_by: user?.id,
           status: 'pending',
           details: {
-            ...payload,
-            tipoEquipo: (formData.get('item_meta[782]') as string) || 'Varonil / Mixto',
-            'item_meta[782]': (formData.get('item_meta[782]') as string) || 'Varonil / Mixto',
-            id: insertedTeam.id,
-            team_id: insertedTeam.id
+            ...fullPayload,
+            tipoEquipo: tipoEquipoVal,
+            'item_meta[782]': tipoEquipoVal,
+            id: insertedId,
+            team_id: insertedId,
+            manager_name: `${managerFirstName.trim()} ${managerLastName.trim()}`.trim().toUpperCase(),
+            manager_nickname: managerNickname.trim().toUpperCase(),
+            manager_discord: formData.get('item_meta[627]')
           }
         })
       } catch (valErr) {
-        console.warn('Error al registrar validación de equipo:', valErr)
+        console.warn('Advertencia al registrar validación de equipo (no bloqueante):', valErr)
       }
-    }
 
-    const fullName = `${managerFirstName.trim()} ${managerLastName.trim()}`.trim().toUpperCase()
-    const cleanNick = managerNickname.trim().toUpperCase()
+      // Actualizar perfil del manager si proporcionó datos (sin bloquear si falla)
+      if (user?.id) {
+        try {
+          const fullName = `${managerFirstName.trim()} ${managerLastName.trim()}`.trim().toUpperCase()
+          const cleanNick = managerNickname.trim().toUpperCase()
+          const profileUpdates: Record<string, any> = {}
+          if (formData.get('item_meta[627]')) profileUpdates.discord_handle = formData.get('item_meta[627]')
+          if (fullName) profileUpdates.name = fullName
+          if (cleanNick) profileUpdates.nickname = cleanNick
 
-    // Also update the manager's profile with their Discord and WhatsApp if they provided it
-    if (user?.id) {
-      await supabase.from('profiles').update({
-        discord_handle: formData.get('item_meta[627]'),
-        name: fullName || ((formData.get('item_meta[625][first]') || '') + ' ' + (formData.get('item_meta[625][last]') || '')).trim().toUpperCase(),
-        nickname: cleanNick || (formData.get('item_meta[626]') as string || '').trim().toUpperCase()
-      }).eq('id', user.id)
-    }
+          if (Object.keys(profileUpdates).length > 0) {
+            await supabase.from('profiles').update(profileUpdates).eq('id', user.id)
+          }
+        } catch (profErr) {
+          console.warn('Advertencia actualizando perfil del manager:', profErr)
+        }
+      }
 
-    if (!teamError) {
+      toast.success('¡Registro de equipo enviado exitosamente!')
       setFormStatus('success')
-      // Desplazar al inicio para que el usuario vea la pantalla de éxito
       if (typeof window !== 'undefined') {
         window.scrollTo({ top: 0, behavior: 'smooth' })
       }
-    } else {
+    } catch (err: any) {
+      console.error('Error inesperado enviando formulario de equipo:', err)
+      toast.error('Error inesperado al enviar: ' + (err?.message || 'Por favor intenta de nuevo.'))
       setFormStatus('idle')
-      alert('Error al enviar el registro del equipo. Por favor intenta de nuevo.')
     }
   }
   
