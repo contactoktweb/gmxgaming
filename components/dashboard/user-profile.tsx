@@ -22,7 +22,13 @@ import {
   Eye,
   Gamepad2,
   Globe,
-  Share2
+  Share2,
+  KeyRound,
+  Lock,
+  EyeOff,
+  Mail,
+  Check,
+  Loader2
 } from 'lucide-react'
 import { cn, formatRoleTitle, formatRolesList, formatNickname, formatPersonName, extractCountry } from '@/lib/utils'
 import { GmxButton } from '@/components/gmx-button'
@@ -575,6 +581,107 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
     }
   }
 
+  // Password Management State
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false)
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
+  const [isSendingResetEmail, setIsSendingResetEmail] = useState(false)
+  const [passwordError, setPasswordError] = useState('')
+  const [passwordSuccess, setPasswordSuccess] = useState('')
+  const [passwordMode, setPasswordMode] = useState<'change' | 'email'>('change')
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setPasswordError('')
+    setPasswordSuccess('')
+
+    if (!user?.email) {
+      setPasswordError('No se encontró una sesión activa con correo electrónico.')
+      return
+    }
+
+    if (!currentPassword) {
+      setPasswordError('Debes ingresar tu contraseña actual.')
+      return
+    }
+    if (newPassword.length < 6) {
+      setPasswordError('La nueva contraseña debe tener al menos 6 caracteres.')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Las nuevas contraseñas no coinciden.')
+      return
+    }
+
+    setIsChangingPassword(true)
+    try {
+      // 1. Validar la contraseña actual intentando autenticar
+      const { error: signInErr } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword
+      })
+
+      if (signInErr) {
+        throw new Error('La contraseña actual ingresada es incorrecta.')
+      }
+
+      // 2. Actualizar a la nueva contraseña en Supabase Auth
+      const { error: updateErr } = await supabase.auth.updateUser({
+        password: newPassword
+      })
+
+      if (updateErr) throw updateErr
+
+      setPasswordSuccess('¡Tu contraseña ha sido actualizada exitosamente!')
+      toast.success('Contraseña actualizada correctamente.')
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      setTimeout(() => {
+        setShowPasswordModal(false)
+        setPasswordSuccess('')
+      }, 2500)
+    } catch (err: any) {
+      console.error('Error al cambiar contraseña:', err)
+      setPasswordError(err?.message || 'Error al actualizar la contraseña.')
+    } finally {
+      setIsChangingPassword(false)
+    }
+  }
+
+  const handleSendRecoveryEmail = async () => {
+    if (!user?.email) {
+      toast.error('No se encontró correo asociado a tu cuenta.')
+      return
+    }
+
+    setIsSendingResetEmail(true)
+    setPasswordError('')
+    setPasswordSuccess('')
+    try {
+      const siteUrl = typeof window !== 'undefined' ? window.location.origin : ''
+      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+        redirectTo: `${siteUrl}/auth/confirm?next=/login/olvide-password`
+      })
+
+      if (error) throw error
+
+      toast.success(`Enlace de restablecimiento enviado a ${user.email}`)
+      setPasswordSuccess(`Hemos enviado un enlace de recuperación a ${user.email}. Revisa tu bandeja de entrada o spam.`)
+    } catch (err: any) {
+      console.error('Error al enviar enlace de recuperación:', err)
+      toast.error('Error al enviar enlace: ' + (err?.message || ''))
+      setPasswordError('No se pudo enviar el correo de recuperación. Intenta más tarde.')
+    } finally {
+      setIsSendingResetEmail(false)
+    }
+  }
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
@@ -651,8 +758,20 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
             </div>
           </div>
 
-          {/* Action Button */}
-          <div className="shrink-0 w-full sm:w-auto">
+          {/* Action Buttons */}
+          <div className="shrink-0 w-full sm:w-auto flex flex-col sm:flex-row items-center gap-3">
+            <button 
+              onClick={() => {
+                setShowPasswordModal(true)
+                setPasswordMode('change')
+                setPasswordError('')
+                setPasswordSuccess('')
+              }}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-md px-4 py-3 text-xs sm:text-sm font-600 uppercase tracking-wider transition-all clip-corner bg-white/5 hover:bg-white/10 border border-white/10 text-muted-foreground hover:text-white cursor-pointer"
+            >
+              <KeyRound className="h-4 w-4 text-primary" />
+              Contraseña
+            </button>
             <button 
               onClick={openEdit}
               className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-md px-5 py-3 text-sm font-600 uppercase tracking-wider transition-all clip-corner bg-white/5 hover:bg-primary border border-white/10 text-white hover:border-primary cursor-pointer"
@@ -995,6 +1114,55 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
             </div>
           </div>
 
+        </div>
+      </div>
+
+      {/* Seguridad de la Cuenta */}
+      <div className="rounded-xl border border-border bg-surface p-6 sm:p-8 shadow-xl">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+          <div className="flex items-start gap-4">
+            <div className="p-3 rounded-xl bg-primary/10 border border-primary/20 text-primary shrink-0 mt-1 sm:mt-0">
+              <Lock className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white">
+                Seguridad y Contraseña
+              </h3>
+              <p className="text-sm text-muted-foreground mt-1 max-w-xl leading-relaxed">
+                Protege tu cuenta de GMX Gaming. Puedes cambiar tu contraseña ingresando la clave actual y la nueva, o solicitar un enlace de restablecimiento a tu correo.
+              </p>
+              <p className="text-xs text-primary mt-2 font-mono flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5" />
+                <span>Correo registrado: <strong>{user?.email || 'No disponible'}</strong></span>
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto shrink-0">
+            <button
+              onClick={() => {
+                setShowPasswordModal(true)
+                setPasswordMode('change')
+                setPasswordError('')
+                setPasswordSuccess('')
+              }}
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-lg bg-primary hover:bg-primary/90 px-4 py-2.5 text-xs font-700 uppercase tracking-wider text-white transition-colors cursor-pointer"
+            >
+              <KeyRound className="w-4 h-4" />
+              Cambiar Contraseña
+            </button>
+            <button
+              onClick={() => {
+                setShowPasswordModal(true)
+                setPasswordMode('email')
+                setPasswordError('')
+                setPasswordSuccess('')
+              }}
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-lg border border-border bg-white/5 hover:bg-white/10 px-4 py-2.5 text-xs font-700 uppercase tracking-wider text-muted-foreground hover:text-white transition-colors cursor-pointer"
+            >
+              <Mail className="w-4 h-4" />
+              Recuperar por Correo
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1643,6 +1811,236 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                   </span>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Password Management Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-[1050] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowPasswordModal(false)} />
+          <div className="relative flex flex-col w-full max-w-md overflow-hidden rounded-xl border border-border bg-surface shadow-2xl animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="flex shrink-0 items-center justify-between border-b border-border p-6 bg-surface z-10">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-primary/10 border border-primary/20 text-primary">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-display text-lg font-700 uppercase tracking-tight text-white">
+                    Seguridad y Contraseña
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Gestiona la clave de acceso a tu cuenta
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowPasswordModal(false)}
+                className="text-muted-foreground hover:text-white transition-colors p-2 rounded-full hover:bg-white/5 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Tabs */}
+            <div className="flex border-b border-border bg-background/50 p-1.5 gap-1 text-xs font-600">
+              <button
+                type="button"
+                onClick={() => {
+                  setPasswordMode('change')
+                  setPasswordError('')
+                  setPasswordSuccess('')
+                }}
+                className={cn(
+                  "flex-1 py-2 rounded-lg transition-all text-center cursor-pointer",
+                  passwordMode === 'change'
+                    ? "bg-primary text-white font-700 shadow-sm"
+                    : "text-muted-foreground hover:text-white"
+                )}
+              >
+                Cambiar con Clave Actual
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPasswordMode('email')
+                  setPasswordError('')
+                  setPasswordSuccess('')
+                }}
+                className={cn(
+                  "flex-1 py-2 rounded-lg transition-all text-center cursor-pointer",
+                  passwordMode === 'email'
+                    ? "bg-primary text-white font-700 shadow-sm"
+                    : "text-muted-foreground hover:text-white"
+                )}
+              >
+                Recuperar por Correo
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4">
+              {passwordError && (
+                <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3.5 flex items-start gap-2.5 text-left">
+                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                  <p className="text-xs text-red-400 font-500 leading-relaxed">
+                    {passwordError}
+                  </p>
+                </div>
+              )}
+
+              {passwordSuccess && (
+                <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3.5 flex items-start gap-2.5 text-left">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <p className="text-xs text-emerald-300 font-500 leading-relaxed">
+                    {passwordSuccess}
+                  </p>
+                </div>
+              )}
+
+              {passwordMode === 'change' ? (
+                <form onSubmit={handleChangePassword} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-600 uppercase tracking-wider text-muted-foreground block">
+                      Contraseña Actual (Antigua) <span className="text-primary">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showCurrentPassword ? 'text' : 'password'}
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        required
+                        placeholder="Ingresa tu clave actual"
+                        className="w-full rounded-lg border border-border bg-background py-2.5 pl-3 pr-10 text-sm text-white placeholder:text-muted-foreground/60 transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
+                      >
+                        {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-600 uppercase tracking-wider text-muted-foreground block">
+                      Nueva Contraseña <span className="text-primary">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showNewPassword ? 'text' : 'password'}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        required
+                        placeholder="Mínimo 6 caracteres"
+                        className="w-full rounded-lg border border-border bg-background py-2.5 pl-3 pr-10 text-sm text-white placeholder:text-muted-foreground/60 transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
+                      >
+                        {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-600 uppercase tracking-wider text-muted-foreground block">
+                      Confirmar Nueva Contraseña <span className="text-primary">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showConfirmNewPassword ? 'text' : 'password'}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        required
+                        placeholder="Repite la nueva contraseña"
+                        className="w-full rounded-lg border border-border bg-background py-2.5 pl-3 pr-10 text-sm text-white placeholder:text-muted-foreground/60 transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmNewPassword(!showConfirmNewPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
+                      >
+                        {showConfirmNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex items-center justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowPasswordModal(false)}
+                      className="px-4 py-2 text-xs font-600 uppercase tracking-wider rounded-lg border border-border text-muted-foreground hover:text-white transition-colors cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isChangingPassword}
+                      className="px-5 py-2.5 text-xs font-700 uppercase tracking-wider rounded-lg bg-primary hover:bg-primary/90 text-white transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-60"
+                    >
+                      {isChangingPassword ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Guardando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-4 h-4" />
+                          <span>Guardar Contraseña</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Si olvidaste tu contraseña o deseas restablecerla de forma segura a través de tu email, te enviaremos un enlace a:
+                  </p>
+
+                  <div className="p-3.5 rounded-lg bg-background border border-border text-center">
+                    <span className="font-mono text-xs text-white font-semibold">{user?.email || 'Sin correo disponible'}</span>
+                  </div>
+
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Al hacer clic en el botón, recibirás un correo oficial de GMX Gaming con las instrucciones de acceso para definir una nueva contraseña.
+                  </p>
+
+                  <div className="pt-2 flex items-center justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowPasswordModal(false)}
+                      className="px-4 py-2 text-xs font-600 uppercase tracking-wider rounded-lg border border-border text-muted-foreground hover:text-white transition-colors cursor-pointer"
+                    >
+                      Cerrar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSendRecoveryEmail}
+                      disabled={isSendingResetEmail || !user?.email}
+                      className="px-5 py-2.5 text-xs font-700 uppercase tracking-wider rounded-lg bg-primary hover:bg-primary/90 text-white transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-60"
+                    >
+                      {isSendingResetEmail ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Enviando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Mail className="w-4 h-4" />
+                          <span>Enviar Enlace por Correo</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
