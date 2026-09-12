@@ -272,12 +272,13 @@ export function AdminTeams() {
   const openTeamDetails = (team: Team) => {
     const raw = team.rawDetails || {}
 
-    // Resolver categoría de género desde los contratos activos del equipo
+    // Resolver categoría de género: primero desde teams.gender_category, luego desde contratos
+    const rawGender = raw.gender_category
     const activeContracts = raw.contracts?.filter((c: any) =>
       c.status === 'active' || c.status === 'activo' || c.status === 'pending_player_release' || c.status === 'pending_manager_release'
     ) || []
     const contractCategory = activeContracts[0]?.team_gender_category
-    const resolvedGender: 'mixed' | 'female' = contractCategory === 'female' ? 'female' : 'mixed'
+    const resolvedGender: 'mixed' | 'female' = (rawGender === 'female' || contractCategory === 'female') ? 'female' : 'mixed'
 
     setSelectedTeam(team)
     setEditingTeam({
@@ -388,6 +389,7 @@ export function AdminTeams() {
         logo_url: editingTeam.logo_url.trim() || null,
         jersey_url: editingTeam.jersey_url.trim() || null,
         games: editingTeam.games.length > 0 ? editingTeam.games : ['Mobile Legends'],
+        gender_category: editingTeam.gender_category,
         social_x: editingTeam.social_x.trim() || null,
         social_ig: editingTeam.social_ig.trim() || null,
         social_tiktok: editingTeam.social_tiktok.trim() || null,
@@ -439,7 +441,8 @@ export function AdminTeams() {
         managerDiscord: managerDiscord,
         rawDetails: {
           ...selectedTeam.rawDetails,
-          ...updates
+          ...updates,
+          gender_category: editingTeam.gender_category
         }
       }
 
