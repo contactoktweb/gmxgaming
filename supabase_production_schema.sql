@@ -235,12 +235,36 @@ CREATE TABLE IF NOT EXISTS public.casters (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL,
   nickname text,
+  photo_url text,
   avatar_url text,
+  social_ig text,
+  social_x text,
+  social_twitch text,
   instagram_url text,
   twitter_url text,
   twitch_url text,
   created_at timestamptz DEFAULT now()
 );
+
+-- Asegurar columnas para Casters, Torneos y Contratos
+ALTER TABLE public.casters ADD COLUMN IF NOT EXISTS photo_url text;
+ALTER TABLE public.casters ADD COLUMN IF NOT EXISTS avatar_url text;
+ALTER TABLE public.casters ADD COLUMN IF NOT EXISTS social_ig text;
+ALTER TABLE public.casters ADD COLUMN IF NOT EXISTS social_x text;
+ALTER TABLE public.casters ADD COLUMN IF NOT EXISTS social_twitch text;
+ALTER TABLE public.casters ADD COLUMN IF NOT EXISTS instagram_url text;
+ALTER TABLE public.casters ADD COLUMN IF NOT EXISTS twitter_url text;
+ALTER TABLE public.casters ADD COLUMN IF NOT EXISTS twitch_url text;
+
+ALTER TABLE public.tournaments ADD COLUMN IF NOT EXISTS description text;
+ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS player_name text;
+ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS player_email text;
+ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS team text;
+ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS role text;
+ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS document_url text;
+
+ALTER TABLE public.media ADD COLUMN IF NOT EXISTS url text;
+ALTER TABLE public.media_links ADD COLUMN IF NOT EXISTS youtube_url text;
 
 -- 12. TABLAS DE CONFIGURACIONES DINÁMICAS (app_settings y admin_settings)
 CREATE TABLE IF NOT EXISTS public.app_settings (
@@ -404,3 +428,9 @@ CREATE POLICY "Public Update Teams Bucket" ON storage.objects FOR UPDATE USING (
 
 DROP POLICY IF EXISTS "Public Delete Teams Bucket" ON storage.objects;
 CREATE POLICY "Public Delete Teams Bucket" ON storage.objects FOR DELETE USING (bucket_id IN ('teams', 'avatars', 'documents'));
+
+-- ==============================================================================
+-- RECARGA DE CACHÉ DE ESQUEMA EN SUPABASE (PostgREST)
+-- ==============================================================================
+NOTIFY pgrst, 'reload schema';
+NOTIFY pgrst, 'reload config';
