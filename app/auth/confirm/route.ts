@@ -245,6 +245,10 @@ export async function handleAuthCallback(request: NextRequest) {
             await syncProfile(data.user);
             window.location.href = "${baseUrl}${next}";
             return;
+          } else if (error) {
+            console.error('Exchange error:', error);
+            window.location.href = "${baseUrl}/login?error=" + encodeURIComponent(error.message || 'Error de autenticación');
+            return;
           }
         }
 
@@ -264,14 +268,14 @@ export async function handleAuthCallback(request: NextRequest) {
           }
         });
 
-        // 4. Redirigir después de breve tiempo si no se detecta nada
+        // 4. Redirigir si no se detecta la sesión tras unos segundos
         setTimeout(() => {
-          window.location.href = "${baseUrl}${next}";
-        }, 2000);
+          window.location.href = "${baseUrl}/login?error=" + encodeURIComponent('No se pudo verificar la sesión de Google');
+        }, 2500);
 
       } catch (err) {
         console.error('Callback error:', err);
-        window.location.href = "${baseUrl}${next}";
+        window.location.href = "${baseUrl}/login?error=" + encodeURIComponent(err?.message || 'Error inesperado al conectar con Google');
       }
     })();
   </script>
