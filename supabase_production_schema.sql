@@ -418,7 +418,7 @@ ON CONFLICT (id) DO NOTHING;
 
 -- Políticas de Storage para lectura y subida pública / autenticada
 DROP POLICY IF EXISTS "Public Read Teams Bucket" ON storage.objects;
-CREATE POLICY "Public Read Teams Bucket" ON storage.objects FOR SELECT USING (bucket_id IN ('teams', 'avatars'));
+CREATE POLICY "Public Read Teams Bucket" ON storage.objects FOR SELECT USING (bucket_id IN ('teams', 'avatars', 'documents'));
 
 DROP POLICY IF EXISTS "Public Insert Teams Bucket" ON storage.objects;
 CREATE POLICY "Public Insert Teams Bucket" ON storage.objects FOR INSERT WITH CHECK (bucket_id IN ('teams', 'avatars', 'documents'));
