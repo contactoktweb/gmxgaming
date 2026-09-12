@@ -22,33 +22,76 @@ export function Tournaments() {
 
   useEffect(() => {
     async function fetchTournaments() {
-      const { data } = await supabase
-        .from('tournaments')
-        .select('*, templates:tournament_templates(name, type, logo_url)')
-        .order('start_date', { ascending: false })
-        .limit(3)
+      try {
+        let tournamentsData: any[] = []
 
-      if (data && data.length > 0) {
-        const formatted = data.map((t: any) => {
-          const dateStr = t.start_date
-            ? new Date(t.start_date).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
-            : 'Próximamente'
+        // 1. Intentar con join a tournament_templates
+        const { data, error } = await supabase
+          .from('tournaments')
+          .select('*, templates:tournament_templates(name, type, logo_url)')
+          .order('start_date', { ascending: false })
+          .limit(3)
 
-          const imgUrl = t.templates?.logo_url || t.logo_url || t.banner_url || t.image_url || '/images/tournament-1.png'
-
-          return {
-            id: t.id,
-            slug: getTournamentSlug(t),
-            category: t.templates?.type || t.game || 'Torneo Oficial',
-            title: t.name,
-            date: dateStr.toUpperCase(),
-            desc: t.description || `Torneo oficial de ${t.game || 'Mobile Legends'}. Los mejores equipos compiten por el título y la gloria.`,
-            img: imgUrl,
-            href: `/torneos/${getTournamentSlug(t)}`
+        if (!error && data && data.length > 0) {
+          tournamentsData = data
+        } else {
+          // Fallback en caso de que la relación en PostgREST no esté en caché
+          const { data: rawData } = await supabase
+            .from('tournaments')
+            .select('*')
+            .order('start_date', { ascending: false })
+            .limit(3)
+          if (rawData && rawData.length > 0) {
+            tournamentsData = rawData
           }
-        })
-        setTournamentsList(formatted)
-      } else {
+        }
+
+        if (tournamentsData.length > 0) {
+          // Si alguno tiene template_id pero no trajo templates, buscamos en tournament_templates
+          const missingTemplateIds = tournamentsData
+            .filter(t => !t.templates && t.template_id)
+            .map(t => t.template_id)
+
+          let templateMap = new Map<string, any>()
+          if (missingTemplateIds.length > 0) {
+            const { data: tmpls } = await supabase
+              .from('tournament_templates')
+              .select('id, name, type, logo_url')
+              .in('id', missingTemplateIds)
+
+            if (tmpls) {
+              tmpls.forEach(tm => templateMap.set(tm.id, tm))
+            }
+          }
+
+          const formatted = tournamentsData.map((t: any) => {
+            const dateStr = t.start_date
+              ? new Date(t.start_date).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
+              : 'Próximamente'
+
+            const tmplObj = Array.isArray(t.templates) ? t.templates[0] : t.templates
+            const fallbackTmpl = templateMap.get(t.template_id)
+            const matchedTmpl = tmplObj || fallbackTmpl
+
+            const imgUrl = t.logo_url || t.banner_url || t.image_url || matchedTmpl?.logo_url || '/images/tournament-1.png'
+
+            return {
+              id: t.id,
+              slug: getTournamentSlug(t),
+              category: matchedTmpl?.type || t.game || 'Torneo Oficial',
+              title: t.name,
+              date: dateStr.toUpperCase(),
+              desc: t.description || `Torneo oficial de ${t.game || 'Mobile Legends'}. Los mejores equipos compiten por el título y la gloria.`,
+              img: imgUrl,
+              href: `/torneos/${getTournamentSlug(t)}`
+            }
+          })
+          setTournamentsList(formatted)
+        } else {
+          setTournamentsList(DEFAULT_TOURNAMENTS.map(t => ({ ...t, href: '/torneos' })))
+        }
+      } catch (err) {
+        console.error('Error fetching tournaments for homepage:', err)
         setTournamentsList(DEFAULT_TOURNAMENTS.map(t => ({ ...t, href: '/torneos' })))
       }
     }

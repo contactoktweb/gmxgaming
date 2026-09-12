@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Trophy, Calendar, Users, Edit, Plus, Trash2, CheckCircle2, Eye, X, AlertCircle, Gamepad2, Link, Save, Swords, ChevronDown, Loader2 } from 'lucide-react'
+import { Trophy, Calendar, Users, Edit, Plus, Trash2, CheckCircle2, Eye, X, AlertCircle, Gamepad2, Link, Save, Swords, ChevronDown, Loader2, Camera } from 'lucide-react'
 import { GmxButton } from '@/components/gmx-button'
 import { createClient } from '@/utils/supabase/client'
 import { cn } from '@/lib/utils'
@@ -18,7 +18,10 @@ interface Tournament {
   end_date: string
   prizepool_total: string
   prizepool_distribution: any
-  template_id: string
+  template_id?: string
+  logo_url?: string
+  banner_url?: string
+  image_url?: string
   templates?: { name: string, type: string, logo_url: string }
 }
 
@@ -32,6 +35,7 @@ interface TournamentEditState {
   end_date: string
   prizepool_total: string
   prizepool_distribution: string[]
+  logo_url?: string
 }
 
 interface Team {
@@ -76,25 +80,92 @@ export function AdminTournaments() {
   const [editMatch, setEditMatch] = useState<{ id: string, s1: number, s2: number, t1_name?: string, t2_name?: string } | null>(null)
   const [matchToDelete, setMatchToDelete] = useState<any | null>(null)
 
-  // Tournament form dates
+  // Tournament form dates & template preview
   const todayStr = new Date().toISOString().split('T')[0]
   const [formStartDate, setFormStartDate] = useState('')
   const [formEndDate, setFormEndDate] = useState('')
+  const [createTemplateId, setCreateTemplateId] = useState('')
+  const [createCustomImage, setCreateCustomImage] = useState<File | null>(null)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
 
   const supabase = createClient()
 
   const fetchBaseData = async () => {
     setLoading(true)
-    const [tRes, tmplRes, teamsRes] = await Promise.all([
-      supabase.from('tournaments').select('*, templates:tournament_templates(name, type, logo_url)').order('created_at', { ascending: false }),
-      supabase.from('tournament_templates').select('*'),
-      supabase.from('teams').select('id, name, logo_url').eq('status', 'active')
-    ])
-    
-    if (tRes.data) setTournaments(tRes.data as any)
-    if (tmplRes.data) setTemplates(tmplRes.data)
-    if (teamsRes.data) setAvailableTeams(teamsRes.data)
-    setLoading(false)
+    try {
+      const [tRes, tmplRes, teamsRes] = await Promise.all([
+        supabase.from('tournaments').select('*, templates:tournament_templates(name, type, logo_url)').order('created_at', { ascending: false }),
+        supabase.from('tournament_templates').select('*'),
+        supabase.from('teams').select('id, name, logo_url').eq('status', 'active')
+      ])
+      
+      let tourneys: any[] = tRes.data || []
+      if (tRes.error) {
+        console.warn('Fallback tournaments fetch without template join:', tRes.error)
+        const { data: fallbackTourneys } = await supabase.from('tournaments').select('*').order('created_at', { ascending: false })
+        if (fallbackTourneys) tourneys = fallbackTourneys
+      }
+
+      const templatesList = tmplRes.data || []
+      setTemplates(templatesList)
+
+      const tmplMap = new Map(templatesList.map(tm => [tm.id, tm]))
+      tourneys = tourneys.map(t => {
+        const tmplObj = Array.isArray(t.templates) ? t.templates[0] : t.templates
+        const matched = tmplObj || tmplMap.get(t.template_id)
+        return {
+          ...t,
+          templates: matched,
+          logo_url: t.logo_url || matched?.logo_url || null
+        }
+      })
+
+      setTournaments(tourneys as any)
+      if (teamsRes.data) setAvailableTeams(teamsRes.data)
+    } catch (err) {
+      console.error('Error fetching base data:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleUploadTourneyLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !selectedTournament) return
+    setUploadingLogo(true)
+    try {
+      const fileExt = file.name.split('.').pop()
+      const fileName = `tourney_${Date.now()}.${fileExt}`
+      const { data: uploadData, error: uploadErr } = await supabase.storage.from('teams').upload(fileName, file)
+      if (uploadErr) throw uploadErr
+
+      const { data: urlData } = supabase.storage.from('teams').getPublicUrl(uploadData.path)
+      const newLogoUrl = urlData.publicUrl
+
+      const { error: updateErr } = await supabase
+        .from('tournaments')
+        .update({ logo_url: newLogoUrl, banner_url: newLogoUrl, image_url: newLogoUrl })
+        .eq('id', selectedTournament.id)
+
+      if (updateErr) throw updateErr
+
+      const updated = {
+        ...selectedTournament,
+        logo_url: newLogoUrl,
+        banner_url: newLogoUrl,
+        image_url: newLogoUrl
+      }
+      setSelectedTournament(updated)
+      setTournaments(prev => prev.map(t => t.id === selectedTournament.id ? updated : t))
+      if (editInfo) {
+        setEditInfo({ ...editInfo, logo_url: newLogoUrl })
+      }
+      toast.success('Imagen del torneo actualizada correctamente')
+    } catch (err: any) {
+      toast.error('Error al subir imagen: ' + (err.message || 'Desconocido'))
+    } finally {
+      setUploadingLogo(false)
+    }
   }
 
   useEffect(() => {
@@ -224,16 +295,37 @@ export function AdminTournaments() {
       return
     }
 
-    const templateId = formData.get('template_id') as string
+    const templateId = (formData.get('template_id') as string) || createTemplateId
     const tmpl = templates.find(t => t.id === templateId)
     // Si no hay plantilla, usar el juego seleccionado directamente en el form
     const gameSelected = (formData.get('game') as string) || (tmpl ? tmpl.game : 'Mobile Legends')
 
+    let logoToUse = tmpl?.logo_url || null
+    if (createCustomImage) {
+      try {
+        const fileExt = createCustomImage.name.split('.').pop()
+        const fileName = `tourney_${Date.now()}.${fileExt}`
+        const { data: uploadData, error: uploadErr } = await supabase.storage.from('teams').upload(fileName, createCustomImage)
+        if (uploadErr) {
+          console.error('Error al subir imagen personalizada de torneo:', uploadErr)
+          toast.error('Error al subir imagen: ' + uploadErr.message)
+        } else if (uploadData) {
+          const { data: urlData } = supabase.storage.from('teams').getPublicUrl(uploadData.path)
+          logoToUse = urlData.publicUrl
+        }
+      } catch (uploadException: any) {
+        console.error('Error en upload de torneo:', uploadException)
+      }
+    }
+
     const newTournament = {
-      name: formData.get('name') as string,
+      name: (formData.get('name') as string)?.trim(),
       game: gameSelected,
       description: (formData.get('description') as string)?.trim() || null,
       template_id: templateId || null,
+      logo_url: logoToUse,
+      banner_url: logoToUse,
+      image_url: logoToUse,
       start_date: formData.get('start_date') as string,
       end_date: formData.get('end_date') as string,
       prizepool_total: formData.get('prizepool_total') as string,
@@ -251,7 +343,9 @@ export function AdminTournaments() {
         setDistPlaces([''])
         setFormStartDate('')
         setFormEndDate('')
-      }, 2000)
+        setCreateTemplateId('')
+        setCreateCustomImage(null)
+      }, 1500)
     } else {
       alert('Error al crear el torneo: ' + error.message)
     }
@@ -536,7 +630,12 @@ export function AdminTournaments() {
               <div className="space-y-2">
                 <label className="text-sm font-500 text-white">Plantilla Base <span className="text-xs text-muted-foreground">(Opcional)</span></label>
                 <div className="relative">
-                  <select name="template_id" className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-3 pr-10 text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer">
+                  <select 
+                    name="template_id" 
+                    value={createTemplateId}
+                    onChange={e => setCreateTemplateId(e.target.value)}
+                    className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-3 pr-10 text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors cursor-pointer"
+                  >
                     <option value="">Sin plantilla</option>
                     {templates.map(t => (
                       <option key={t.id} value={t.id}>{t.name} ({t.game})</option>
@@ -544,7 +643,38 @@ export function AdminTournaments() {
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 </div>
+                {(() => {
+                  const tmpl = templates.find(t => t.id === createTemplateId)
+                  if (!tmpl) return null
+                  return (
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-surface border border-border mt-2">
+                      <img 
+                        src={tmpl.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
+                        alt={tmpl.name} 
+                        className="w-12 h-12 rounded-lg object-cover border border-border shrink-0 bg-background" 
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-700 text-white truncate">{tmpl.name}</p>
+                        <p className="text-[11px] text-primary font-500">{tmpl.type || tmpl.game}</p>
+                        <p className="text-[10px] text-emerald-400 font-500 mt-0.5 flex items-center gap-1">
+                          ✓ Imagen de plantilla vinculada para portada
+                        </p>
+                      </div>
+                    </div>
+                  )
+                })()}
                 {templates.length === 0 && <p className="text-xs text-muted-foreground">No tienes plantillas creadas en Configuración. Puedes crear el torneo sin plantilla.</p>}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-500 text-white">Imagen / Portada Personalizada <span className="text-xs text-muted-foreground">(Opcional)</span></label>
+                <input 
+                  type="file" 
+                  accept="image/*"
+                  onChange={e => setCreateCustomImage(e.target.files?.[0] || null)}
+                  className="w-full text-xs text-muted-foreground file:mr-4 file:py-2.5 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-600 file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
+                />
+                <p className="text-[11px] text-muted-foreground">Si no seleccionas un archivo, se utilizará automáticamente la imagen de la plantilla.</p>
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-500 text-white">Fecha de Inicio</label>
@@ -674,11 +804,19 @@ export function AdminTournaments() {
             {tournaments.map(tournament => (
               <div key={tournament.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-lg border border-border bg-background p-4 sm:p-5 hover:border-primary/50 transition-colors">
                 <div className="flex items-center gap-4">
-                  <img 
-                    src={tournament.templates?.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
-                    alt={tournament.name}
-                    className="w-12 h-12 rounded-lg object-cover bg-surface border border-border"
-                  />
+                  {(() => {
+                    const tmplObj = Array.isArray(tournament.templates) ? tournament.templates[0] : tournament.templates
+                    const tmplFromState = templates.find(t => t.id === tournament.template_id)
+                    const displayImg = tournament.logo_url || tournament.banner_url || tournament.image_url || tmplObj?.logo_url || tmplFromState?.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
+
+                    return (
+                      <img 
+                        src={displayImg} 
+                        alt={tournament.name}
+                        className="w-12 h-12 rounded-lg object-cover bg-surface border border-border shrink-0"
+                      />
+                    )
+                  })()}
                   <div>
                     <h3 className="font-600 text-white">{tournament.name}</h3>
                     <div className="flex flex-wrap items-center gap-3 mt-1 text-xs text-muted-foreground">
@@ -742,11 +880,36 @@ export function AdminTournaments() {
             {/* Header Fijo */}
             <div className="flex shrink-0 items-center justify-between border-b border-border p-6 bg-surface z-10">
               <div className="flex items-center gap-4">
-                <img 
-                  src={selectedTournament.templates?.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
-                  alt="Logo"
-                  className="w-12 h-12 rounded-lg object-cover"
-                />
+                {(() => {
+                  const tmplObj = Array.isArray(selectedTournament.templates) ? selectedTournament.templates[0] : selectedTournament.templates
+                  const tmplFromState = templates.find(t => t.id === selectedTournament.template_id)
+                  const displayImg = editInfo?.logo_url || selectedTournament.logo_url || selectedTournament.banner_url || selectedTournament.image_url || tmplObj?.logo_url || tmplFromState?.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
+
+                  return (
+                    <div className="relative group/logo w-12 h-12 rounded-lg overflow-hidden border border-border bg-surface shrink-0">
+                      <img 
+                        src={displayImg} 
+                        alt="Logo"
+                        className="w-full h-full object-cover"
+                      />
+                      <label 
+                        htmlFor="upload-tourney-logo" 
+                        className="absolute inset-0 bg-black/70 opacity-0 group-hover/logo:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-opacity text-white"
+                        title="Cambiar imagen del torneo"
+                      >
+                        {uploadingLogo ? <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" /> : <Camera className="w-3.5 h-3.5" />}
+                        <input 
+                          id="upload-tourney-logo"
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          disabled={uploadingLogo}
+                          onChange={handleUploadTourneyLogo}
+                        />
+                      </label>
+                    </div>
+                  )
+                })()}
                 <div>
                   <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white">{editInfo?.name || selectedTournament.name}</h3>
                   <p className="text-sm text-primary">{editInfo?.game || selectedTournament.game}</p>

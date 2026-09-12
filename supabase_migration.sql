@@ -36,13 +36,44 @@ ALTER TABLE public.teams
   ADD COLUMN IF NOT EXISTS social_kick text,
   ADD COLUMN IF NOT EXISTS social_x text;
 
+-- 2.5. TOURNAMENT_TEMPLATES (Plantillas de Torneos)
+CREATE TABLE IF NOT EXISTS public.tournament_templates (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  game text DEFAULT 'Mobile Legends',
+  type text DEFAULT 'Relámpago',
+  logo_url text,
+  created_at timestamptz DEFAULT now()
+);
+
+ALTER TABLE public.tournament_templates ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public Access" ON public.tournament_templates;
+CREATE POLICY "Public Access" ON public.tournament_templates FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Admin All" ON public.tournament_templates;
+CREATE POLICY "Admin All" ON public.tournament_templates FOR ALL USING (true);
+
 -- 3. TOURNAMENTS (Add new columns)
 ALTER TABLE public.tournaments 
+  ADD COLUMN IF NOT EXISTS template_id uuid REFERENCES public.tournament_templates(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS game text DEFAULT 'Mobile Legends',
   ADD COLUMN IF NOT EXISTS type text,
   ADD COLUMN IF NOT EXISTS prizepool_total numeric,
   ADD COLUMN IF NOT EXISTS prizepool_distribution jsonb,
-  ADD COLUMN IF NOT EXISTS status text DEFAULT 'upcoming';
+  ADD COLUMN IF NOT EXISTS status text DEFAULT 'upcoming',
+  ADD COLUMN IF NOT EXISTS description text,
+  ADD COLUMN IF NOT EXISTS logo_url text,
+  ADD COLUMN IF NOT EXISTS banner_url text,
+  ADD COLUMN IF NOT EXISTS image_url text;
+
+-- Sincronizar imágenes en torneos ya existentes que tengan plantilla vinculada
+UPDATE public.tournaments t
+SET 
+  logo_url = tmpl.logo_url,
+  banner_url = tmpl.logo_url,
+  image_url = tmpl.logo_url
+FROM public.tournament_templates tmpl
+WHERE t.template_id = tmpl.id
+  AND (t.logo_url IS NULL OR t.logo_url = '');
 
 -- 4. MATCHES (Recreate completely)
 DROP TABLE IF EXISTS public.matches CASCADE;

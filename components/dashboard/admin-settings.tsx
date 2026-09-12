@@ -178,9 +178,12 @@ export function AdminSettings() {
     if (templateImage) {
       const fileExt = templateImage.name.split('.').pop()
       const fileName = `tmpl_${Date.now()}.${fileExt}`
-      const { data } = await supabase.storage.from('teams').upload(fileName, templateImage)
-      if (data) {
-        const { data: urlData } = supabase.storage.from('teams').getPublicUrl(data.path)
+      const { data: uploadData, error: uploadErr } = await supabase.storage.from('teams').upload(fileName, templateImage)
+      if (uploadErr) {
+        console.error('Error al subir imagen de plantilla:', uploadErr)
+        toast.error('Error al subir la imagen de la plantilla: ' + uploadErr.message)
+      } else if (uploadData) {
+        const { data: urlData } = supabase.storage.from('teams').getPublicUrl(uploadData.path)
         logoUrl = urlData.publicUrl
       }
     }
@@ -191,8 +194,12 @@ export function AdminSettings() {
       logo_url: logoUrl
     }).select().single()
     
-    if (data) {
+    if (error) {
+      console.error('Error al insertar plantilla:', error)
+      toast.error('Error al crear plantilla: ' + error.message)
+    } else if (data) {
       setTemplates([data, ...templates])
+      toast.success('Plantilla de torneo creada exitosamente con su imagen')
     }
     setNewTemplate({name: '', game: 'Mobile Legends', type: '', logo_url: ''})
     setSelectedTemplateTypes([])

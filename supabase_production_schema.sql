@@ -441,6 +441,16 @@ CREATE POLICY "Public Update Teams Bucket" ON storage.objects FOR UPDATE USING (
 DROP POLICY IF EXISTS "Public Delete Teams Bucket" ON storage.objects;
 CREATE POLICY "Public Delete Teams Bucket" ON storage.objects FOR DELETE USING (bucket_id IN ('teams', 'avatars', 'documents'));
 
+-- Sincronizar imágenes de torneos existentes desde sus plantillas
+UPDATE public.tournaments t
+SET 
+  logo_url = tmpl.logo_url,
+  banner_url = tmpl.logo_url,
+  image_url = tmpl.logo_url
+FROM public.tournament_templates tmpl
+WHERE t.template_id = tmpl.id
+  AND (t.logo_url IS NULL OR t.logo_url = '');
+
 -- ==============================================================================
 -- RECARGA DE CACHÉ DE ESQUEMA EN SUPABASE (PostgREST)
 -- ==============================================================================

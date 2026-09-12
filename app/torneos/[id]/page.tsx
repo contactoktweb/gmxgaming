@@ -61,6 +61,14 @@ export default function TournamentDetailsPage() {
       }
 
       if (tournamentData) {
+        if (tournamentData.template_id && !tournamentData.templates) {
+          const { data: tmpl } = await supabase
+            .from('tournament_templates')
+            .select('name, type, logo_url')
+            .eq('id', tournamentData.template_id)
+            .single()
+          if (tmpl) tournamentData.templates = tmpl
+        }
         setTournament(tournamentData)
         const [teamsRes, matchesRes] = await Promise.all([
           supabase.from('tournament_teams').select('teams(id, name, logo_url, tag)').eq('tournament_id', targetId),
@@ -173,11 +181,18 @@ export default function TournamentDetailsPage() {
         <div className="relative z-10 px-5 lg:px-10 max-w-[1200px] mx-auto">
           {/* Hero Header */}
           <Reveal direction="up" className="flex flex-col md:flex-row items-center md:items-start gap-8 mb-16 text-center md:text-left">
-            <img 
-              src={tournament.templates?.logo_url || tournament.logo_url || tournament.banner_url || tournament.image_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
-              alt={tournament.name}
-              className="w-40 h-40 object-cover rounded-2xl bg-surface border-2 border-border shadow-2xl"
-            />
+            {(() => {
+              const tmplObj = Array.isArray(tournament.templates) ? tournament.templates[0] : tournament.templates
+              const displayImg = tournament.logo_url || tournament.banner_url || tournament.image_url || tmplObj?.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
+
+              return (
+                <img 
+                  src={displayImg} 
+                  alt={tournament.name}
+                  className="w-40 h-40 object-cover rounded-2xl bg-surface border-2 border-border shadow-2xl shrink-0"
+                />
+              )
+            })()}
             <div className="flex-1">
               <div className="flex flex-wrap justify-center md:justify-start items-center gap-3 mb-4">
                 <span className={cn("px-3 py-1 text-xs font-600 uppercase tracking-widest rounded-full", 

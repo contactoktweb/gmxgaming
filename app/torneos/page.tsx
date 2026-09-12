@@ -21,13 +21,44 @@ export default function TorneosPage() {
   useEffect(() => {
     async function fetchTournaments() {
       const supabase = createClient()
-      const { data } = await supabase
-        .from('tournaments')
-        .select('*, templates:tournament_templates(name, type, logo_url)')
-        .order('start_date', { ascending: false })
-      
-      if (data) setTournaments(data)
-      setLoading(false)
+      try {
+        let list: any[] = []
+        const { data, error } = await supabase
+          .from('tournaments')
+          .select('*, templates:tournament_templates(name, type, logo_url)')
+          .order('start_date', { ascending: false })
+        
+        if (!error && data) {
+          list = data
+        } else {
+          const { data: rawData } = await supabase
+            .from('tournaments')
+            .select('*')
+            .order('start_date', { ascending: false })
+          if (rawData) list = rawData
+        }
+
+        const missingIds = list.filter(t => !t.templates && t.template_id).map(t => t.template_id)
+        if (missingIds.length > 0) {
+          const { data: tmpls } = await supabase
+            .from('tournament_templates')
+            .select('id, name, type, logo_url')
+            .in('id', missingIds)
+          if (tmpls) {
+            const map = new Map(tmpls.map(tm => [tm.id, tm]))
+            list = list.map(t => ({
+              ...t,
+              templates: t.templates || map.get(t.template_id)
+            }))
+          }
+        }
+
+        setTournaments(list)
+      } catch (err) {
+        console.error('Error fetching tournaments:', err)
+      } finally {
+        setLoading(false)
+      }
     }
     fetchTournaments()
   }, [])
@@ -36,12 +67,16 @@ export default function TorneosPage() {
   const ongoing = tournaments.filter(t => t.status === 'ongoing')
   const finished = tournaments.filter(t => t.status === 'finished')
 
-  const renderTournamentCard = (t: any) => (
+  const renderTournamentCard = (t: any) => {
+    const tmplObj = Array.isArray(t.templates) ? t.templates[0] : t.templates
+    const imgUrl = t.logo_url || t.banner_url || t.image_url || tmplObj?.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
+
+    return (
     <Link href={`/torneos/${getTournamentSlug(t)}`} key={t.id} className="group relative rounded-xl border border-border bg-surface p-6 sm:p-8 transition-colors hover:border-primary/50 block">
       <div className="flex flex-col sm:flex-row gap-6">
         <div className="shrink-0 flex justify-center sm:justify-start">
           <img 
-            src={t.templates?.logo_url || t.logo_url || t.banner_url || t.image_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
+            src={imgUrl} 
             alt={t.name} 
             className="w-24 h-24 sm:w-32 sm:h-32 object-cover rounded-xl bg-background border border-border transition-transform duration-500 group-hover:scale-105" 
           />
@@ -83,7 +118,8 @@ export default function TorneosPage() {
         </div>
       </div>
     </Link>
-  )
+    )
+  }
 
   return (
     <>
