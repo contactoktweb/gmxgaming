@@ -11,6 +11,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- 1. TABLA PROFILES (Usuarios, Administradores, Jugadores y Managers)
 CREATE TABLE IF NOT EXISTS public.profiles (
   id uuid PRIMARY KEY REFERENCES auth.users ON DELETE CASCADE,
+  email text,
   name text,
   nickname text UNIQUE,
   discord_handle text,
@@ -27,6 +28,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   is_player boolean DEFAULT false,
   player_status text DEFAULT 'none', -- 'none', 'pending', 'active', 'rejected', 'inactive', 'banned'
   is_featured boolean DEFAULT false,
+  edit_requested boolean DEFAULT false,
   passport_number text,
   passport_photo_url text,
   id_photo_url text,
@@ -44,13 +46,18 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   created_at timestamptz DEFAULT now()
 );
 
+-- Asegurar columnas si la tabla ya existía
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email text;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS edit_requested boolean DEFAULT false;
+
 -- 1.1 TRIGGER AUTOMÁTICO: CREACIÓN Y SINCRONIZACIÓN DE PERFIL AL REGISTRARSE (Google y Correo)
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
-  INSERT INTO public.profiles (id, name, avatar_url, role, is_player, player_status)
+  INSERT INTO public.profiles (id, email, name, avatar_url, role, is_player, player_status)
   VALUES (
     NEW.id,
+    NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1), 'Usuario'),
     COALESCE(NEW.raw_user_meta_data->>'avatar_url', NEW.raw_user_meta_data->>'picture', NULL),
     'user',
@@ -58,6 +65,7 @@ BEGIN
     'none'
   )
   ON CONFLICT (id) DO UPDATE SET
+    email = EXCLUDED.email,
     name = COALESCE(public.profiles.name, EXCLUDED.name),
     avatar_url = COALESCE(public.profiles.avatar_url, EXCLUDED.avatar_url);
   RETURN NEW;
