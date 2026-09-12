@@ -285,6 +285,10 @@ export function AltaEquipoForm() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    // Capturar form y FormData de forma síncrona antes de cualquier await
+    const form = e.currentTarget
+    const formData = new FormData(form)
+
     if (formStatus === 'loading') return
 
     const cleanTeamName = teamName.trim().toUpperCase()
@@ -358,9 +362,6 @@ export function AltaEquipoForm() {
           }
         }
       }
-
-      const form = e.currentTarget
-      const formData = new FormData(form)
 
       let urlLogo = 'https://placehold.co/400x400/png?text=LOGO+EQUIPO'
       let urlJersey = 'https://placehold.co/400x400/png?text=JERSEY'

@@ -255,6 +255,10 @@ export function AltaContratoForm() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    // Capturar form y FormData de forma síncrona antes de cualquier proceso asíncrono
+    const form = e.currentTarget
+    const formData = new FormData(form)
+
     if (selectedRoles.length === 0) {
       toast.error('Debes seleccionar al menos un rol en el equipo.')
       return
@@ -263,9 +267,6 @@ export function AltaContratoForm() {
     setFormStatus('loading')
     
     try {
-      const form = e.currentTarget
-      const formData = new FormData(form)
-
       const teamId = formData.get('item_meta[879]') as string
       const rawEndDate = formData.get('item_meta[882]') as string
 

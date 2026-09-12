@@ -147,6 +147,10 @@ function FormContent() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    // Capturar form y FormData de forma síncrona antes de cualquier await
+    const form = e.currentTarget
+    const formData = new FormData(form)
+
     if (formStatus === 'loading') return
 
     const cleanNick = nickname.trim().toUpperCase()
@@ -205,9 +209,6 @@ function FormContent() {
           return
         }
       }
-
-      const form = e.currentTarget
-      const formData = new FormData(form)
 
       // Validar formato de correo electrónico
       const emailValue = (formData.get('item_meta[676]') as string || '').trim()
