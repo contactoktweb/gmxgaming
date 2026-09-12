@@ -16,7 +16,7 @@ export async function handleAuthCallback(request: NextRequest) {
   const forwardedHost = request.headers.get('x-forwarded-host')
   const forwardedProto = request.headers.get('x-forwarded-proto') || 'https'
   const isLocalEnv = process.env.NODE_ENV === 'development'
-  const baseUrl = isLocalEnv ? origin : (forwardedHost ? `${forwardedProto}://${forwardedHost}` : origin)
+  const baseUrl = isLocalEnv ? origin : (forwardedHost ? `${forwardedProto}://${forwardedHost}` : (process.env.NEXT_PUBLIC_SITE_URL || origin))
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''

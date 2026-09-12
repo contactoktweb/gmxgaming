@@ -16,7 +16,10 @@ const body = Inter({
   variable: '--font-body',
 })
 
+import { getSiteUrl } from '@/lib/site-url'
+
 export const metadata: Metadata = {
+  metadataBase: new URL(getSiteUrl()),
   title: 'GMX GAMING — La organización #1 de eSports en MOBAs de habla hispana',
   description:
     'GMX Gaming: ligas, torneos y eventos de eSports competitivos. Conviértete en jugador profesional. Aquí comienza el camino.',
