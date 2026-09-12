@@ -132,7 +132,7 @@ export function AltaContratoForm() {
       // 3. Obtener equipos y sus divisiones registradas
       const { data: teamsData } = await supabase
         .from('teams')
-        .select('id, name, status, manager_id')
+        .select('id, name, status, manager_id, gender_category')
         .in('status', ['active', 'approved', 'pending'])
 
       const { data: teamValidations } = await supabase
@@ -153,7 +153,15 @@ export function AltaContratoForm() {
 
       const parsedTeams = (teamsData || [])
         .map(t => {
-          const category = teamCategoryMap.get(t.id) || (t.name.toLowerCase().includes('fem') ? 'Femenil' : 'Varonil / Mixto')
+          // Prioridad: 1) gender_category en tabla teams, 2) validaciones, 3) nombre del equipo
+          let category: 'Varonil / Mixto' | 'Femenil'
+          if (t.gender_category === 'female') {
+            category = 'Femenil'
+          } else if (t.gender_category === 'mixed') {
+            category = 'Varonil / Mixto'
+          } else {
+            category = teamCategoryMap.get(t.id) || (t.name.toLowerCase().includes('fem') ? 'Femenil' : 'Varonil / Mixto')
+          }
           return { ...t, category }
         })
         .sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }))
