@@ -12,6 +12,7 @@ interface Tournament {
   name: string
   game: string
   type?: string
+  description?: string
   status: 'upcoming' | 'ongoing' | 'finished'
   start_date: string
   end_date: string
@@ -25,6 +26,7 @@ interface TournamentEditState {
   name: string
   game: string
   type: string
+  description: string
   status: 'upcoming' | 'ongoing' | 'finished'
   start_date: string
   end_date: string
@@ -177,6 +179,7 @@ export function AdminTournaments() {
         name: selectedTournament.name || '',
         game: selectedTournament.game || 'Mobile Legends',
         status: selectedTournament.status || 'upcoming',
+        description: selectedTournament.description || '',
         start_date: selectedTournament.start_date ? selectedTournament.start_date.split('T')[0] : '',
         end_date: selectedTournament.end_date ? selectedTournament.end_date.split('T')[0] : '',
         prizepool_total: String(selectedTournament.prizepool_total ?? ''),
@@ -229,6 +232,7 @@ export function AdminTournaments() {
     const newTournament = {
       name: formData.get('name') as string,
       game: gameSelected,
+      description: (formData.get('description') as string)?.trim() || null,
       template_id: templateId || null,
       start_date: formData.get('start_date') as string,
       end_date: formData.get('end_date') as string,
@@ -449,6 +453,7 @@ export function AdminTournaments() {
         name: editInfo.name.trim(),
         game: editInfo.game,
         status: editInfo.status,
+        description: editInfo.description.trim() || null,
         start_date: editInfo.start_date ? new Date(editInfo.start_date + 'T00:00:00Z').toISOString() : null,
         end_date: editInfo.end_date ? new Date(editInfo.end_date + 'T23:59:59Z').toISOString() : null,
         prizepool_total: editInfo.prizepool_total.trim(),
@@ -468,6 +473,7 @@ export function AdminTournaments() {
         name: updates.name,
         game: updates.game,
         status: updates.status,
+        description: updates.description || undefined,
         start_date: updates.start_date || '',
         end_date: updates.end_date || '',
         prizepool_total: updates.prizepool_total,
@@ -574,6 +580,16 @@ export function AdminTournaments() {
                 )}
               </div>
               
+              <div className="space-y-2 sm:col-span-2">
+                <label className="text-sm font-500 text-white">Descripción del Torneo <span className="text-xs text-muted-foreground">(Opcional)</span></label>
+                <textarea
+                  name="description"
+                  rows={3}
+                  placeholder="Breve descripción que se mostrará en la página principal y en la ficha del torneo..."
+                  className="w-full rounded-md border border-border bg-background px-4 py-3 text-sm text-white focus:border-primary focus:outline-none resize-none leading-relaxed placeholder:text-muted-foreground/50"
+                />
+              </div>
+
               <div className="space-y-2 sm:col-span-2 border-t border-border pt-6 mt-2">
                 <h4 className="text-sm font-600 text-primary uppercase tracking-widest">Prizepool</h4>
               </div>
@@ -884,40 +900,60 @@ export function AdminTournaments() {
                       </button>
                     </div>
 
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {editInfo.prizepool_distribution.map((val, idx) => (
-                        <div key={idx} className="flex items-center gap-2.5 p-2.5 border border-border rounded-lg bg-background hover:border-primary/50 transition-colors">
-                          <span className="w-8 h-8 shrink-0 flex items-center justify-center rounded bg-primary/20 text-primary font-extrabold text-xs">
-                            {idx + 1}º
-                          </span>
-                          <input
-                            type="text"
-                            value={val}
-                            placeholder={`Premio lugar ${idx + 1}`}
-                            onChange={(e) => {
-                              const next = [...editInfo.prizepool_distribution]
-                              next[idx] = e.target.value
-                              setEditInfo({ ...editInfo, prizepool_distribution: next })
-                            }}
-                            className="flex-1 rounded border border-border bg-surface px-3 py-1.5 text-sm font-semibold text-white focus:border-primary focus:outline-none"
-                          />
-                          {editInfo.prizepool_distribution.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const next = editInfo.prizepool_distribution.filter((_, i) => i !== idx)
-                                setEditInfo({ ...editInfo, prizepool_distribution: next })
-                              }}
-                              title="Eliminar este puesto"
-                              className="p-1.5 text-muted-foreground hover:text-red-400 transition-colors rounded hover:bg-white/5 cursor-pointer"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                      {editInfo.prizepool_distribution.map((val, idx) => {
+                        const medalColors = [
+                          { bg: 'bg-yellow-500/15', border: 'border-yellow-500/30', text: 'text-yellow-400', label: 'bg-yellow-500/20' },
+                          { bg: 'bg-slate-400/10', border: 'border-slate-400/30', text: 'text-slate-300', label: 'bg-slate-400/20' },
+                          { bg: 'bg-amber-700/15', border: 'border-amber-600/30', text: 'text-amber-500', label: 'bg-amber-700/20' },
+                        ]
+                        const colors = medalColors[idx] ?? { bg: 'bg-white/5', border: 'border-border', text: 'text-muted-foreground', label: 'bg-white/10' }
+                        return (
+                          <div
+                            key={idx}
+                            className={`relative flex flex-col gap-2 rounded-xl border ${colors.border} ${colors.bg} p-3 transition-colors hover:border-primary/40`}
+                          >
+                            {/* Badge de posición */}
+                            <div className="flex items-center justify-between">
+                              <span className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wider ${colors.label} ${colors.text}`}>
+                                {idx + 1}º Lugar
+                              </span>
+                              {editInfo.prizepool_distribution.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const next = editInfo.prizepool_distribution.filter((_, i) => i !== idx)
+                                    setEditInfo({ ...editInfo, prizepool_distribution: next })
+                                  }}
+                                  title="Eliminar este puesto"
+                                  className="p-1 text-muted-foreground hover:text-red-400 transition-colors rounded hover:bg-white/5 cursor-pointer shrink-0"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Input del monto */}
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-semibold select-none">$</span>
+                              <input
+                                type="text"
+                                value={val}
+                                placeholder="0"
+                                onChange={(e) => {
+                                  const next = [...editInfo.prizepool_distribution]
+                                  next[idx] = e.target.value
+                                  setEditInfo({ ...editInfo, prizepool_distribution: next })
+                                }}
+                                className={`w-full rounded-lg border ${colors.border} bg-background/60 pl-7 pr-3 py-2 text-sm font-bold ${colors.text} focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30 placeholder:text-muted-foreground/40 transition-colors`}
+                              />
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
+
 
                   {/* Identidad del Torneo (Nombre y Juego) */}
                   <div className="rounded-xl border border-border bg-surface/60 p-5 space-y-4">
@@ -958,7 +994,22 @@ export function AdminTournaments() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Descripción */}
+                    <div>
+                      <label className="text-xs font-600 text-muted-foreground uppercase block mb-1">
+                        Descripción <span className="text-xs normal-case text-muted-foreground/60 font-400">(se muestra en la página de inicio)</span>
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={editInfo.description}
+                        onChange={(e) => setEditInfo({ ...editInfo, description: e.target.value })}
+                        placeholder="Breve descripción que se mostrará en la tarjeta del torneo en la página principal..."
+                        className="w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none resize-none leading-relaxed placeholder:text-muted-foreground/40 transition-colors"
+                      />
+                    </div>
                   </div>
+
 
                   {/* Barra Fija de Guardar Cambios */}
                   <div className="sticky bottom-0 bg-surface/95 backdrop-blur border border-border p-4 rounded-xl flex items-center justify-between gap-4 z-20 shadow-xl">

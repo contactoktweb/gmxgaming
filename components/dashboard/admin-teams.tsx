@@ -91,6 +91,7 @@ interface EditingTeamState {
   logo_url: string
   jersey_url: string
   games: string[]
+  gender_category: 'mixed' | 'female'
   social_x: string
   social_ig: string
   social_tiktok: string
@@ -270,6 +271,14 @@ export function AdminTeams() {
 
   const openTeamDetails = (team: Team) => {
     const raw = team.rawDetails || {}
+
+    // Resolver categoría de género desde los contratos activos del equipo
+    const activeContracts = raw.contracts?.filter((c: any) =>
+      c.status === 'active' || c.status === 'activo' || c.status === 'pending_player_release' || c.status === 'pending_manager_release'
+    ) || []
+    const contractCategory = activeContracts[0]?.team_gender_category
+    const resolvedGender: 'mixed' | 'female' = contractCategory === 'female' ? 'female' : 'mixed'
+
     setSelectedTeam(team)
     setEditingTeam({
       id: team.id,
@@ -282,6 +291,7 @@ export function AdminTeams() {
       logo_url: raw.logo_url || team.logo || '',
       jersey_url: raw.jersey_url || team.jersey || '',
       games: Array.isArray(raw.games) && raw.games.length > 0 ? raw.games : ['Mobile Legends'],
+      gender_category: resolvedGender,
       social_x: raw.social_x || '',
       social_ig: raw.social_ig || '',
       social_tiktok: raw.social_tiktok || '',
@@ -389,6 +399,17 @@ export function AdminTeams() {
 
       const { error } = await supabase.from('teams').update(updates).eq('id', editingTeam.id)
       if (error) throw error
+
+      // Actualizar team_gender_category en todos los contratos activos del equipo
+      try {
+        await supabase
+          .from('contracts')
+          .update({ team_gender_category: editingTeam.gender_category })
+          .eq('team_id', editingTeam.id)
+          .in('status', ['active', 'activo', 'pending_player_release', 'pending_manager_release'])
+      } catch (gErr) {
+        console.warn('Could not update gender in contracts:', gErr)
+      }
 
       // Sincronizar con la tabla validations si existe solicitud
       try {
@@ -1076,6 +1097,32 @@ export function AdminTeams() {
                           </select>
                           <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         </div>
+                      </div>
+
+                      {/* Tipo / Categoría del Equipo */}
+                      <div>
+                        <label className="text-xs font-600 text-muted-foreground uppercase block mb-1">
+                          Tipo de Equipo
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={editingTeam.gender_category}
+                            onChange={(e) => setEditingTeam({ ...editingTeam, gender_category: e.target.value as 'mixed' | 'female' })}
+                            className={cn(
+                              "w-full appearance-none rounded-lg border bg-surface px-3.5 py-2 pr-9 text-sm font-semibold focus:outline-none focus:ring-1 cursor-pointer transition-colors",
+                              editingTeam.gender_category === 'female'
+                                ? 'text-pink-400 border-pink-500/30 focus:border-pink-500'
+                                : 'text-sky-400 border-sky-500/30 focus:border-sky-500'
+                            )}
+                          >
+                            <option value="mixed" className="bg-surface text-sky-400 font-semibold">Varonil / Mixto</option>
+                            <option value="female" className="bg-surface text-pink-400 font-semibold">Femenil</option>
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <p className="text-[11px] text-muted-foreground mt-1">
+                          Este valor se actualizará en todos los contratos activos del equipo.
+                        </p>
                       </div>
                     </div>
                   </div>

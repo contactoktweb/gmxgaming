@@ -80,9 +80,9 @@ export function GlobalSearch() {
           .limit(5),
         supabase
           .from('profiles')
-          .select('id, nickname, game_nickname, name, avatar_url, is_player')
+          .select('id, nickname, game_nickname, avatar_url, is_player')
           .eq('is_player', true)
-          .or(`nickname.ilike.${searchTerms},game_nickname.ilike.${searchTerms},name.ilike.${searchTerms}`)
+          .or(`nickname.ilike.${searchTerms},game_nickname.ilike.${searchTerms}`)
           .limit(5),
         supabase
           .from('tournaments')
@@ -106,13 +106,12 @@ export function GlobalSearch() {
       }
       if (playersResponse.data) {
         playersResponse.data.forEach(p => {
-          const displayNickname = p.nickname || p.game_nickname || p.name || 'Jugador'
-          const realName = p.name && p.name !== displayNickname ? p.name : undefined
+          const displayNickname = p.nickname || p.game_nickname || 'Jugador'
           const slug = getPlayerSlug(p) || p.id
           results.push({
             id: p.id,
             title: displayNickname,
-            subtitle: realName,
+            subtitle: undefined,
             type: 'player',
             slug,
             imageUrl: p.avatar_url
