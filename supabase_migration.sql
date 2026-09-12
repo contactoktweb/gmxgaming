@@ -202,6 +202,19 @@ DROP POLICY IF EXISTS "Users Update Own Profile" ON public.profiles;
 DROP POLICY IF EXISTS "Admin All" ON public.profiles;
 CREATE POLICY "Admin All" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
 
+-- Función segura con SECURITY DEFINER para asignar roles evitando bloqueos de RLS
+CREATE OR REPLACE FUNCTION public.assign_user_role(target_user_id uuid, new_role text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  UPDATE public.profiles
+  SET role = new_role
+  WHERE id = target_user_id;
+END;
+$$;
+
 DROP POLICY IF EXISTS "User Insert Teams" ON public.teams;
 CREATE POLICY "User Insert Teams" ON public.teams FOR INSERT WITH CHECK (auth.uid() = manager_id);
 

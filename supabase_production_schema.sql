@@ -376,6 +376,19 @@ DROP POLICY IF EXISTS "Admin Update Profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Users Insert Profile" ON public.profiles;
 CREATE POLICY "Admin All" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
 
+-- Función segura con SECURITY DEFINER para asignar roles evitando bloqueos de RLS
+CREATE OR REPLACE FUNCTION public.assign_user_role(target_user_id uuid, new_role text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  UPDATE public.profiles
+  SET role = new_role
+  WHERE id = target_user_id;
+END;
+$$;
+
 DROP POLICY IF EXISTS "Users Insert Player Game Info" ON public.player_game_info;
 CREATE POLICY "Users Insert Player Game Info" ON public.player_game_info FOR INSERT WITH CHECK (auth.uid() = profile_id);
 

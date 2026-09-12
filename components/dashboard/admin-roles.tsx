@@ -180,20 +180,37 @@ export function AdminRoles() {
 
     setUpdatingUserId(targetProfile.id)
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .update({ role: targetRole })
-        .eq('id', targetProfile.id)
-        .select()
+      let success = false
 
-      if (error) {
-        toast.error('Error al actualizar el rol: ' + error.message)
-      } else if (!data || data.length === 0) {
-        toast.error('No se pudo guardar en Supabase. Asegúrate de aplicar las políticas de RLS en la base de datos.')
+      // 1. Intentar primero con la función RPC con SECURITY DEFINER (omite RLS)
+      const { error: rpcError } = await supabase.rpc('assign_user_role', {
+        target_user_id: targetProfile.id,
+        new_role: targetRole
+      })
+
+      if (!rpcError) {
+        success = true
       } else {
+        // 2. Fallback a UPDATE directo sobre la tabla profiles
+        const { data, error: updateError } = await supabase
+          .from('profiles')
+          .update({ role: targetRole })
+          .eq('id', targetProfile.id)
+          .select()
+
+        if (!updateError && data && data.length > 0) {
+          success = true
+        } else if (updateError) {
+          console.error('Error en update directo de profiles:', updateError)
+        }
+      }
+
+      if (success) {
         setProfiles(prev => prev.map(p => p.id === targetProfile.id ? { ...p, role: targetRole } : p))
         const roleLabel = ROLE_DEFINITIONS.find(r => r.key === targetRole)?.name || targetRole
         toast.success(`Rol asignado: ${roleLabel} a ${targetProfile.name || 'usuario'}`)
+      } else {
+        toast.error('No se pudo guardar en Supabase. Asegúrate de aplicar las políticas de RLS en la base de datos.')
       }
     } catch (err: any) {
       toast.error('Error inesperado: ' + (err?.message || ''))
