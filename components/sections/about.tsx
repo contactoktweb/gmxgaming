@@ -81,7 +81,7 @@ export function About() {
           </motion.div>
 
           <div className="absolute right-0 sm:right-2 top-4 sm:top-6 border border-primary/50 bg-deep/70 px-3 sm:px-4 py-2 sm:py-3 backdrop-blur-sm z-10">
-            <p className="font-display text-2xl sm:text-3xl font-700 leading-none text-primary">+10K</p>
+            <p className="font-display text-2xl sm:text-3xl font-700 leading-none text-primary">+100</p>
             <p className="mt-1 text-[9px] sm:text-[10px] font-500 uppercase tracking-[0.2em] text-muted-foreground">
               Jugadores
             </p>
