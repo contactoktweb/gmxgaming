@@ -42,10 +42,20 @@ export function Preloader({ onDone }: { onDone?: () => void }) {
   return (
     <AnimatePresence>
       {phase !== 'done' && (
-        <div className="fixed inset-0 z-[10000]" aria-hidden>
+        <div 
+          className="fixed inset-0 z-[10000] flex w-full h-[100dvh] min-h-[100dvh] items-center justify-center overflow-hidden bg-deep"
+          style={{ height: '100dvh', width: '100vw' }}
+          aria-hidden
+        >
           {/* Center content */}
           <motion.div
-            className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-8"
+            className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-6 sm:gap-8 px-4 text-center select-none"
+            style={{
+              paddingTop: 'env(safe-area-inset-top, 0px)',
+              paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+              paddingLeft: 'env(safe-area-inset-left, 0px)',
+              paddingRight: 'env(safe-area-inset-right, 0px)',
+            }}
             animate={
               phase === 'reveal'
                 ? { y: -30, opacity: 0 }
@@ -54,26 +64,30 @@ export function Preloader({ onDone }: { onDone?: () => void }) {
             transition={{ duration: 0.5, ease: 'easeInOut' }}
           >
             {/* Glowing Dual-Arc Spinner */}
-            <div className="h-16 w-16 rounded-full border-2 border-transparent border-y-primary animate-spin-fast filter drop-shadow-[0_0_12px_#ff2d20]" />
+            <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-full border-2 border-transparent border-y-primary animate-spin-fast filter drop-shadow-[0_0_12px_#ff2d20] shrink-0" />
 
             {/* GMX GAMING letters */}
-            <div className="flex font-display text-3xl font-black uppercase tracking-[0.25em] text-white sm:text-5xl">
-              {LETTERS.map((l, i) => (
-                <motion.span
-                  key={i}
-                  className="inline-block animate-neon-glow"
-                  style={{ animationDelay: `${i * 0.08}s` }}
-                  initial={{ opacity: 0, y: 18 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.15 + i * 0.12, duration: 0.4, ease: 'easeOut' }}
-                >
-                  {l === ' ' ? '\u00A0\u00A0' : l}
-                </motion.span>
-              ))}
+            <div className="flex items-center justify-center font-display text-2xl xs:text-3xl sm:text-5xl font-black uppercase tracking-[0.2em] sm:tracking-[0.25em] pl-[0.2em] sm:pl-[0.25em] text-white max-w-full overflow-visible">
+              {LETTERS.map((l, i) =>
+                l === ' ' ? (
+                  <span key={i} className="inline-block w-2 sm:w-3.5 shrink-0" aria-hidden="true" />
+                ) : (
+                  <motion.span
+                    key={i}
+                    className="inline-block animate-neon-glow shrink-0"
+                    style={{ animationDelay: `${i * 0.08}s` }}
+                    initial={{ opacity: 0, y: 18 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.15 + i * 0.12, duration: 0.4, ease: 'easeOut' }}
+                  >
+                    {l}
+                  </motion.span>
+                )
+              )}
             </div>
 
             <motion.span
-              className="text-[11px] font-700 uppercase tracking-[0.6em] text-primary/80 animate-pulse-opacity"
+              className="text-[11px] font-700 uppercase tracking-[0.6em] pl-[0.6em] text-primary/80 animate-pulse-opacity shrink-0"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 1.4, duration: 0.6 }}
@@ -83,11 +97,11 @@ export function Preloader({ onDone }: { onDone?: () => void }) {
           </motion.div>
 
           {/* Four vertical panels */}
-          <div className="absolute inset-0 z-10 flex">
+          <div className="absolute inset-0 z-10 flex w-full h-full pointer-events-none">
             {panels.map((p) => (
               <motion.div
                 key={p}
-                className="h-full flex-1 bg-deep"
+                className="h-full flex-1 bg-deep will-change-transform"
                 initial={{ y: 0 }}
                 animate={
                   phase === 'reveal'
