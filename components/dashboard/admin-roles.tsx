@@ -180,13 +180,16 @@ export function AdminRoles() {
 
     setUpdatingUserId(targetProfile.id)
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .update({ role: targetRole })
         .eq('id', targetProfile.id)
+        .select()
 
       if (error) {
         toast.error('Error al actualizar el rol: ' + error.message)
+      } else if (!data || data.length === 0) {
+        toast.error('No se pudo guardar en Supabase. Asegúrate de aplicar las políticas de RLS en la base de datos.')
       } else {
         setProfiles(prev => prev.map(p => p.id === targetProfile.id ? { ...p, role: targetRole } : p))
         const roleLabel = ROLE_DEFINITIONS.find(r => r.key === targetRole)?.name || targetRole

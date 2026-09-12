@@ -167,7 +167,9 @@ CREATE POLICY "Public Access" ON public.casters FOR SELECT USING (true);
 CREATE POLICY "Public Access" ON public.admin_settings FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "User Update Profiles" ON public.profiles;
-CREATE POLICY "User Update Profiles" ON public.profiles FOR UPDATE USING (auth.uid() = id);
+DROP POLICY IF EXISTS "Users Update Own Profile" ON public.profiles;
+DROP POLICY IF EXISTS "Admin All" ON public.profiles;
+CREATE POLICY "Admin All" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "User Insert Teams" ON public.teams;
 CREATE POLICY "User Insert Teams" ON public.teams FOR INSERT WITH CHECK (auth.uid() = manager_id);

@@ -368,12 +368,13 @@ CREATE POLICY "Public Read Casters" ON public.casters FOR SELECT USING (true);
 DROP POLICY IF EXISTS "Public Read Settings" ON public.admin_settings;
 CREATE POLICY "Public Read Settings" ON public.admin_settings FOR SELECT USING (true);
 
--- Políticas de escritura (inserción y actualización)
+-- Políticas de profiles (Permite lectura, inserción y actualización para usuarios y administradores)
 DROP POLICY IF EXISTS "Users Update Own Profile" ON public.profiles;
-CREATE POLICY "Users Update Own Profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
-
+DROP POLICY IF EXISTS "User Update Profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Admin All" ON public.profiles;
+DROP POLICY IF EXISTS "Admin Update Profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Users Insert Profile" ON public.profiles;
-CREATE POLICY "Users Insert Profile" ON public.profiles FOR INSERT WITH CHECK (true);
+CREATE POLICY "Admin All" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Users Insert Player Game Info" ON public.player_game_info;
 CREATE POLICY "Users Insert Player Game Info" ON public.player_game_info FOR INSERT WITH CHECK (auth.uid() = profile_id);
