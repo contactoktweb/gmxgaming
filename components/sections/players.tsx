@@ -24,10 +24,9 @@ export function Players() {
   useEffect(() => {
     async function loadFeaturedPlayers() {
       const supabase = createClient()
-      // We will try to fetch from the new profiles structure
-      // As the database might not be fully populated, we wrap in try-catch
       try {
-        const { data, error } = await supabase
+        // 1. Intentar cargar jugadores destacados de profiles
+        const { data: featuredData } = await supabase
           .from('profiles')
           .select(`
             id,
@@ -42,26 +41,80 @@ export function Players() {
           .eq('is_featured', true)
           .limit(8)
           
-        if (data && data.length > 0) {
-          const formatted = data.map((p: any) => {
+        let sourceList = featuredData
+
+        // 2. Si no hay marcados como destacados, cargar cualquier jugador activo de profiles
+        if (!sourceList || sourceList.length === 0) {
+          const { data: allActive } = await supabase
+            .from('profiles')
+            .select(`
+              id,
+              name,
+              nickname,
+              avatar_url,
+              is_featured,
+              is_player,
+              contracts(teams(name), status)
+            `)
+            .eq('is_player', true)
+            .limit(8)
+          
+          if (allActive && allActive.length > 0) {
+            sourceList = allActive
+          }
+        }
+
+        // 3. Si aún no hay, buscar en la tabla players (formato alternativo/legado)
+        if (!sourceList || sourceList.length === 0) {
+          const { data: directPlayers } = await supabase
+            .from('players')
+            .select('*')
+            .limit(8)
+
+          if (directPlayers && directPlayers.length > 0) {
+            const formatted = directPlayers.map((p: any) => ({
+              id: p.id,
+              name: p.nickname || p.name,
+              nickname: p.name,
+              game: 'Mobile Legends',
+              team: p.team || 'Agente Libre',
+              img: p.avatar_url || p.avatar || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
+            }))
+            setPlayers(formatted)
+            setLoading(false)
+            return
+          }
+        }
+
+        if (sourceList && sourceList.length > 0) {
+          const formatted = sourceList.map((p: any) => {
             const activeContract = p.contracts?.find((c: any) => c.status === 'activo' || c.status === 'active')
             const teamName = activeContract?.teams?.name || 'Agente Libre'
+            const finalImg = p.avatar_url || p.avatar || (p as any).photo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
 
             return {
               id: p.id,
               name: p.nickname || p.name,
               nickname: p.name,
-              game: 'Esports', // We can update this later if we add per-game tracking
+              game: 'Mobile Legends',
               team: teamName,
-              img: p.avatar_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
+              img: finalImg
             }
           })
           setPlayers(formatted)
         } else {
-          // Si no hay destacados, mostrar array vacio o ocultar seccion, pero dejamos fallback por diseño base
-          setPlayers([])
+          // Fallback visual con datos de muestra para que nunca quede vacía la sección
+          setPlayers(PLAYERS.map(p => ({
+            id: p.name,
+            name: p.name,
+            nickname: p.name,
+            game: p.game,
+            team: p.team,
+            img: p.img
+          })))
         }
       } catch (err) {
+        console.error('Error cargando jugadores en home:', err)
         setPlayers(PLAYERS.map(p => ({
           id: p.name,
           name: p.name,

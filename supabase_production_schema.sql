@@ -49,16 +49,19 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 -- Asegurar columnas si la tabla ya existía
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email text;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS edit_requested boolean DEFAULT false;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS avatar text;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS photo_url text;
 
 -- 1.1 TRIGGER AUTOMÁTICO: CREACIÓN Y SINCRONIZACIÓN DE PERFIL AL REGISTRARSE (Google y Correo)
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, name, avatar_url, role, is_player, player_status)
+  INSERT INTO public.profiles (id, email, name, avatar_url, avatar, role, is_player, player_status)
   VALUES (
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1), 'Usuario'),
+    COALESCE(NEW.raw_user_meta_data->>'avatar_url', NEW.raw_user_meta_data->>'picture', NULL),
     COALESCE(NEW.raw_user_meta_data->>'avatar_url', NEW.raw_user_meta_data->>'picture', NULL),
     'user',
     false,
@@ -67,7 +70,8 @@ BEGIN
   ON CONFLICT (id) DO UPDATE SET
     email = EXCLUDED.email,
     name = COALESCE(public.profiles.name, EXCLUDED.name),
-    avatar_url = COALESCE(public.profiles.avatar_url, EXCLUDED.avatar_url);
+    avatar_url = COALESCE(public.profiles.avatar_url, EXCLUDED.avatar_url),
+    avatar = COALESCE(public.profiles.avatar, EXCLUDED.avatar);
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -257,6 +261,13 @@ ALTER TABLE public.casters ADD COLUMN IF NOT EXISTS twitter_url text;
 ALTER TABLE public.casters ADD COLUMN IF NOT EXISTS twitch_url text;
 
 ALTER TABLE public.tournaments ADD COLUMN IF NOT EXISTS description text;
+ALTER TABLE public.tournaments ADD COLUMN IF NOT EXISTS logo_url text;
+ALTER TABLE public.tournaments ADD COLUMN IF NOT EXISTS banner_url text;
+ALTER TABLE public.tournaments ADD COLUMN IF NOT EXISTS image_url text;
+
+ALTER TABLE public.players ADD COLUMN IF NOT EXISTS avatar_url text;
+ALTER TABLE public.players ADD COLUMN IF NOT EXISTS photo_url text;
+
 ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS player_name text;
 ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS player_email text;
 ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS team text;

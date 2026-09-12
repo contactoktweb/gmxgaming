@@ -34,6 +34,8 @@ export function Tournaments() {
             ? new Date(t.start_date).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
             : 'Próximamente'
 
+          const imgUrl = t.templates?.logo_url || t.logo_url || t.banner_url || t.image_url || '/images/tournament-1.png'
+
           return {
             id: t.id,
             slug: getTournamentSlug(t),
@@ -41,7 +43,7 @@ export function Tournaments() {
             title: t.name,
             date: dateStr.toUpperCase(),
             desc: t.description || `Torneo oficial de ${t.game || 'Mobile Legends'}. Los mejores equipos compiten por el título y la gloria.`,
-            img: t.templates?.logo_url || '/images/tournament-1.png',
+            img: imgUrl,
             href: `/torneos/${getTournamentSlug(t)}`
           }
         })

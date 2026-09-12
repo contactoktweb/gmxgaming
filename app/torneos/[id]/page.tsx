@@ -174,7 +174,7 @@ export default function TournamentDetailsPage() {
           {/* Hero Header */}
           <Reveal direction="up" className="flex flex-col md:flex-row items-center md:items-start gap-8 mb-16 text-center md:text-left">
             <img 
-              src={tournament.templates?.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
+              src={tournament.templates?.logo_url || tournament.logo_url || tournament.banner_url || tournament.image_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
               alt={tournament.name}
               className="w-40 h-40 object-cover rounded-2xl bg-surface border-2 border-border shadow-2xl"
             />

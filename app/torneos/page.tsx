@@ -41,7 +41,7 @@ export default function TorneosPage() {
       <div className="flex flex-col sm:flex-row gap-6">
         <div className="shrink-0 flex justify-center sm:justify-start">
           <img 
-            src={t.templates?.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
+            src={t.templates?.logo_url || t.logo_url || t.banner_url || t.image_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
             alt={t.name} 
             className="w-24 h-24 sm:w-32 sm:h-32 object-cover rounded-xl bg-background border border-border transition-transform duration-500 group-hover:scale-105" 
           />
