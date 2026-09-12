@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth-context'
 import { GmxButton } from '@/components/gmx-button'
 import { toast } from 'sonner'
 import { cn, formatNickname, formatPersonName, formatRoleTitle, extractCountry, DEFAULT_COUNTRIES } from '@/lib/utils'
+import { AdminPagination } from '@/components/dashboard/admin-pagination'
 
 const FIELD_LABELS: Record<string, string> = {
   name: 'Nombre Completo',
@@ -137,9 +138,14 @@ export function AdminPlayers() {
   // Selection for Export
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
-  // Reiniciar seleccionados al cambiar cualquier filtro o búsqueda
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(12)
+
+  // Reiniciar seleccionados y página al cambiar cualquier filtro o búsqueda
   useEffect(() => {
     setSelectedIds(new Set())
+    setCurrentPage(1)
   }, [searchQuery, filterTeam, filterStatus, filterCountry])
 
   useEffect(() => {
@@ -797,6 +803,11 @@ export function AdminPlayers() {
     return result
   }, [players, filterTeam, filterStatus, filterCountry, searchQuery])
 
+  const paginatedPlayers = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage
+    return filteredAndSortedPlayers.slice(startIndex, startIndex + itemsPerPage)
+  }, [filteredAndSortedPlayers, currentPage, itemsPerPage])
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="rounded-xl border border-border bg-surface p-6 sm:p-8">
@@ -888,8 +899,9 @@ export function AdminPlayers() {
             <p className="text-muted-foreground">No hay jugadores que coincidan con los filtros.</p>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {filteredAndSortedPlayers.map(player => (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {paginatedPlayers.map(player => (
               <div key={player.id} className="relative flex flex-col rounded-lg border border-border bg-background p-5 hover:border-primary/50 transition-colors">
                 <div className="absolute top-4 right-4 z-10">
                   <input 
@@ -1014,6 +1026,17 @@ export function AdminPlayers() {
               </div>
             ))}
           </div>
+
+          <AdminPagination
+            currentPage={currentPage}
+            totalItems={filteredAndSortedPlayers.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={setItemsPerPage}
+            itemsPerPageOptions={[6, 12, 24, 48]}
+            itemName="jugadores"
+          />
+        </>
         )}
       </div>
 

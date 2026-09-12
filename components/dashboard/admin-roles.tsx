@@ -19,6 +19,7 @@ import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { AdminPagination } from '@/components/dashboard/admin-pagination'
 
 interface ProfileUser {
   id: string
@@ -73,6 +74,8 @@ export function AdminRoles() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedFilterRole, setSelectedFilterRole] = useState<string>('all')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null)
   const [confirmRoleModal, setConfirmRoleModal] = useState<{
     profile: ProfileUser
@@ -138,6 +141,17 @@ export function AdminRoles() {
       return name.includes(q) || nickname.includes(q) || gameNick.includes(q) || email.includes(q) || p.id.includes(q)
     })
   }, [profiles, searchQuery, selectedFilterRole])
+
+  // Reset de página al cambiar filtros
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, selectedFilterRole])
+
+  // Elementos paginados
+  const paginatedUsers = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage
+    return filteredUsers.slice(start, start + itemsPerPage)
+  }, [filteredUsers, currentPage, itemsPerPage])
 
   // Contadores
   const stats = useMemo(() => {
@@ -331,104 +345,117 @@ export function AdminRoles() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-border bg-white/[0.02] text-[11px] font-600 uppercase tracking-wider text-muted-foreground">
-                  <th className="py-3.5 px-4">Usuario</th>
-                  <th className="py-3.5 px-4 hidden md:table-cell">Nickname / IGN</th>
-                  <th className="py-3.5 px-4">Rol Actual</th>
-                  <th className="py-3.5 px-4 text-right">Asignar Nuevo Rol</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60 text-sm">
-                {filteredUsers.map((profile) => {
-                  const currentRole = (profile.role || 'user').toLowerCase()
-                  const isCurrentUser = profile.id === user?.id
-                  const isUpdating = updatingUserId === profile.id
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-border bg-white/[0.02] text-[11px] font-600 uppercase tracking-wider text-muted-foreground">
+                    <th className="py-3.5 px-4">Usuario</th>
+                    <th className="py-3.5 px-4 hidden md:table-cell">Nickname / IGN</th>
+                    <th className="py-3.5 px-4">Rol Actual</th>
+                    <th className="py-3.5 px-4 text-right">Asignar Nuevo Rol</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60 text-sm">
+                  {paginatedUsers.map((profile) => {
+                    const currentRole = (profile.role || 'user').toLowerCase()
+                    const isRaul = profile.email === 'kike_301097@hotmail.com' || profile.role === 'admin_principal'
+                    const isSelf = profile.id === user?.id
+                    const isUpdating = updatingUserId === profile.id
 
-                  return (
-                    <tr key={profile.id} className="hover:bg-white/[0.02] transition-colors">
-                      {/* Usuario info */}
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={profile.avatar_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'}
-                            alt={profile.name || 'Avatar'}
-                            className="w-10 h-10 rounded-full object-cover border border-border/80 shrink-0 bg-deep"
-                          />
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-500 text-white truncate max-w-[200px] sm:max-w-[260px]">
-                                {profile.name || 'Usuario Sin Nombre'}
-                              </span>
-                              {isCurrentUser && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-600 uppercase">
-                                  Tú
-                                </span>
-                              )}
+                    return (
+                      <tr key={profile.id} className="hover:bg-white/[0.02] transition-colors">
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={profile.avatar_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'}
+                              alt={profile.name || 'Usuario'}
+                              className="w-9 h-9 rounded-full object-cover border border-border shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <p className="font-600 text-white truncate text-xs sm:text-sm">
+                                {profile.name || 'Sin Nombre'}
+                              </p>
+                              <p className="text-[11px] text-muted-foreground truncate">
+                                {profile.email || profile.id}
+                              </p>
                             </div>
-                            <span className="text-xs text-muted-foreground font-mono block truncate max-w-[180px]">
-                              {profile.email ? profile.email : profile.id.slice(0, 12) + '...'}
-                            </span>
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* Nickname / IGN */}
-                      <td className="py-3.5 px-4 hidden md:table-cell">
-                        {profile.nickname || profile.game_nickname ? (
-                          <div className="flex flex-col text-xs">
-                            <span className="text-white font-500">
-                              {profile.nickname || profile.game_nickname}
-                            </span>
-                            {profile.is_player && (
-                              <span className="text-[10px] text-primary">Jugador Registrado</span>
+                        <td className="py-3 px-4 hidden md:table-cell">
+                          <span className="text-xs text-muted-foreground font-mono">
+                            {profile.nickname || profile.game_nickname || '—'}
+                          </span>
+                        </td>
+
+                        <td className="py-3 px-4">
+                          {(() => {
+                            const def = getRoleDef(currentRole)
+                            const Icon = def.icon
+                            return (
+                              <span className={cn(
+                                "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-600 border",
+                                def.badge
+                              )}>
+                                <Icon className="w-3 h-3" />
+                                <span>{def.name}</span>
+                              </span>
+                            )
+                          })()}
+                        </td>
+
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {isUpdating ? (
+                              <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                            ) : isRaul ? (
+                              <span className="text-[11px] text-amber-400 font-500 italic">
+                                Rol Protegido
+                              </span>
+                            ) : (
+                              <select
+                                value={currentRole === 'admin' ? 'admin_principal' : currentRole}
+                                onChange={(e) => {
+                                  const newRole = e.target.value
+                                  if (newRole !== currentRole) {
+                                    setConfirmRoleModal({
+                                      profile,
+                                      targetRole: newRole
+                                    })
+                                  }
+                                }}
+                                className="rounded-lg bg-deep border border-border px-3 py-1.5 text-xs text-white focus:outline-none focus:border-primary transition-colors cursor-pointer"
+                              >
+                                <option value="admin_principal">👑 Admin Principal</option>
+                                <option value="admin_secundario">🛡️ Admin Secundario</option>
+                                <option value="admin_visitante">👁️ Admin Visitante</option>
+                                <option value="user">👤 Usuario / Jugador</option>
+                              </select>
                             )}
                           </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground/60 italic">—</span>
-                        )}
-                      </td>
-
-                      {/* Rol Actual */}
-                      <td className="py-3.5 px-4">
-                        {getRoleBadge(profile.role)}
-                      </td>
-
-                      {/* Selector de asignación */}
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="inline-flex items-center gap-2">
-                          {isUpdating ? (
-                            <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                          ) : (
-                            <select
-                              value={currentRole === 'admin' ? 'admin_principal' : currentRole}
-                              onChange={(e) => {
-                                const newRole = e.target.value
-                                if (newRole !== currentRole) {
-                                  setConfirmRoleModal({
-                                    profile,
-                                    targetRole: newRole
-                                  })
-                                }
-                              }}
-                              className="rounded-lg bg-deep border border-border px-3 py-1.5 text-xs text-white focus:outline-none focus:border-primary transition-colors cursor-pointer"
-                            >
-                              <option value="admin_principal">👑 Admin Principal</option>
-                              <option value="admin_secundario">🛡️ Admin Secundario</option>
-                              <option value="admin_visitante">👁️ Admin Visitante</option>
-                              <option value="user">👤 Usuario / Jugador</option>
-                            </select>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {filteredUsers.length > 0 && (
+              <div className="p-4 border-t border-border bg-surface/40">
+                <AdminPagination
+                  currentPage={currentPage}
+                  totalItems={filteredUsers.length}
+                  itemsPerPage={itemsPerPage}
+                  onPageChange={setCurrentPage}
+                  onItemsPerPageChange={setItemsPerPage}
+                  itemsPerPageOptions={[5, 10, 20, 50]}
+                  itemName="usuarios registrados"
+                  className="border-t-0 pt-0 mt-0"
+                />
+              </div>
+            )}
+          </>
         )}
       </div>
 

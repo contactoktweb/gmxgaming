@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { 
   ShieldCheck, 
   Users, 
@@ -33,6 +33,7 @@ import { useAuth } from '@/lib/auth-context'
 import { cn, formatLocation, extractCountry, formatRoleTitle, DEFAULT_COUNTRIES } from '@/lib/utils'
 import { GmxButton } from '@/components/gmx-button'
 import { toast } from 'sonner'
+import { AdminPagination } from '@/components/dashboard/admin-pagination'
 
 interface PlayerRoster {
   contractId: string
@@ -140,9 +141,14 @@ export function AdminTeams() {
   const [quickNewStatus, setQuickNewStatus] = useState<string>('active')
   const [isUpdatingQuickStatus, setIsUpdatingQuickStatus] = useState(false)
 
-  // Reiniciar seleccionados al cambiar cualquier filtro o búsqueda
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(12)
+
+  // Reiniciar seleccionados y página al cambiar cualquier filtro o búsqueda
   useEffect(() => {
     setSelectedIds(new Set())
+    setCurrentPage(1)
   }, [searchQuery, filterRegion, filterStatus])
 
   useEffect(() => {
@@ -611,6 +617,11 @@ export function AdminTeams() {
     return result
   })()
 
+  const paginatedTeams = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage
+    return filteredAndSortedTeams.slice(startIndex, startIndex + itemsPerPage)
+  }, [filteredAndSortedTeams, currentPage, itemsPerPage])
+
   const downloadTeamsCSV = (list: Team[], baseName: string) => {
     const date = new Date()
     const dateStr = `${date.getFullYear()}${String(date.getMonth()+1).padStart(2,'0')}${String(date.getDate()).padStart(2,'0')}`
@@ -747,8 +758,9 @@ export function AdminTeams() {
             <p className="text-muted-foreground">No hay equipos que coincidan con los filtros.</p>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredAndSortedTeams.map(team => (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {paginatedTeams.map(team => (
               <div 
                 key={team.id} 
                 className={cn(
@@ -911,6 +923,17 @@ export function AdminTeams() {
               </div>
             ))}
           </div>
+
+          <AdminPagination
+            currentPage={currentPage}
+            totalItems={filteredAndSortedTeams.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={setItemsPerPage}
+            itemsPerPageOptions={[6, 12, 24, 48]}
+            itemName="equipos"
+          />
+        </>
         )}
       </div>
 

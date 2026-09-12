@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Check, X, UserCheck, ShieldCheck, ScrollText, Eye, FileText, Image as ImageIcon, AlertCircle, Maximize2, ZoomIn, Search, Trash2, Save, Edit3, UserCog, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Trophy } from 'lucide-react'
+import { Check, X, UserCheck, ShieldCheck, ScrollText, Eye, FileText, Image as ImageIcon, AlertCircle, Maximize2, ZoomIn, Search, Trash2, Save, Edit3, UserCog, Trophy } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { GmxButton } from '@/components/gmx-button'
 import { createClient } from '@/utils/supabase/client'
 import { toast } from 'sonner'
 import { cn, formatNickname, formatPersonName } from '@/lib/utils'
 import { useDebounce } from '@/hooks/use-debounce'
+import { AdminPagination } from '@/components/dashboard/admin-pagination'
 
 const FIELD_LABELS: Record<string, string> = {
   name: 'Nombre Completo',
@@ -850,13 +851,6 @@ export function AdminValidations() {
     }
   }
 
-  // Pagination calculations (Server-side paginated via Supabase range)
-  const totalItems = totalCount
-  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage))
-  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages)
-  const startIndex = totalItems === 0 ? 0 : (safeCurrentPage - 1) * itemsPerPage
-  const endIndex = totalItems === 0 ? 0 : Math.min(startIndex + requests.length, totalItems)
-
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
@@ -1020,125 +1014,15 @@ export function AdminValidations() {
             </table>
           </div>
 
-          {/* Pagination Controls */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-border pt-5 mt-4 text-xs">
-            {/* Left: Info & Items per page selector */}
-            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 sm:gap-4 text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <span className="font-500">Mostrar:</span>
-                <select
-                  value={itemsPerPage}
-                  onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
-                  aria-label="Cantidad por página"
-                  className="rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer transition-colors"
-                >
-                  <option value={10}>10 por página</option>
-                  <option value={20}>20 por página</option>
-                  <option value={50}>50 por página</option>
-                  <option value={5}>5 por página</option>
-                </select>
-              </div>
-
-              <span className="text-border hidden sm:inline">|</span>
-
-              <span>
-                Mostrando <strong className="text-white font-600">{totalItems === 0 ? 0 : startIndex + 1}</strong> - <strong className="text-white font-600">{endIndex}</strong> de <strong className="text-white font-600">{totalItems}</strong> solicitudes
-              </span>
-            </div>
-
-            {/* Right: Page navigation */}
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setCurrentPage(1)}
-                disabled={safeCurrentPage === 1}
-                title="Primera página"
-                aria-label="Primera página"
-                className="flex h-8 w-8 items-center justify-center rounded border border-border bg-background text-muted-foreground transition-colors hover:border-primary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:text-muted-foreground"
-              >
-                <ChevronsLeft className="h-4 w-4" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                disabled={safeCurrentPage === 1}
-                title="Página anterior"
-                aria-label="Página anterior"
-                className="flex h-8 w-8 items-center justify-center rounded border border-border bg-background text-muted-foreground transition-colors hover:border-primary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:text-muted-foreground"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-
-              {/* Page Number Buttons */}
-              <div className="flex items-center gap-1 mx-1">
-                {(() => {
-                  const pages: (number | string)[] = []
-                  const delta = 1
-
-                  for (let i = 1; i <= totalPages; i++) {
-                    if (
-                      i === 1 ||
-                      i === totalPages ||
-                      (i >= safeCurrentPage - delta && i <= safeCurrentPage + delta)
-                    ) {
-                      pages.push(i)
-                    } else if (pages[pages.length - 1] !== '...') {
-                      pages.push('...')
-                    }
-                  }
-
-                  return pages.map((p, idx) => {
-                    if (p === '...') {
-                      return (
-                        <span key={`ellipsis-${idx}`} className="px-1 text-muted-foreground select-none">
-                          ...
-                        </span>
-                      )
-                    }
-                    const isCurrent = p === safeCurrentPage
-                    return (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() => setCurrentPage(Number(p))}
-                        className={cn(
-                          "flex h-8 min-w-[32px] px-2 items-center justify-center rounded text-xs font-600 transition-colors",
-                          isCurrent
-                            ? "bg-primary text-white font-700 shadow-sm"
-                            : "border border-border bg-background text-muted-foreground hover:border-primary hover:text-white"
-                        )}
-                      >
-                        {p}
-                      </button>
-                    )
-                  })
-                })()}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                disabled={safeCurrentPage === totalPages}
-                title="Página siguiente"
-                aria-label="Página siguiente"
-                className="flex h-8 w-8 items-center justify-center rounded border border-border bg-background text-muted-foreground transition-colors hover:border-primary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:text-muted-foreground"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setCurrentPage(totalPages)}
-                disabled={safeCurrentPage === totalPages}
-                title="Última página"
-                aria-label="Última página"
-                className="flex h-8 w-8 items-center justify-center rounded border border-border bg-background text-muted-foreground transition-colors hover:border-primary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-border disabled:hover:text-muted-foreground"
-              >
-                <ChevronsRight className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
+          <AdminPagination
+            currentPage={currentPage}
+            totalItems={totalCount}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={handleItemsPerPageChange}
+            itemsPerPageOptions={[5, 10, 20, 50]}
+            itemName="solicitudes"
+          />
           </>
         )}
       </div>
