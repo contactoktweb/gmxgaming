@@ -529,6 +529,17 @@ export function AdminValidations() {
                 await supabase.from('teams').update(updates).eq('id', details.team_id)
               }
 
+              // Actualizar tipo de equipo en contratos activos si el campo fue modificado
+              const tipoEquipo = details.tipoEquipo || details['item_meta[782]']
+              if (tipoEquipo) {
+                const newGenderCategory = tipoEquipo.toLowerCase().includes('fem') ? 'female' : 'mixed'
+                await supabase
+                  .from('contracts')
+                  .update({ team_gender_category: newGenderCategory })
+                  .eq('team_id', details.team_id)
+                  .in('status', ['active', 'activo', 'pending_player_release', 'pending_manager_release'])
+              }
+
               if (details.manager_id) {
                 const managerUpdates: any = {}
                 if (details.manager_name) managerUpdates.name = details.manager_name
