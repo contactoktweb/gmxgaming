@@ -142,10 +142,18 @@ export function AdminTournaments() {
       const { data: urlData } = supabase.storage.from('teams').getPublicUrl(uploadData.path)
       const newLogoUrl = urlData.publicUrl
 
-      const { error: updateErr } = await supabase
+      let { error: updateErr } = await supabase
         .from('tournaments')
-        .update({ logo_url: newLogoUrl, banner_url: newLogoUrl, image_url: newLogoUrl })
+        .update({ logo_url: newLogoUrl, banner_url: newLogoUrl })
         .eq('id', selectedTournament.id)
+
+      if (updateErr && (updateErr.message?.includes('logo_url') || updateErr.message?.includes('schema cache'))) {
+        const retry = await supabase
+          .from('tournaments')
+          .update({ banner_url: newLogoUrl })
+          .eq('id', selectedTournament.id)
+        updateErr = retry.error
+      }
 
       if (updateErr) throw updateErr
 
@@ -318,14 +326,13 @@ export function AdminTournaments() {
       }
     }
 
-    const newTournament = {
+    const newTournament: Record<string, any> = {
       name: (formData.get('name') as string)?.trim(),
       game: gameSelected,
       description: (formData.get('description') as string)?.trim() || null,
       template_id: templateId || null,
-      logo_url: logoToUse,
       banner_url: logoToUse,
-      image_url: logoToUse,
+      logo_url: logoToUse,
       start_date: formData.get('start_date') as string,
       end_date: formData.get('end_date') as string,
       prizepool_total: formData.get('prizepool_total') as string,
@@ -333,8 +340,27 @@ export function AdminTournaments() {
       status: 'upcoming'
     }
 
-    const { error } = await supabase.from('tournaments').insert(newTournament)
+    let { error } = await supabase.from('tournaments').insert(newTournament)
+
+    // Si falla por columna inexistente (por ejemplo logo_url en schema cache antiguo)
+    if (error && (error.message?.includes('logo_url') || error.message?.includes('schema cache'))) {
+      const fallbackPayload = { ...newTournament }
+      delete fallbackPayload.logo_url
+      const retry1 = await supabase.from('tournaments').insert(fallbackPayload)
+      error = retry1.error
+    }
+
+    // Si falla por columna description
+    if (error && (error.message?.includes('description') || error.message?.includes('schema cache'))) {
+      const fallbackPayload = { ...newTournament }
+      delete fallbackPayload.description
+      delete fallbackPayload.logo_url
+      const retry2 = await supabase.from('tournaments').insert(fallbackPayload)
+      error = retry2.error
+    }
+
     if (!error) {
+      toast.success('¡Torneo creado exitosamente!')
       setShowSuccess(true)
       fetchBaseData()
       setTimeout(() => {
@@ -347,7 +373,8 @@ export function AdminTournaments() {
         setCreateCustomImage(null)
       }, 1500)
     } else {
-      alert('Error al crear el torneo: ' + error.message)
+      console.error('Error al crear torneo:', error)
+      toast.error('Error al crear el torneo: ' + error.message)
     }
   }
 
