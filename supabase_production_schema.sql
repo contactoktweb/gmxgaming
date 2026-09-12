@@ -134,7 +134,23 @@ CREATE TABLE IF NOT EXISTS public.contracts (
   created_at timestamptz DEFAULT now()
 );
 
--- 5. TABLA VALIDATIONS (Peticiones de Altas y Bajas para Administradores)
+-- 5. TABLA PLAYERS (Jugadores)
+CREATE TABLE IF NOT EXISTS public.players (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  email text,
+  role text,
+  team text,
+  status text DEFAULT 'active',
+  avatar text,
+  phone text,
+  game_id text,
+  discord text,
+  country text,
+  created_at timestamptz DEFAULT now()
+);
+
+-- 6. TABLA VALIDATIONS (Peticiones de Altas y Bajas para Administradores)
 CREATE TABLE IF NOT EXISTS public.validations (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   type text NOT NULL, -- 'equipo', 'jugador', 'contrato', 'baja_contrato', etc.
@@ -145,10 +161,21 @@ CREATE TABLE IF NOT EXISTS public.validations (
   created_at timestamptz DEFAULT now()
 );
 
--- 6. TABLA TOURNAMENTS (Torneos)
+-- 7. TABLA TOURNAMENT_TEMPLATES (Plantillas de Torneos)
+CREATE TABLE IF NOT EXISTS public.tournament_templates (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  logo_url text,
+  type text DEFAULT 'Relámpago',
+  game text DEFAULT 'Mobile Legends',
+  created_at timestamptz DEFAULT now()
+);
+
+-- 8. TABLA TOURNAMENTS (Torneos)
 CREATE TABLE IF NOT EXISTS public.tournaments (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL,
+  template_id uuid REFERENCES public.tournament_templates(id) ON DELETE SET NULL,
   game text DEFAULT 'Mobile Legends',
   type text DEFAULT 'Relámpago', -- 'Relámpago', 'Clasificatorio', 'Liga', 'Exhibición'
   start_date timestamptz,
@@ -163,7 +190,9 @@ CREATE TABLE IF NOT EXISTS public.tournaments (
   created_at timestamptz DEFAULT now()
 );
 
--- 7. TABLA TOURNAMENT_TEAMS (Equipos inscritos en torneos)
+ALTER TABLE public.tournaments ADD COLUMN IF NOT EXISTS template_id uuid REFERENCES public.tournament_templates(id) ON DELETE SET NULL;
+
+-- 9. TABLA TOURNAMENT_TEAMS (Equipos inscritos en torneos)
 CREATE TABLE IF NOT EXISTS public.tournament_teams (
   tournament_id uuid REFERENCES public.tournaments(id) ON DELETE CASCADE,
   team_id uuid REFERENCES public.teams(id) ON DELETE CASCADE,
@@ -172,7 +201,7 @@ CREATE TABLE IF NOT EXISTS public.tournament_teams (
   PRIMARY KEY (tournament_id, team_id)
 );
 
--- 8. TABLA MATCHES (Partidas y Cruces de Torneos)
+-- 10. TABLA MATCHES (Partidas y Cruces de Torneos)
 CREATE TABLE IF NOT EXISTS public.matches (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tournament_id uuid REFERENCES public.tournaments(id) ON DELETE CASCADE,
@@ -186,11 +215,19 @@ CREATE TABLE IF NOT EXISTS public.matches (
   created_at timestamptz DEFAULT now()
 );
 
--- 9. TABLAS DE CONTENIDO: MEDIA Y CASTERS
+-- 11. TABLAS DE CONTENIDO: MEDIA, MEDIA_LINKS Y CASTERS
 CREATE TABLE IF NOT EXISTS public.media (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   title text NOT NULL,
   youtube_url text NOT NULL,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.media_links (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  title text,
+  url text,
+  type text DEFAULT 'youtube',
   created_at timestamptz DEFAULT now()
 );
 
@@ -205,7 +242,7 @@ CREATE TABLE IF NOT EXISTS public.casters (
   created_at timestamptz DEFAULT now()
 );
 
--- 10. TABLAS DE CONFIGURACIONES DINÁMICAS (app_settings y admin_settings)
+-- 12. TABLAS DE CONFIGURACIONES DINÁMICAS (app_settings y admin_settings)
 CREATE TABLE IF NOT EXISTS public.app_settings (
   id text PRIMARY KEY,
   value jsonb NOT NULL,
@@ -236,20 +273,25 @@ VALUES
 ON CONFLICT (id) DO UPDATE SET value = EXCLUDED.value;
 
 -- ==============================================================================
--- SEGURIDAD: HABILITACIÓN DE RLS Y POLÍTICAS
+-- SEGURIDAD: HABILITACIÓN DE RLS Y POLÍTICAS (Igual a Development)
 -- ==============================================================================
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.player_game_info ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.teams ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.contracts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.validations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.players ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tournament_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tournaments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tournament_teams ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.matches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.media ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.media_links ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.casters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.admin_settings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
+
+-- En Development, validations y app_settings son UNRESTRICTED:
+ALTER TABLE public.app_settings DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.validations DISABLE ROW LEVEL SECURITY;
 
 -- Políticas de lectura pública
 DROP POLICY IF EXISTS "Public Read Profiles" ON public.profiles;
@@ -264,8 +306,11 @@ CREATE POLICY "Public Read Teams" ON public.teams FOR SELECT USING (true);
 DROP POLICY IF EXISTS "Public Read Contracts" ON public.contracts;
 CREATE POLICY "Public Read Contracts" ON public.contracts FOR SELECT USING (true);
 
-DROP POLICY IF EXISTS "Public Read Validations" ON public.validations;
-CREATE POLICY "Public Read Validations" ON public.validations FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Public Read Players" ON public.players;
+CREATE POLICY "Public Read Players" ON public.players FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Public Read Tournament Templates" ON public.tournament_templates;
+CREATE POLICY "Public Read Tournament Templates" ON public.tournament_templates FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Public Read Tournaments" ON public.tournaments;
 CREATE POLICY "Public Read Tournaments" ON public.tournaments FOR SELECT USING (true);
@@ -279,14 +324,14 @@ CREATE POLICY "Public Read Matches" ON public.matches FOR SELECT USING (true);
 DROP POLICY IF EXISTS "Public Read Media" ON public.media;
 CREATE POLICY "Public Read Media" ON public.media FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Public Read Media Links" ON public.media_links;
+CREATE POLICY "Public Read Media Links" ON public.media_links FOR SELECT USING (true);
+
 DROP POLICY IF EXISTS "Public Read Casters" ON public.casters;
 CREATE POLICY "Public Read Casters" ON public.casters FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Public Read Settings" ON public.admin_settings;
 CREATE POLICY "Public Read Settings" ON public.admin_settings FOR SELECT USING (true);
-
-DROP POLICY IF EXISTS "Public Read App Settings" ON public.app_settings;
-CREATE POLICY "Public Read App Settings" ON public.app_settings FOR SELECT USING (true);
 
 -- Políticas de escritura (inserción y actualización)
 DROP POLICY IF EXISTS "Users Update Own Profile" ON public.profiles;
@@ -313,32 +358,29 @@ CREATE POLICY "Users Insert Contracts" ON public.contracts FOR INSERT WITH CHECK
 DROP POLICY IF EXISTS "Users Update Contracts" ON public.contracts;
 CREATE POLICY "Users Update Contracts" ON public.contracts FOR UPDATE USING (true);
 
-DROP POLICY IF EXISTS "Users Insert Validations" ON public.validations;
-CREATE POLICY "Users Insert Validations" ON public.validations FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Admin Manage Players" ON public.players;
+CREATE POLICY "Admin Manage Players" ON public.players FOR ALL USING (true);
 
-DROP POLICY IF EXISTS "Users Update Validations" ON public.validations;
-CREATE POLICY "Users Update Validations" ON public.validations FOR UPDATE USING (true);
-
-DROP POLICY IF EXISTS "Users Delete Validations" ON public.validations;
-CREATE POLICY "Users Delete Validations" ON public.validations FOR DELETE USING (true);
-
-DROP POLICY IF EXISTS "Admin Manage Media" ON public.media;
-CREATE POLICY "Admin Manage Media" ON public.media FOR ALL USING (true);
-
-DROP POLICY IF EXISTS "Admin Manage Casters" ON public.casters;
-CREATE POLICY "Admin Manage Casters" ON public.casters FOR ALL USING (true);
-
-DROP POLICY IF EXISTS "Admin Manage Settings" ON public.admin_settings;
-CREATE POLICY "Admin Manage Settings" ON public.admin_settings FOR ALL USING (true);
-
-DROP POLICY IF EXISTS "Admin Manage App Settings" ON public.app_settings;
-CREATE POLICY "Admin Manage App Settings" ON public.app_settings FOR ALL USING (true);
+DROP POLICY IF EXISTS "Admin Manage Tournament Templates" ON public.tournament_templates;
+CREATE POLICY "Admin Manage Tournament Templates" ON public.tournament_templates FOR ALL USING (true);
 
 DROP POLICY IF EXISTS "Admin Manage Tournaments" ON public.tournaments;
 CREATE POLICY "Admin Manage Tournaments" ON public.tournaments FOR ALL USING (true);
 
 DROP POLICY IF EXISTS "Admin Manage Matches" ON public.matches;
 CREATE POLICY "Admin Manage Matches" ON public.matches FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Admin Manage Media" ON public.media;
+CREATE POLICY "Admin Manage Media" ON public.media FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Admin Manage Media Links" ON public.media_links;
+CREATE POLICY "Admin Manage Media Links" ON public.media_links FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Admin Manage Casters" ON public.casters;
+CREATE POLICY "Admin Manage Casters" ON public.casters FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Admin Manage Settings" ON public.admin_settings;
+CREATE POLICY "Admin Manage Settings" ON public.admin_settings FOR ALL USING (true);
 
 -- ==============================================================================
 -- CREACIÓN DE STORAGE BUCKETS (teams, avatars, documents)
