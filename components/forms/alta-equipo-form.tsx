@@ -392,6 +392,9 @@ export function AltaEquipoForm() {
       console.error('Error uploading team files:', err)
     }
 
+    const tipoEquipoVal = (formData.get('item_meta[782]') as string) || 'Varonil / Mixto'
+    const genderCategory = tipoEquipoVal.toLowerCase().includes('fem') ? 'female' : 'mixed'
+
     const payload = {
       manager_id: user?.id,
       name: cleanTeamName,
@@ -408,6 +411,7 @@ export function AltaEquipoForm() {
       social_twitch: formData.get('social_twitch'),
       social_kick: formData.get('social_kick'),
       social_x: formData.get('social_x'),
+      gender_category: genderCategory,
       status: 'pending' // Admin must approve
     }
     

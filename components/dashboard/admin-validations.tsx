@@ -465,7 +465,17 @@ export function AdminValidations() {
           }
         } else if (requestToUpdate.type === 'equipo') {
           const targetTeamId = requestToUpdate.details?.team_id || requestToUpdate.details?.id || confirmAction.id
-          await supabase.from('teams').update({ status: newStatus }).eq('id', targetTeamId)
+          const teamUpdates: any = { status: newStatus }
+
+          // Al aprobar, escribir gender_category desde tipoEquipo de la solicitud
+          if (isApproved) {
+            const tipoEquipo = requestToUpdate.details?.tipoEquipo || requestToUpdate.details?.['item_meta[782]']
+            if (tipoEquipo) {
+              teamUpdates.gender_category = tipoEquipo.toLowerCase().includes('fem') ? 'female' : 'mixed'
+            }
+          }
+
+          await supabase.from('teams').update(teamUpdates).eq('id', targetTeamId)
           
           const { data: valExists } = await supabase.from('validations').select('id').eq('id', confirmAction.id).limit(1)
           if (valExists && valExists.length > 0) {
@@ -529,10 +539,16 @@ export function AdminValidations() {
                 await supabase.from('teams').update(updates).eq('id', details.team_id)
               }
 
-              // Actualizar tipo de equipo en contratos activos si el campo fue modificado
+              // Actualizar tipo de equipo en tabla teams y en contratos activos
               const tipoEquipo = details.tipoEquipo || details['item_meta[782]']
               if (tipoEquipo) {
                 const newGenderCategory = tipoEquipo.toLowerCase().includes('fem') ? 'female' : 'mixed'
+                // 1. Persistir en tabla teams (fuente de verdad)
+                await supabase
+                  .from('teams')
+                  .update({ gender_category: newGenderCategory })
+                  .eq('id', details.team_id)
+                // 2. Sincronizar en contratos activos
                 await supabase
                   .from('contracts')
                   .update({ team_gender_category: newGenderCategory })
