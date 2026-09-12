@@ -200,6 +200,20 @@ export function AdminRoles() {
     }
   }
 
+  const getRoleDef = (roleStr: string | null) => {
+    const r = (roleStr || 'user').toLowerCase()
+    if (r === 'admin_principal' || r === 'admin') {
+      return ROLE_DEFINITIONS[0]
+    }
+    if (r === 'admin_secundario') {
+      return ROLE_DEFINITIONS[1]
+    }
+    if (r === 'admin_visitante') {
+      return ROLE_DEFINITIONS[2]
+    }
+    return ROLE_DEFINITIONS[3]
+  }
+
   const getRoleBadge = (roleStr: string | null) => {
     const r = (roleStr || 'user').toLowerCase()
     if (r === 'admin_principal' || r === 'admin') {
