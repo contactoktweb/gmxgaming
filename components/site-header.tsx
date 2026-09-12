@@ -152,7 +152,7 @@ export function SiteHeader() {
             <div className="hidden lg:flex items-center gap-3">
               {user ? (
                 <>
-                  {user.role === 'admin' ? (
+                  {user.isAdmin ? (
                     <GmxButton href="/administracion" variant="secondary" className="px-5 py-3 border-white/20 hover:border-white gap-2 whitespace-nowrap bg-primary/20 text-white">
                       ADMINISTRACIÓN
                     </GmxButton>
@@ -284,7 +284,7 @@ export function SiteHeader() {
               <div className="mt-10 flex flex-col gap-3">
                 {user ? (
                   <>
-                    {user.role === 'admin' ? (
+                    {user.isAdmin ? (
                       <GmxButton href="/administracion" variant="secondary" className="w-full border-white/20 hover:border-white bg-primary/20 text-white" onClick={() => setOpen(false)}>
                         ADMINISTRACIÓN
                       </GmxButton>

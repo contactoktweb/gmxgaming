@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import { translateAuthError } from '@/lib/utils'
 
-export type Role = 'admin' | 'jugador' | 'user'
+export type Role = 'admin_principal' | 'admin_secundario' | 'admin_visitante' | 'admin' | 'jugador' | 'user'
 
 export interface User {
   id: string
@@ -16,6 +16,10 @@ export interface User {
   avatar?: string
   is_player?: boolean
   player_status?: string
+  isAdmin?: boolean
+  isAdminPrincipal?: boolean
+  isAdminSecundario?: boolean
+  isAdminVisitante?: boolean
 }
 
 interface AuthContextType {
@@ -90,16 +94,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
 
+        const dbRole = (activeProfile?.role || '').trim().toLowerCase()
+        const isAdmPrincipal = dbRole === 'admin_principal' || dbRole === 'admin'
+        const isAdmSecundario = dbRole === 'admin_secundario'
+        const isAdmVisitante = dbRole === 'admin_visitante'
+        const isAdm = isAdmPrincipal || isAdmSecundario || isAdmVisitante
+
+        let userRole: Role = 'user'
+        if (isAdmPrincipal) userRole = dbRole === 'admin' ? 'admin' : 'admin_principal'
+        else if (isAdmSecundario) userRole = 'admin_secundario'
+        else if (isAdmVisitante) userRole = 'admin_visitante'
+        else if (activeProfile?.is_player) userRole = 'jugador'
+        else userRole = (dbRole as Role) || 'user'
+
         if (mounted) {
           setUser({
             id: authUser.id,
             name: activeProfile?.name || googleName,
             nickname: activeProfile?.nickname || activeProfile?.game_nickname || '',
             email: authUser.email || '',
-            role: activeProfile?.role === 'admin' ? 'admin' : 'jugador',
+            role: userRole,
             avatar: activeProfile?.avatar_url || activeProfile?.avatar || googleAvatar || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg',
             is_player: activeProfile?.is_player || false,
-            player_status: activeProfile?.player_status || 'none'
+            player_status: activeProfile?.player_status || 'none',
+            isAdmin: isAdm,
+            isAdminPrincipal: isAdmPrincipal,
+            isAdminSecundario: isAdmSecundario,
+            isAdminVisitante: isAdmVisitante
           })
           setIsLoading(false)
         }
@@ -111,10 +132,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             id: authUser.id,
             name: googleName,
             email: authUser.email || '',
-            role: 'jugador',
+            role: 'user',
             avatar: googleAvatar || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg',
             is_player: false,
-            player_status: 'none'
+            player_status: 'none',
+            isAdmin: false,
+            isAdminPrincipal: false,
+            isAdminSecundario: false,
+            isAdminVisitante: false
           })
           setIsLoading(false)
         }

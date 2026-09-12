@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { User, Mail, Gamepad2, Shield, Eye, X, Phone, Calendar, Filter, Ban, CheckCircle2, Edit, Download, Save, ZoomIn, Star, ChevronDown, UserX, AlertCircle, FileText, Globe, Upload, Image as ImageIcon, Loader2 } from 'lucide-react'
+import { User, Mail, Gamepad2, Shield, Eye, X, Phone, Calendar, Filter, Ban, CheckCircle2, Edit, Download, Save, ZoomIn, Star, ChevronDown, UserX, AlertCircle, FileText, Globe, Upload, Image as ImageIcon, Loader2, RotateCcw, Power } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
 import { GmxButton } from '@/components/gmx-button'
@@ -102,6 +102,7 @@ export interface Player {
 
 export function AdminPlayers() {
   const { user } = useAuth()
+  const isVisitor = Boolean(user?.isAdminVisitante)
   const [players, setPlayers] = useState<Player[]>([])
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null)
   const [modalTab, setModalTab] = useState<'profile' | 'contracts'>('profile')
@@ -362,8 +363,33 @@ export function AdminPlayers() {
     if (!error) {
       setPlayers(prev => prev.map(p => p.id === actionModal.player.id ? { ...p, status: newStatus } : p))
       setSelectedPlayer(prev => prev?.id === actionModal.player.id ? { ...prev, status: newStatus } : prev)
+      toast.success('Estado del jugador actualizado correctamente')
+    } else {
+      toast.error('Error al actualizar estado: ' + error.message)
     }
     setActionModal(null)
+  }
+
+  const handleDeactivatePlayer = async (playerId: string, playerName: string) => {
+    const { error } = await supabase.from('profiles').update({ player_status: 'inactive' }).eq('id', playerId)
+    if (error) {
+      toast.error('Error al desactivar el jugador: ' + error.message)
+    } else {
+      setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, status: 'inactive' } : p))
+      setSelectedPlayer(prev => prev?.id === playerId ? { ...prev, status: 'inactive' } : prev)
+      toast.success(`Jugador "${playerName}" desactivado. El registro se conserva y puede reactivarse.`)
+    }
+  }
+
+  const handleReactivatePlayer = async (playerId: string, playerName: string) => {
+    const { error } = await supabase.from('profiles').update({ player_status: 'active' }).eq('id', playerId)
+    if (error) {
+      toast.error('Error al reactivar el jugador: ' + error.message)
+    } else {
+      setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, status: 'active' } : p))
+      setSelectedPlayer(prev => prev?.id === playerId ? { ...prev, status: 'active' } : prev)
+      toast.success(`Jugador "${playerName}" reactivado correctamente a estado Activo.`)
+    }
   }
 
   const handleToggleFeatured = async (playerId: string, currentStatus: boolean) => {
@@ -925,35 +951,64 @@ export function AdminPlayers() {
                   
                   {/* Acciones Rápidas */}
                   <div className="flex items-center gap-2 mt-2">
-                    <button
-                      onClick={() => handleToggleFeatured(player.id, player.is_featured)}
-                      title={player.is_featured ? "Quitar de Destacados" : "Marcar como Destacado"}
-                      className={cn(
-                        "flex h-8 w-8 items-center justify-center rounded border transition-colors",
-                        player.is_featured 
-                          ? "border-amber-500/50 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20" 
-                          : "border-border bg-surface text-muted-foreground hover:text-amber-500 hover:border-amber-500/50"
-                      )}
-                    >
-                      <Star className={cn("h-3 w-3", player.is_featured && "fill-current")} />
-                    </button>
-                    <button
-                      onClick={() => openPlayerDetails(player)}
-                      title="Ver Detalles Completos y Editar"
-                      className="flex-1 flex h-8 items-center justify-center gap-1 rounded bg-surface border border-border text-xs font-500 text-white hover:bg-white/5 transition-colors"
-                    >
-                      <Eye className="h-3 w-3" /> Detalles / Editar
-                    </button>
-                    <button
-                      onClick={() => {
-                        setActionModal({ type: 'status', player })
-                        setNewStatus(player.status)
-                      }}
-                      title="Cambiar Estado"
-                      className="flex h-8 w-8 items-center justify-center rounded border border-border bg-surface text-muted-foreground hover:text-white transition-colors"
-                    >
-                      <Ban className="h-3 w-3" />
-                    </button>
+                    {isVisitor ? (
+                      <button
+                        onClick={() => openPlayerDetails(player)}
+                        title="Ver Información y Documentos"
+                        className="flex-1 flex h-8 items-center justify-center gap-1.5 rounded bg-surface border border-sky-500/30 text-xs font-500 text-sky-300 hover:bg-sky-500/10 transition-colors"
+                      >
+                        <Eye className="h-3.5 w-3.5" /> Ver Información
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleToggleFeatured(player.id, player.is_featured)}
+                          title={player.is_featured ? "Quitar de Destacados" : "Marcar como Destacado"}
+                          className={cn(
+                            "flex h-8 w-8 items-center justify-center rounded border transition-colors",
+                            player.is_featured 
+                              ? "border-amber-500/50 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20" 
+                              : "border-border bg-surface text-muted-foreground hover:text-amber-500 hover:border-amber-500/50"
+                          )}
+                        >
+                          <Star className={cn("h-3 w-3", player.is_featured && "fill-current")} />
+                        </button>
+                        <button
+                          onClick={() => openPlayerDetails(player)}
+                          title="Ver Detalles Completos y Editar"
+                          className="flex-1 flex h-8 items-center justify-center gap-1 rounded bg-surface border border-border text-xs font-500 text-white hover:bg-white/5 transition-colors"
+                        >
+                          <Eye className="h-3 w-3" /> Detalles / Editar
+                        </button>
+                        {player.status === 'inactive' ? (
+                          <button
+                            onClick={() => handleReactivatePlayer(player.id, player.name)}
+                            title="Reactivar Jugador"
+                            className="flex h-8 w-8 items-center justify-center rounded border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleDeactivatePlayer(player.id, player.name)}
+                            title="Desactivar Jugador (conserva su registro)"
+                            className="flex h-8 w-8 items-center justify-center rounded border border-border bg-surface text-muted-foreground hover:text-amber-400 hover:border-amber-500/40 transition-colors"
+                          >
+                            <Power className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            setActionModal({ type: 'status', player })
+                            setNewStatus(player.status)
+                          }}
+                          title="Cambiar Estado Avanzado"
+                          className="flex h-8 w-8 items-center justify-center rounded border border-border bg-surface text-muted-foreground hover:text-white transition-colors"
+                        >
+                          <Ban className="h-3 w-3" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1309,24 +1364,26 @@ export function AdminPlayers() {
                             </div>
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setTerminatingContract({
-                                contractId: selectedPlayer.activeContract!.id,
-                                playerId: selectedPlayer.id,
-                                playerName: selectedPlayer.name,
-                                teamId: selectedPlayer.activeContract!.team_id,
-                                teamName: selectedPlayer.activeContract!.teamName
-                              })
-                              setTerminationJustification('')
-                            }}
-                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider text-white bg-red-600 hover:bg-red-500 transition-colors shadow-sm"
-                            title="Dar de baja contrato administrativamente"
-                          >
-                            <UserX className="w-4 h-4" />
-                            <span>Dar de Baja Contrato</span>
-                          </button>
+                          {!isVisitor && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTerminatingContract({
+                                  contractId: selectedPlayer.activeContract!.id,
+                                  playerId: selectedPlayer.id,
+                                  playerName: selectedPlayer.name,
+                                  teamId: selectedPlayer.activeContract!.team_id,
+                                  teamName: selectedPlayer.activeContract!.teamName
+                                })
+                                setTerminationJustification('')
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider text-white bg-red-600 hover:bg-red-500 transition-colors shadow-sm"
+                              title="Dar de baja contrato administrativamente"
+                            >
+                              <UserX className="w-4 h-4" />
+                              <span>Dar de Baja Contrato</span>
+                            </button>
+                          )}
                         </div>
 
                         <div className="grid sm:grid-cols-2 gap-3 pt-3 border-t border-border/60 text-xs">
@@ -1416,24 +1473,42 @@ export function AdminPlayers() {
             </div>
 
             {/* Footer Fijo */}
-            <div className="flex shrink-0 items-center justify-end border-t border-border p-6 bg-surface z-10">
-              {modalTab === 'profile' ? (
-                <GmxButton
-                  variant="secondary"
-                  onClick={handleSaveDetails}
-                  className="gap-2 px-6"
-                >
-                  <Save className="w-4 h-4" />
-                  GUARDAR CAMBIOS
-                </GmxButton>
+            <div className="flex shrink-0 items-center justify-between border-t border-border p-6 bg-surface z-10 gap-4">
+              {isVisitor ? (
+                <div className="flex flex-col sm:flex-row items-center justify-between w-full gap-3">
+                  <div className="flex items-center gap-2 text-xs text-sky-400 bg-sky-500/10 border border-sky-500/20 px-3.5 py-2.5 rounded-lg w-full sm:w-auto">
+                    <Eye className="w-4 h-4 shrink-0" />
+                    <span>Modo Consulta (Admin Visitante): Puedes consultar la información y descargar imágenes o reportes. No se permite edición.</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPlayer(null)}
+                    className="w-full sm:w-auto px-6 py-2.5 rounded-lg border border-border text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/5 transition-colors text-center"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              ) : modalTab === 'profile' ? (
+                <div className="flex justify-end w-full">
+                  <GmxButton
+                    variant="secondary"
+                    onClick={handleSaveDetails}
+                    className="gap-2 px-6"
+                  >
+                    <Save className="w-4 h-4" />
+                    GUARDAR CAMBIOS
+                  </GmxButton>
+                </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setSelectedPlayer(null)}
-                  className="px-6 py-2.5 rounded-lg border border-border text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/5 transition-colors"
-                >
-                  Cerrar
-                </button>
+                <div className="flex justify-end w-full">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPlayer(null)}
+                    className="px-6 py-2.5 rounded-lg border border-border text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/5 transition-colors"
+                  >
+                    Cerrar
+                  </button>
+                </div>
               )}
             </div>
           </div>

@@ -24,7 +24,9 @@ import {
   Trophy,
   Loader2,
   Globe,
-  Ban
+  Ban,
+  RotateCcw,
+  Power
 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
@@ -103,6 +105,7 @@ interface EditingTeamState {
 
 export function AdminTeams() {
   const { user } = useAuth()
+  const isVisitor = Boolean(user?.isAdminVisitante)
   const [teams, setTeams] = useState<Team[]>([])
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
   const [modalTab, setModalTab] = useState<'info' | 'roster'>('info')
@@ -556,12 +559,26 @@ export function AdminTeams() {
     }
   }
 
-  const handleDelete = async () => {
+  const handleDeactivate = async () => {
     if (confirmAction) {
-      await supabase.from('teams').delete().eq('id', confirmAction.id)
-      setTeams(prev => prev.filter(t => t.id !== confirmAction.id))
+      const { error } = await supabase.from('teams').update({ status: 'inactive' }).eq('id', confirmAction.id)
+      if (error) {
+        toast.error('Error al desactivar el equipo: ' + error.message)
+      } else {
+        setTeams(prev => prev.map(t => t.id === confirmAction.id ? { ...t, status: 'inactive' } : t))
+        toast.success(`Equipo "${confirmAction.name}" desactivado correctamente. El registro se conserva y puede reactivarse.`)
+      }
       setConfirmAction(null)
-      toast.success('Equipo eliminado correctamente')
+    }
+  }
+
+  const handleReactivate = async (teamId: string, teamName: string) => {
+    const { error } = await supabase.from('teams').update({ status: 'active' }).eq('id', teamId)
+    if (error) {
+      toast.error('Error al reactivar el equipo: ' + error.message)
+    } else {
+      setTeams(prev => prev.map(t => t.id === teamId ? { ...t, status: 'active' } : t))
+      toast.success(`Equipo "${teamName}" reactivado correctamente a estado Activo.`)
     }
   }
 
@@ -750,37 +767,67 @@ export function AdminTeams() {
                     </span>
                   </div>
                 )}
+                {team.status === 'inactive' && (
+                  <div className="absolute -top-2.5 left-4 z-10">
+                    <span className="px-2 py-0.5 rounded bg-amber-600 text-white font-extrabold text-[10px] tracking-wider uppercase shadow flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      Inactivo
+                    </span>
+                  </div>
+                )}
 
                 <div className="absolute right-3 top-3 flex items-center gap-1.5 z-10">
-                  <button 
-                    onClick={() => {
-                      setStatusModalTeam(team)
-                      setQuickNewStatus(team.status)
-                    }}
-                    title="Cambiar Estado (Activo / Baneado / etc.)"
-                    className={cn(
-                      "p-2 transition-colors bg-surface border border-border rounded-md",
-                      team.status === 'banned' 
-                        ? "text-red-400 border-red-500/40 hover:bg-red-500/20" 
-                        : "text-muted-foreground hover:text-white hover:border-primary"
-                    )}
-                  >
-                    <Ban className="w-4 h-4" />
-                  </button>
-                  <button 
-                    onClick={() => openTeamDetails(team)}
-                    title="Editar Información"
-                    className="p-2 text-muted-foreground hover:text-white transition-colors bg-surface border border-border rounded-md hover:border-primary"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </button>
-                  <button 
-                    onClick={() => setConfirmAction({ id: team.id, name: team.name })}
-                    title="Eliminar Equipo"
-                    className="p-2 text-muted-foreground hover:text-red-500 transition-colors bg-surface border border-border rounded-md hover:border-red-500"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {isVisitor ? (
+                    <button 
+                      onClick={() => openTeamDetails(team)}
+                      title="Ver Información y Roster"
+                      className="p-2 text-sky-400 hover:text-white transition-colors bg-surface border border-border rounded-md hover:border-sky-400"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <>
+                      <button 
+                        onClick={() => {
+                          setStatusModalTeam(team)
+                          setQuickNewStatus(team.status)
+                        }}
+                        title="Cambiar Estado (Activo / Baneado / etc.)"
+                        className={cn(
+                          "p-2 transition-colors bg-surface border border-border rounded-md",
+                          team.status === 'banned' 
+                            ? "text-red-400 border-red-500/40 hover:bg-red-500/20" 
+                            : "text-muted-foreground hover:text-white hover:border-primary"
+                        )}
+                      >
+                        <Ban className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => openTeamDetails(team)}
+                        title="Editar Información"
+                        className="p-2 text-muted-foreground hover:text-white transition-colors bg-surface border border-border rounded-md hover:border-primary"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      {team.status === 'inactive' ? (
+                        <button 
+                          onClick={() => handleReactivate(team.id, team.name)}
+                          title="Reactivar Equipo"
+                          className="p-2 text-emerald-400 hover:text-emerald-300 transition-colors bg-surface border border-emerald-500/40 rounded-md hover:bg-emerald-500/20"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={() => setConfirmAction({ id: team.id, name: team.name })}
+                          title="Desactivar Equipo (el registro se conserva)"
+                          className="p-2 text-muted-foreground hover:text-amber-400 transition-colors bg-surface border border-border rounded-md hover:border-amber-500"
+                        >
+                          <Power className="w-4 h-4" />
+                        </button>
+                      )}
+                    </>
+                  )}
                 </div>
 
                 <div className="relative mb-4">
@@ -818,31 +865,46 @@ export function AdminTeams() {
                 </div>
 
                 <div className="mt-auto flex w-full items-center justify-between border-t border-border pt-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStatusModalTeam(team)
-                      setQuickNewStatus(team.status)
-                    }}
-                    title="Clic para cambiar estado"
-                    className="flex items-center gap-1.5 text-sm font-500 text-white hover:opacity-80 transition-opacity cursor-pointer group/btn"
-                  >
-                    <Users className="h-4 w-4 text-primary" />
-                    {team.status === 'active' ? (
-                       <span className="text-emerald-500 font-semibold text-xs uppercase group-hover/btn:underline">Activo</span>
-                    ) : team.status === 'pending' ? (
-                       <span className="text-amber-400 font-semibold text-xs uppercase group-hover/btn:underline">En Revisión</span>
-                    ) : team.status === 'banned' ? (
-                       <span className="text-red-500 font-semibold text-xs uppercase group-hover/btn:underline">Baneado</span>
-                    ) : (
-                       <span className="text-yellow-500 font-semibold text-xs uppercase group-hover/btn:underline">Inactivo</span>
-                    )}
-                  </button>
+                  {isVisitor ? (
+                    <div className="flex items-center gap-1.5 text-sm font-500 text-white">
+                      <Users className="h-4 w-4 text-primary" />
+                      {team.status === 'active' ? (
+                         <span className="text-emerald-500 font-semibold text-xs uppercase">Activo</span>
+                      ) : team.status === 'pending' ? (
+                         <span className="text-amber-400 font-semibold text-xs uppercase">En Revisión</span>
+                      ) : team.status === 'banned' ? (
+                         <span className="text-red-500 font-semibold text-xs uppercase">Baneado</span>
+                      ) : (
+                         <span className="text-yellow-500 font-semibold text-xs uppercase">Inactivo</span>
+                      )}
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStatusModalTeam(team)
+                        setQuickNewStatus(team.status)
+                      }}
+                      title="Clic para cambiar estado"
+                      className="flex items-center gap-1.5 text-sm font-500 text-white hover:opacity-80 transition-opacity cursor-pointer group/btn"
+                    >
+                      <Users className="h-4 w-4 text-primary" />
+                      {team.status === 'active' ? (
+                         <span className="text-emerald-500 font-semibold text-xs uppercase group-hover/btn:underline">Activo</span>
+                      ) : team.status === 'pending' ? (
+                         <span className="text-amber-400 font-semibold text-xs uppercase group-hover/btn:underline">En Revisión</span>
+                      ) : team.status === 'banned' ? (
+                         <span className="text-red-500 font-semibold text-xs uppercase group-hover/btn:underline">Baneado</span>
+                      ) : (
+                         <span className="text-yellow-500 font-semibold text-xs uppercase group-hover/btn:underline">Inactivo</span>
+                      )}
+                    </button>
+                  )}
                   <button 
                     onClick={() => openTeamDetails(team)} 
                     className="text-xs font-600 text-primary hover:text-white transition-colors flex items-center gap-1.5"
                   >
-                    <span>Editar / Roster</span>
+                    <span>{isVisitor ? 'Ver Roster / Info' : 'Editar / Roster'}</span>
                     <ExternalLink className="h-3.5 w-3.5" />
                   </button>
                 </div>
@@ -1276,56 +1338,65 @@ export function AdminTeams() {
                     </div>
                   </div>
 
-                  {/* Barra de Guardar */}
+                  {/* Barra de Guardar / Modo Solo Lectura */}
                   <div className="sticky bottom-0 bg-surface/95 backdrop-blur border border-border p-4 rounded-xl flex flex-wrap items-center justify-between gap-4 z-20 shadow-xl">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-700 uppercase tracking-wider text-muted-foreground whitespace-nowrap">
-                          Estado:
-                        </span>
-                        <div className="relative">
-                          <select
-                            value={editingTeam.status}
-                            onChange={(e) => setEditingTeam({ ...editingTeam, status: e.target.value })}
-                            className={cn(
-                              "appearance-none rounded-lg border px-3 py-2 pr-8 text-xs font-bold uppercase tracking-wider focus:outline-none focus:ring-1 cursor-pointer transition-colors font-sans",
-                              editingTeam.status === 'active' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 focus:border-emerald-500" :
-                              editingTeam.status === 'pending' ? "bg-amber-500/10 text-amber-400 border-amber-500/30 focus:border-amber-500" :
-                              editingTeam.status === 'banned' ? "bg-red-500/10 text-red-400 border-red-500/30 focus:border-red-500" :
-                              "bg-yellow-500/10 text-yellow-400 border-yellow-500/30 focus:border-yellow-500"
-                            )}
-                          >
-                            <option value="active" className="bg-surface text-emerald-400 font-semibold">Activo</option>
-                            <option value="pending" className="bg-surface text-amber-400 font-semibold">En Revisión</option>
-                            <option value="inactive" className="bg-surface text-yellow-400 font-semibold">Inactivo</option>
-                            <option value="banned" className="bg-surface text-red-400 font-semibold">Baneado</option>
-                          </select>
-                          <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                        </div>
+                    {isVisitor ? (
+                      <div className="flex items-center gap-2 text-xs text-sky-400 bg-sky-500/10 border border-sky-500/20 px-4 py-3 rounded-lg w-full">
+                        <Eye className="w-4 h-4 shrink-0" />
+                        <span>Modo Consulta (Admin Visitante): Puedes consultar la información, descargar imágenes y exportar reportes. No tienes permisos para modificar campos.</span>
                       </div>
-                      <span className="text-xs text-muted-foreground hidden lg:inline">
-                        Los cambios se aplicarán inmediatamente en la base de datos de GMX Gaming.
-                      </span>
-                    </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-700 uppercase tracking-wider text-muted-foreground whitespace-nowrap">
+                              Estado:
+                            </span>
+                            <div className="relative">
+                              <select
+                                value={editingTeam.status}
+                                onChange={(e) => setEditingTeam({ ...editingTeam, status: e.target.value })}
+                                className={cn(
+                                  "appearance-none rounded-lg border px-3 py-2 pr-8 text-xs font-bold uppercase tracking-wider focus:outline-none focus:ring-1 cursor-pointer transition-colors font-sans",
+                                  editingTeam.status === 'active' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 focus:border-emerald-500" :
+                                  editingTeam.status === 'pending' ? "bg-amber-500/10 text-amber-400 border-amber-500/30 focus:border-amber-500" :
+                                  editingTeam.status === 'banned' ? "bg-red-500/10 text-red-400 border-red-500/30 focus:border-red-500" :
+                                  "bg-yellow-500/10 text-yellow-400 border-yellow-500/30 focus:border-yellow-500"
+                                )}
+                              >
+                                <option value="active" className="bg-surface text-emerald-400 font-semibold">Activo</option>
+                                <option value="pending" className="bg-surface text-amber-400 font-semibold">En Revisión</option>
+                                <option value="inactive" className="bg-surface text-yellow-400 font-semibold">Inactivo</option>
+                                <option value="banned" className="bg-surface text-red-400 font-semibold">Baneado</option>
+                              </select>
+                              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                            </div>
+                          </div>
+                          <span className="text-xs text-muted-foreground hidden lg:inline">
+                            Los cambios se aplicarán inmediatamente en la base de datos de GMX Gaming.
+                          </span>
+                        </div>
 
-                    <button
-                      type="button"
-                      disabled={isSavingTeam}
-                      onClick={handleSaveTeam}
-                      className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider text-black bg-primary hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 disabled:opacity-50 cursor-pointer"
-                    >
-                      {isSavingTeam ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Guardando...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Save className="w-4 h-4" />
-                          <span>Guardar Cambios</span>
-                        </>
-                      )}
-                    </button>
+                        <button
+                          type="button"
+                          disabled={isSavingTeam}
+                          onClick={handleSaveTeam}
+                          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider text-black bg-primary hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 disabled:opacity-50 cursor-pointer"
+                        >
+                          {isSavingTeam ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span>Guardando...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Save className="w-4 h-4" />
+                              <span>Guardar Cambios</span>
+                            </>
+                          )}
+                        </button>
+                      </>
+                    )}
                   </div>
 
                 </div>
@@ -1357,7 +1428,9 @@ export function AdminTeams() {
                               <th className="px-4 py-3 font-600 text-muted-foreground text-xs uppercase tracking-wider">ROLES</th>
                               <th className="px-4 py-3 font-600 text-muted-foreground text-xs uppercase tracking-wider">PAÍS</th>
                               <th className="px-4 py-3 font-600 text-muted-foreground text-xs uppercase tracking-wider">DISCORD</th>
-                              <th className="px-4 py-3 font-600 text-muted-foreground text-xs uppercase tracking-wider text-right">ACCIÓN</th>
+                              {!isVisitor && (
+                                <th className="px-4 py-3 font-600 text-muted-foreground text-xs uppercase tracking-wider text-right">ACCIÓN</th>
+                              )}
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border bg-surface">
@@ -1388,25 +1461,27 @@ export function AdminTeams() {
                                   </span>
                                 </td>
                                 <td className="px-4 py-3 text-primary text-xs">{p.discord}</td>
-                                <td className="px-4 py-3 text-right">
-                                  <button
-                                    onClick={() => {
-                                      setTerminatingContract({
-                                        contractId: p.contractId,
-                                        playerId: p.playerId,
-                                        playerName: p.nickname || p.name,
-                                        teamId: selectedTeam.id,
-                                        teamName: selectedTeam.name
-                                      })
-                                      setTerminationJustification('')
-                                    }}
-                                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold text-red-400 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-colors"
-                                    title="Dar de baja contrato administrativamente"
-                                  >
-                                    <UserX className="w-3.5 h-3.5" />
-                                    <span>Dar de Baja</span>
-                                  </button>
-                                </td>
+                                {!isVisitor && (
+                                  <td className="px-4 py-3 text-right">
+                                    <button
+                                      onClick={() => {
+                                        setTerminatingContract({
+                                          contractId: p.contractId,
+                                          playerId: p.playerId,
+                                          playerName: p.nickname || p.name,
+                                          teamId: selectedTeam.id,
+                                          teamName: selectedTeam.name
+                                        })
+                                        setTerminationJustification('')
+                                      }}
+                                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold text-red-400 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-colors"
+                                      title="Dar de baja contrato administrativamente"
+                                    >
+                                      <UserX className="w-3.5 h-3.5" />
+                                      <span>Dar de Baja</span>
+                                    </button>
+                                  </td>
+                                )}
                               </tr>
                             ))}
                           </tbody>
@@ -1583,24 +1658,28 @@ export function AdminTeams() {
         </div>
       )}
 
-      {/* Confirmation Modal */}
+      {/* Confirmation Modal (Desactivación) */}
       {confirmAction && (
         <div className="fixed inset-0 z-[1010] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setConfirmAction(null)} />
           <div className="relative w-full max-w-md rounded-xl border border-border bg-surface p-6 sm:p-8 shadow-2xl animate-in zoom-in-95 duration-200 text-center">
             
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full mb-6 bg-red-500/10 text-red-500">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full mb-6 bg-amber-500/10 text-amber-500">
               <AlertCircle className="h-8 w-8" />
             </div>
 
             <h3 className="font-display text-2xl font-700 uppercase tracking-tight text-white mb-2">
-              ¿Eliminar Equipo?
+              ¿Desactivar Equipo?
             </h3>
             
-            <p className="text-muted-foreground mb-8">
-              Estás a punto de eliminar al equipo:<br/>
-              <span className="text-white mt-2 block font-500">{confirmAction.name}</span>
+            <p className="text-muted-foreground mb-6 text-sm">
+              Estás a punto de desactivar al equipo:<br/>
+              <span className="text-white mt-1 block font-semibold text-base">{confirmAction.name}</span>
             </p>
+
+            <div className="bg-deep/60 p-3.5 rounded-lg border border-border mb-6 text-xs text-muted-foreground text-left">
+              💡 <strong>No se perderá el registro:</strong> El equipo pasará a estado <span className="text-yellow-400 font-semibold">Inactivo</span>. Sus datos, contratos y estadísticas se mantendrán intactos y podrás reactivarlo en cualquier momento.
+            </div>
 
             <div className="flex flex-col sm:flex-row gap-3">
               <button 
@@ -1610,11 +1689,11 @@ export function AdminTeams() {
                 CANCELAR
               </button>
               <button 
-                onClick={handleDelete}
-                className="flex-1 rounded-md px-4 py-3 font-display text-[13px] font-600 uppercase tracking-widest text-white transition-colors relative overflow-hidden clip-corner group bg-red-600 hover:bg-red-500"
+                onClick={handleDeactivate}
+                className="flex-1 rounded-md px-4 py-3 font-display text-[13px] font-600 uppercase tracking-widest text-white transition-colors relative overflow-hidden clip-corner group bg-amber-600 hover:bg-amber-500"
               >
                 <span className="relative z-10 flex items-center justify-center gap-2">
-                  ELIMINAR <Trash2 className="w-4 h-4" />
+                  DESACTIVAR <Power className="w-4 h-4" />
                 </span>
               </button>
             </div>
