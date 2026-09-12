@@ -8,6 +8,8 @@ import { useDebounce } from '@/hooks/use-debounce'
 import { cn, getPlayerSlug, getTeamSlug, getTournamentSlug } from '@/lib/utils'
 import Link from 'next/link'
 
+import { useLanguage } from '@/lib/language-context'
+
 type SearchResult = {
   id: string
   title: string
@@ -22,6 +24,7 @@ export function GlobalSearch() {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const { d } = useLanguage()
   const supabase = createClient()
   const debouncedQuery = useDebounce(query, 300)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -106,7 +109,7 @@ export function GlobalSearch() {
       }
       if (playersResponse.data) {
         playersResponse.data.forEach(p => {
-          const displayNickname = p.nickname || p.game_nickname || 'Jugador'
+          const displayNickname = p.nickname || p.game_nickname || d.header.searchTypePlayer
           const slug = getPlayerSlug(p) || p.id
           results.push({
             id: p.id,
@@ -134,7 +137,7 @@ export function GlobalSearch() {
       setIsLoading(false)
     }
     searchDatabase()
-  }, [debouncedQuery])
+  }, [debouncedQuery, d])
 
   return (
     <>
@@ -144,7 +147,7 @@ export function GlobalSearch() {
         className="flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-muted-foreground transition-colors hover:border-white/20 hover:text-white shrink-0 cursor-pointer"
       >
         <Search className="h-4 w-4 shrink-0" />
-        <span className="hidden lg:inline">Buscar...</span>
+        <span className="hidden lg:inline">{d.header.searchPlaceholder}</span>
         <span className="hidden lg:inline ml-auto text-xs opacity-50 border border-border rounded px-1.5">⌘K</span>
       </button>
 
@@ -175,7 +178,7 @@ export function GlobalSearch() {
                   type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Busca jugadores por nickname, equipos o torneos..."
+                  placeholder={d.header.searchModalPlaceholder}
                   className="flex-1 bg-transparent font-display text-lg text-white outline-none placeholder:text-muted-foreground"
                 />
                 {isLoading && <Loader2 className="ml-3 h-5 w-5 animate-spin text-primary" />}
@@ -190,13 +193,13 @@ export function GlobalSearch() {
               <div className="max-h-[60vh] overflow-y-auto overscroll-contain px-2 py-4">
                 {query.length > 0 && query.length < 2 && (
                   <p className="text-center text-sm text-muted-foreground py-6">
-                    Escribe al menos 2 caracteres...
+                    {d.header.searchMinChars}
                   </p>
                 )}
 
                 {query.length >= 2 && results.length === 0 && !isLoading && (
                   <p className="text-center text-sm text-muted-foreground py-6">
-                    No se encontraron resultados para "{query}".
+                    {d.header.searchNoResults} "{query}".
                   </p>
                 )}
 
@@ -204,6 +207,7 @@ export function GlobalSearch() {
                   <div className="flex flex-col gap-1">
                     {results.map((result, idx) => {
                       const destinationUrl = `/${result.type === 'player' ? 'jugadores' : result.type === 'team' ? 'equipos' : 'torneos'}/${result.slug || result.id}`
+                      const typeLabel = result.type === 'player' ? d.header.searchTypePlayer : result.type === 'team' ? d.header.searchTypeTeam : d.header.searchTypeTournament
                       return (
                         <motion.div
                           key={`${result.type}-${result.id}-${idx}`}
@@ -242,7 +246,7 @@ export function GlobalSearch() {
                                   {result.title}
                                 </span>
                                 <span className="text-xs font-500 uppercase tracking-wider text-muted-foreground">
-                                  {result.type === 'player' ? 'Jugador' : result.type === 'team' ? 'Equipo' : 'Torneo'}
+                                  {typeLabel}
                                   {result.subtitle && (result.type === 'team' ? ` • [${result.subtitle}]` : ` • ${result.subtitle}`)}
                                 </span>
                               </div>

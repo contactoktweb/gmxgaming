@@ -6,6 +6,7 @@ import { Camera, Tv, Mic, Loader2, ArrowRight } from 'lucide-react'
 import { SplitText } from '@/components/split-text'
 import { Reveal, Stagger, StaggerItem } from '@/components/anim'
 import { createClient } from '@/utils/supabase/client'
+import { useLanguage } from '@/lib/language-context'
 
 type Caster = {
   id: string
@@ -19,6 +20,7 @@ type Caster = {
 
 export function Casters() {
   const ref = useRef<HTMLDivElement>(null)
+  const { d } = useLanguage()
   const { scrollYProgress } = useScroll({
     target: ref,
     offset: ['start end', 'end start'],
@@ -53,7 +55,7 @@ export function Casters() {
     <section ref={ref} className="relative overflow-hidden bg-deep py-12 lg:py-16">
       {/* Giant background text */}
       <span className="pointer-events-none absolute -right-20 top-20 select-none font-display text-[15vw] font-700 uppercase leading-none text-white/[0.02]">
-        TALENTO
+        {d.casters.bgText}
       </span>
 
       <div className="container relative z-10 mx-auto px-5 lg:px-10">
@@ -63,7 +65,7 @@ export function Casters() {
               <div className="mb-4 flex items-center gap-3">
                 <span className="h-px w-10 bg-primary" />
                 <span className="font-display text-sm font-600 uppercase tracking-widest text-primary">
-                  Voces de GMX
+                  {d.casters.badge}
                 </span>
               </div>
             </Reveal>
@@ -71,7 +73,7 @@ export function Casters() {
             <SplitText
               as="h2"
               variant="title"
-              lines={['NUESTROS', 'CASTERS']}
+              lines={[d.casters.title1, d.casters.title2]}
               className="font-display text-5xl font-700 uppercase leading-[0.95] tracking-tight text-white sm:text-6xl lg:text-7xl"
             />
           </div>
@@ -85,9 +87,9 @@ export function Casters() {
             >
               <div className="flex flex-col">
                 <span className="font-display text-sm font-600 uppercase tracking-widest text-white transition-colors group-hover:text-primary">
-                  ¿Quieres ser Caster?
+                  {d.casters.wantToBeCaster}
                 </span>
-                <span className="text-xs text-muted-foreground">Postúlate por WhatsApp</span>
+                <span className="text-xs text-muted-foreground">{d.casters.applyWhatsApp}</span>
               </div>
               <ArrowRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-primary" />
             </a>

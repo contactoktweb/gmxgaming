@@ -7,6 +7,7 @@ import { SplitText } from '@/components/split-text'
 import { Reveal } from '@/components/anim'
 import { GmxButton } from '@/components/gmx-button'
 import { useAuth } from '@/lib/auth-context'
+import { useLanguage } from '@/lib/language-context'
 
 // Configurable: replace with the official GMX Gaming video embed URL.
 const VIDEO_URL = 'https://www.youtube.com/embed/dQw4w9WgXcQ'
@@ -15,6 +16,7 @@ export function VideoExperience() {
   const ref = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
   const { user } = useAuth()
+  const { d } = useLanguage()
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end start'] })
   const y = useTransform(scrollYProgress, [0, 1], ['-10%', '10%'])
 
@@ -31,20 +33,20 @@ export function VideoExperience() {
           <div className="max-w-xl">
             <Reveal direction="fade">
               <span className="font-display text-xs font-600 uppercase tracking-[0.3em] text-primary sm:text-sm">
-                Vive la competencia
+                {d.video.badge}
               </span>
             </Reveal>
             <SplitText
               as="h2"
               variant="title"
-              lines={['TU CAMINO', 'COMIENZA AQUÍ']}
+              lines={d.video.title}
               className="mt-4 font-display text-4xl font-700 uppercase leading-[0.95] tracking-tight text-white sm:text-5xl lg:text-6xl"
             />
             <Reveal direction="up" delay={0.2} className="mt-8 flex justify-center lg:justify-start">
               {user ? (
-                <GmxButton href="/micuenta">IR A TU PERFIL</GmxButton>
+                <GmxButton href="/micuenta">{d.video.goToProfile}</GmxButton>
               ) : (
-                <GmxButton href="#registro">ÚNETE A GMX</GmxButton>
+                <GmxButton href="#registro">{d.video.joinGmx}</GmxButton>
               )}
             </Reveal>
           </div>
@@ -52,8 +54,8 @@ export function VideoExperience() {
           {/* Play button with ripples */}
           <button
             onClick={() => setOpen(true)}
-            aria-label="Reproducir vídeo de GMX Gaming"
-            className="relative flex h-24 w-24 shrink-0 items-center justify-center"
+            aria-label={d.video.playAria}
+            className="relative flex h-24 w-24 shrink-0 items-center justify-center cursor-pointer"
             data-cursor
           >
             <span className="absolute inset-0 rounded-full bg-primary/40 animate-ripple" />
@@ -84,15 +86,15 @@ export function VideoExperience() {
             >
               <button
                 onClick={() => setOpen(false)}
-                aria-label="Cerrar vídeo"
-                className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center bg-primary text-white transition-colors hover:bg-primary-dark"
+                aria-label={d.video.closeAria}
+                className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center bg-primary text-white transition-colors hover:bg-primary-dark cursor-pointer"
               >
                 <X className="size-5" />
               </button>
               <iframe
                 className="h-full w-full"
                 src={VIDEO_URL}
-                title="Vídeo oficial de GMX Gaming"
+                title={d.video.videoTitle}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
               />

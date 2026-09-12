@@ -5,9 +5,11 @@ import { SplitText } from '@/components/split-text'
 import { Reveal } from '@/components/anim'
 import { GmxButton } from '@/components/gmx-button'
 import { useAuth } from '@/lib/auth-context'
+import { useLanguage } from '@/lib/language-context'
 
 export function CtaPrimary() {
   const { user } = useAuth()
+  const { d } = useLanguage()
 
   return (
     <section className="relative overflow-hidden">
@@ -21,20 +23,20 @@ export function CtaPrimary() {
         <div>
           <Reveal direction="fade">
             <span className="font-display text-xs font-600 uppercase tracking-[0.3em] text-primary sm:text-sm">
-              El siguiente nivel te espera
+              {d.ctaPrimary.badge}
             </span>
           </Reveal>
           <SplitText
             as="h2"
             variant="title"
-            lines={['ÚNETE A GMX GAMING', 'Y CONVIÉRTETE EN', 'EL PRÓXIMO PRO']}
+            lines={d.ctaPrimary.title}
             className="mt-4 font-display text-4xl font-700 uppercase leading-[0.95] tracking-tight text-white sm:text-5xl lg:text-6xl xl:text-7xl"
           />
           <Reveal direction="up" delay={0.2} className="mt-9">
             {user ? (
-              <GmxButton href="/micuenta">IR A TU PERFIL</GmxButton>
+              <GmxButton href="/micuenta">{d.ctaPrimary.goToProfile}</GmxButton>
             ) : (
-              <GmxButton href="/crear-cuenta">CREA TU USUARIO</GmxButton>
+              <GmxButton href="/crear-cuenta">{d.ctaPrimary.createUser}</GmxButton>
             )}
           </Reveal>
         </div>
@@ -50,7 +52,7 @@ export function CtaPrimary() {
           <div className="animate-float-bob-y">
             <img
               src="/images/cta-player.png"
-              alt="Campeón de GMX Gaming con trofeo"
+              alt={d.ctaPrimary.playerImgAlt}
               className="max-h-[560px] w-auto object-contain drop-shadow-[0_25px_60px_rgba(255,45,32,0.35)]"
             />
           </div>

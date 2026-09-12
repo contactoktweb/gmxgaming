@@ -1,13 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Menu, X, LogOut, User, Globe, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
-import { NAV_LINKS, SOCIALS } from '@/lib/site-data'
+import { SOCIALS } from '@/lib/site-data'
 import { GmxLogo } from '@/components/gmx-logo'
 import { GmxButton } from '@/components/gmx-button'
 import { useAuth } from '@/lib/auth-context'
+import { useLanguage } from '@/lib/language-context'
 import { GlobalSearch } from '@/components/global-search'
 import { cn } from '@/lib/utils'
 
@@ -15,8 +16,23 @@ export function SiteHeader() {
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
   const [showLogoutModal, setShowLogoutModal] = useState(false)
-  const [lang, setLang] = useState('ES')
+  const { lang, setLanguage, toggleLang, d } = useLanguage()
   const { user, logout } = useAuth()
+
+  const navLinks = useMemo(() => [
+    { label: d.nav.home, href: '/#hero' },
+    { 
+      label: d.nav.esportsRegistration, 
+      href: '#registro',
+      submenu: [
+        { label: d.nav.registerTeam, href: '/registro/alta-de-equipo' },
+        { label: d.nav.registerPlayer, href: '/registro/alta-de-jugador' },
+        { label: d.nav.registerContract, href: '/registro/alta-de-contrato' }
+      ]
+    },
+    { label: d.nav.affiliatedTeams, href: '/equipos' },
+    { label: d.nav.tournaments, href: '/torneos' },
+  ], [d])
 
   const handleLogout = () => {
     logout()
@@ -31,10 +47,10 @@ export function SiteHeader() {
   const handleRestrictedClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
     if (!user && href.includes('/registro')) {
       e.preventDefault()
-      toast.error('Acceso Restringido', {
-        description: 'Debes iniciar sesión para realizar altas o registros en la plataforma.',
+      toast.error(d.header.restrictedAccess, {
+        description: d.header.restrictedLoginDesc,
         action: {
-          label: 'Iniciar Sesión',
+          label: d.header.login,
           onClick: () => window.location.href = '/login'
         }
       })
@@ -43,10 +59,10 @@ export function SiteHeader() {
 
     if (href === '/registro/alta-de-contrato' && !isApprovedPlayer) {
       e.preventDefault()
-      toast.error('Acceso Restringido', {
-        description: 'Debes ser un Jugador Profesional Aprobado para registrar un contrato.',
+      toast.error(d.header.restrictedAccess, {
+        description: d.header.restrictedPlayerDesc,
         action: {
-          label: 'Ver Mi Cuenta',
+          label: d.header.viewMyAccount,
           onClick: () => window.location.href = '/micuenta'
         }
       })
@@ -54,7 +70,7 @@ export function SiteHeader() {
     }
   }
 
-  const getFilteredSubmenu = (submenu: typeof NAV_LINKS[0]['submenu']) => {
+  const getFilteredSubmenu = (submenu?: { label: string; href: string }[]) => {
     if (!submenu) return undefined;
     return submenu.filter(sub => {
       // Alta de Contrato SOLO para jugadores aprobados
@@ -96,7 +112,7 @@ export function SiteHeader() {
           <GmxLogo className="shrink-0" />
 
           <nav className="hidden items-center gap-8 lg:flex">
-            {NAV_LINKS.map((link) => {
+            {navLinks.map((link) => {
               const filteredSubmenu = getFilteredSubmenu(link.submenu);
               
               return (
@@ -139,14 +155,34 @@ export function SiteHeader() {
             <GlobalSearch />
             
             {/* Language Selector */}
-            <div className="hidden lg:flex items-center gap-2 px-2 border-l border-border/50 ml-2 h-8">
-              <Globe className="w-4 h-4 text-muted-foreground" />
-              <button 
-                onClick={() => setLang(lang === 'ES' ? 'EN' : 'ES')}
-                className="font-display text-[11px] font-600 uppercase tracking-[0.14em] text-white hover:text-primary transition-colors"
-              >
-                {lang}
-              </button>
+            <div className="hidden lg:flex items-center gap-1.5 px-2 border-l border-border/50 ml-1 h-8">
+              <Globe className="w-3.5 h-3.5 text-muted-foreground" />
+              <div className="inline-flex rounded-full border border-white/15 bg-white/5 p-0.5 text-[10px] font-700 tracking-wider">
+                <button
+                  type="button"
+                  onClick={() => setLanguage('es')}
+                  title="Español"
+                  aria-label="Español"
+                  className={cn(
+                    "px-2 py-0.5 rounded-full transition-all cursor-pointer",
+                    lang === 'es' ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:text-white"
+                  )}
+                >
+                  ES
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLanguage('en')}
+                  title="English"
+                  aria-label="English"
+                  className={cn(
+                    "px-2 py-0.5 rounded-full transition-all cursor-pointer",
+                    lang === 'en' ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:text-white"
+                  )}
+                >
+                  EN
+                </button>
+              </div>
             </div>
 
             <div className="hidden lg:flex items-center gap-3">
@@ -154,34 +190,34 @@ export function SiteHeader() {
                 <>
                   {user.isAdmin ? (
                     <GmxButton href="/administracion" variant="secondary" className="px-5 py-3 border-white/20 hover:border-white gap-2 whitespace-nowrap bg-primary/20 text-white">
-                      ADMINISTRACIÓN
+                      {d.header.administration}
                     </GmxButton>
                   ) : (
                     <GmxButton href="/micuenta" variant="secondary" className="px-5 py-3 border-white/20 hover:border-white gap-2 whitespace-nowrap">
                       <User className="w-4 h-4 shrink-0" />
-                      MI CUENTA
+                      {d.header.myAccount}
                     </GmxButton>
                   )}
                   <button
                     onClick={() => setShowLogoutModal(true)}
-                    className="group relative inline-flex items-center justify-center gap-2 overflow-hidden bg-primary/10 border border-primary/20 px-5 py-3 font-display text-[13px] font-600 uppercase tracking-[0.14em] text-primary transition-colors duration-300 clip-corner hover:bg-primary hover:text-white whitespace-nowrap"
+                    className="group relative inline-flex items-center justify-center gap-2 overflow-hidden bg-primary/10 border border-primary/20 px-5 py-3 font-display text-[13px] font-600 uppercase tracking-[0.14em] text-primary transition-colors duration-300 clip-corner hover:bg-primary hover:text-white whitespace-nowrap cursor-pointer"
                   >
                     <span className="relative z-10 flex items-center gap-2">
                       <LogOut className="w-4 h-4 shrink-0" />
-                      SALIR
+                      {d.header.logout}
                     </span>
                   </button>
                 </>
               ) : (
                 <>
                   <GmxButton href="/login" variant="secondary" className="px-5 py-3 border-white/20 hover:border-white whitespace-nowrap">
-                    INGRESAR
+                    {d.header.login}
                   </GmxButton>
                   <GmxButton 
                     href="/crear-cuenta" 
                     className="px-5 py-3 whitespace-nowrap"
                   >
-                    CREA TU USUARIO
+                    {d.header.createUser}
                   </GmxButton>
                 </>
               )}
@@ -189,7 +225,7 @@ export function SiteHeader() {
             <button
               onClick={() => setOpen(true)}
               aria-label="Abrir menú"
-              className="flex lg:hidden h-11 w-11 items-center justify-center border border-border bg-elevated text-white transition-colors hover:border-primary hover:text-primary clip-corner"
+              className="flex lg:hidden h-11 w-11 items-center justify-center border border-border bg-elevated text-white transition-colors hover:border-primary hover:text-primary clip-corner cursor-pointer"
             >
               <Menu className="size-5" />
             </button>
@@ -220,24 +256,42 @@ export function SiteHeader() {
                 <button
                   onClick={() => setOpen(false)}
                   aria-label="Cerrar menú"
-                  className="flex h-11 w-11 items-center justify-center border border-border text-white transition-colors hover:border-primary hover:text-primary clip-corner"
+                  className="flex h-11 w-11 items-center justify-center border border-border text-white transition-colors hover:border-primary hover:text-primary clip-corner cursor-pointer"
                 >
                   <X className="size-5" />
                 </button>
               </div>
 
               <div className="mt-8 flex items-center justify-between border-y border-border py-4">
-                <span className="text-sm font-500 text-muted-foreground uppercase tracking-widest">Idioma</span>
-                <button 
-                  onClick={() => setLang(lang === 'ES' ? 'EN' : 'ES')}
-                  className="flex items-center gap-2 text-sm font-600 uppercase tracking-widest text-white hover:text-primary transition-colors"
-                >
-                  <Globe className="w-4 h-4" /> {lang}
-                </button>
+                <span className="text-sm font-500 text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-primary" /> {d.header.languageLabel}
+                </span>
+                <div className="inline-flex rounded-full border border-white/15 bg-white/5 p-1 text-xs font-700 tracking-wider">
+                  <button
+                    type="button"
+                    onClick={() => setLanguage('es')}
+                    className={cn(
+                      "px-3 py-1 rounded-full transition-all cursor-pointer",
+                      lang === 'es' ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:text-white"
+                    )}
+                  >
+                    ES
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLanguage('en')}
+                    className={cn(
+                      "px-3 py-1 rounded-full transition-all cursor-pointer",
+                      lang === 'en' ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:text-white"
+                    )}
+                  >
+                    EN
+                  </button>
+                </div>
               </div>
 
               <nav className="mt-8 flex flex-col">
-                {NAV_LINKS.map((link, i) => {
+                {navLinks.map((link, i) => {
                   const filteredSubmenu = getFilteredSubmenu(link.submenu);
                   return (
                   <div key={link.href}>
@@ -286,33 +340,33 @@ export function SiteHeader() {
                   <>
                     {user.isAdmin ? (
                       <GmxButton href="/administracion" variant="secondary" className="w-full border-white/20 hover:border-white bg-primary/20 text-white" onClick={() => setOpen(false)}>
-                        ADMINISTRACIÓN
+                        {d.header.administration}
                       </GmxButton>
                     ) : (
                       <GmxButton href="/micuenta" variant="secondary" className="w-full border-white/20 hover:border-white" onClick={() => setOpen(false)}>
-                        MI CUENTA
+                        {d.header.myAccount}
                       </GmxButton>
                     )}
                     <button
                       onClick={() => setShowLogoutModal(true)}
-                      className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden bg-primary/10 border border-primary/20 px-8 py-4 font-display text-[15px] font-600 uppercase tracking-[0.18em] text-primary transition-colors duration-300 clip-corner hover:bg-primary hover:text-white"
+                      className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden bg-primary/10 border border-primary/20 px-8 py-4 font-display text-[15px] font-600 uppercase tracking-[0.18em] text-primary transition-colors duration-300 clip-corner hover:bg-primary hover:text-white cursor-pointer"
                     >
                       <span className="relative z-10 flex items-center gap-2">
-                        SALIR
+                        {d.header.logout}
                       </span>
                     </button>
                   </>
                 ) : (
                   <>
                     <GmxButton href="/login" variant="secondary" className="w-full border-white/20 hover:border-white" onClick={() => setOpen(false)}>
-                      INGRESAR
+                      {d.header.login}
                     </GmxButton>
                     <GmxButton 
                       href="/crear-cuenta" 
                       className="w-full" 
                       onClick={() => setOpen(false)}
                     >
-                      CREA TU USUARIO
+                      {d.header.createUser}
                     </GmxButton>
                   </>
                 )}
@@ -320,7 +374,7 @@ export function SiteHeader() {
 
               <div className="mt-auto pt-10">
                 <p className="mb-3 text-[11px] font-500 uppercase tracking-[0.3em] text-faint">
-                  Síguenos
+                  {d.header.followUs}
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {SOCIALS.map((s) => (
@@ -360,23 +414,23 @@ export function SiteHeader() {
                 <AlertTriangle className="h-8 w-8" />
               </div>
               <h3 className="font-display text-2xl font-700 uppercase tracking-tight text-white mb-2">
-                ¿Cerrar Sesión?
+                {d.header.logoutModalTitle}
               </h3>
               <p className="text-sm text-muted-foreground mb-8">
-                Estás a punto de salir de tu cuenta en GMX Gaming. ¿Deseas continuar?
+                {d.header.logoutModalDesc}
               </p>
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setShowLogoutModal(false)}
-                  className="flex-1 rounded-md border border-border bg-transparent px-4 py-3 text-sm font-600 text-muted-foreground hover:text-white transition-colors uppercase tracking-widest"
+                  className="flex-1 rounded-md border border-border bg-transparent px-4 py-3 text-sm font-600 text-muted-foreground hover:text-white transition-colors uppercase tracking-widest cursor-pointer"
                 >
-                  Cancelar
+                  {d.header.cancel}
                 </button>
                 <button
                   onClick={handleLogout}
-                  className="flex-1 rounded-md bg-primary px-4 py-3 text-sm font-600 text-white hover:bg-primary-dark transition-colors uppercase tracking-widest"
+                  className="flex-1 rounded-md bg-primary px-4 py-3 text-sm font-600 text-white hover:bg-primary-dark transition-colors uppercase tracking-widest cursor-pointer"
                 >
-                  Sí, Salir
+                  {d.header.confirmLogout}
                 </button>
               </div>
             </motion.div>

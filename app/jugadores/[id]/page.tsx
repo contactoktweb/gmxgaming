@@ -6,6 +6,7 @@ import { SiteFooter } from '@/components/sections/site-footer'
 import { Trophy, Shield, Gamepad2, Users, Medal, ExternalLink, Camera, Tv } from 'lucide-react'
 import { cn, formatRoleTitle, getPlayerSlug, getTeamSlug, slugify } from '@/lib/utils'
 import { cookies } from 'next/headers'
+import { translations, type Language } from '@/lib/i18n/translations'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -13,6 +14,8 @@ export const revalidate = 0
 export default async function PlayerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: paramSlug } = await params
   const cookieStore = await cookies()
+  const lang = (cookieStore.get('gmx_lang')?.value as Language) || 'es'
+  const d = translations[lang] || translations.es
   const supabase = createClient(cookieStore)
 
   // Verificar si el usuario actual es administrador
@@ -112,7 +115,7 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
                 className="h-full w-full object-cover"
               />
               {player.is_featured && (
-                <div className="absolute top-2 right-2 rounded-full bg-emerald-500 p-1.5 text-white shadow-lg" title="Jugador Destacado">
+                <div className="absolute top-2 right-2 rounded-full bg-emerald-500 p-1.5 text-white shadow-lg" title={d.playerDetail.featuredPlayer}>
                   <Medal className="h-4 w-4" />
                 </div>
               )}
@@ -166,26 +169,26 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
               <div className="rounded-xl border border-border bg-surface p-6 shadow-xl">
                 <h3 className="mb-6 font-display text-lg font-600 uppercase tracking-widest text-white flex items-center gap-2">
                   <Gamepad2 className="h-5 w-5 text-primary" />
-                  Info del Juego
+                  {d.playerDetail.gameInfo}
                 </h3>
                 
                 {gameInfo ? (
                   <div className="flex flex-col gap-4">
                     <div>
-                      <p className="text-xs font-600 uppercase tracking-widest text-muted-foreground">ID del Juego</p>
+                      <p className="text-xs font-600 uppercase tracking-widest text-muted-foreground">{d.playerDetail.gameId}</p>
                       <p className="mt-1 font-display text-lg text-white">{gameInfo.game_id || 'N/A'}</p>
                     </div>
                     <div>
-                      <p className="text-xs font-600 uppercase tracking-widest text-muted-foreground">Servidor</p>
+                      <p className="text-xs font-600 uppercase tracking-widest text-muted-foreground">{d.playerDetail.server}</p>
                       <p className="mt-1 font-display text-lg text-white">{gameInfo.server || 'N/A'}</p>
                     </div>
                     <div>
-                      <p className="text-xs font-600 uppercase tracking-widest text-muted-foreground">País (Cuenta)</p>
+                      <p className="text-xs font-600 uppercase tracking-widest text-muted-foreground">{d.playerDetail.countryAccount}</p>
                       <p className="mt-1 font-display text-lg text-white">{gameInfo.country_account || 'N/A'}</p>
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-faint">No hay información del juego registrada.</p>
+                  <p className="text-sm text-faint">{d.playerDetail.noGameInfo}</p>
                 )}
               </div>
             </div>
@@ -196,7 +199,7 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
               <div>
                 <h3 className="mb-6 font-display text-2xl font-600 uppercase tracking-widest text-white flex items-center gap-3">
                   <Shield className="h-6 w-6 text-primary" />
-                  Equipos Actuales
+                  {d.playerDetail.currentTeams}
                 </h3>
                 
                 {contracts && contracts.length > 0 ? (
@@ -224,7 +227,7 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
                               <div className="mt-1 flex flex-wrap gap-2 text-xs font-500 text-muted-foreground">
                                 {contract.roles && contract.roles.map((r: string, i: number) => (
                                   <span key={i} className="rounded bg-white/5 px-2 py-0.5 text-xs font-600 text-white/80 border border-white/10">
-                                    {formatRoleTitle(r)}
+                                    {formatRoleTitle(r, lang)}
                                   </span>
                                 ))}
                               </div>
@@ -232,7 +235,7 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
                           </div>
                           
                           <div className="rounded bg-emerald-500/10 px-3 py-1 text-xs font-600 uppercase tracking-widest text-emerald-500">
-                            Activo
+                            {d.playerDetail.activeStatus}
                           </div>
                         </Link>
                       )
@@ -240,7 +243,7 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
                   </div>
                 ) : (
                   <div className="rounded-xl border border-dashed border-border p-8 text-center">
-                    <p className="text-sm text-muted-foreground">Este jugador no tiene contratos activos con ningún equipo actualmente.</p>
+                    <p className="text-sm text-muted-foreground">{d.playerDetail.noContracts}</p>
                   </div>
                 )}
               </div>

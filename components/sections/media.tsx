@@ -6,6 +6,7 @@ import { Play } from 'lucide-react'
 import { SplitText } from '@/components/split-text'
 import { Reveal } from '@/components/anim'
 import { createClient } from '@/utils/supabase/client'
+import { useLanguage } from '@/lib/language-context'
 
 type MediaLink = {
   id: string
@@ -41,6 +42,7 @@ function getYouTubeEmbedUrl(url: string) {
 
 export function Media() {
   const ref = useRef<HTMLDivElement>(null)
+  const { d } = useLanguage()
   const { scrollYProgress } = useScroll({
     target: ref,
     offset: ['start end', 'end start'],
@@ -83,7 +85,7 @@ export function Media() {
             <div className="mb-4 flex items-center gap-3">
               <span className="h-px w-10 bg-primary" />
               <span className="font-display text-sm font-600 uppercase tracking-widest text-primary">
-                GMX TV
+                {d.media.badge}
               </span>
               <span className="h-px w-10 bg-primary" />
             </div>
@@ -92,8 +94,7 @@ export function Media() {
           <SplitText
             as="h2"
             variant="title"
-            text="CONTENIDO DESTACADO"
-            lines={['CONTENIDO', 'DESTACADO']}
+            lines={[d.media.title1, d.media.title2]}
             className="font-display text-5xl font-700 uppercase leading-[0.95] tracking-tight text-white sm:text-6xl lg:text-7xl"
           />
         </div>

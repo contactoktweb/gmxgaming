@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { PARTNERS, PartnerSponsor } from '@/lib/site-data'
+import { useLanguage } from '@/lib/language-context'
 
 export function Partners() {
   const [sponsors, setSponsors] = useState<PartnerSponsor[]>(PARTNERS)
@@ -53,11 +54,13 @@ export function Partners() {
     trackItems = [...trackItems, ...baseList]
   }
 
+  const { d } = useLanguage()
+
   return (
-    <section className="border-y border-border bg-deep py-8 overflow-hidden relative lg:py-10" aria-label="Nuestros Sponsors y Aliados">
+    <section className="border-y border-border bg-deep py-8 overflow-hidden relative lg:py-10" aria-label={d.partners.ariaLabel}>
       <div className="mx-auto mb-5 max-w-[1400px] px-5 lg:px-10 text-center">
         <h2 className="font-display text-[11px] font-600 uppercase tracking-[0.4em] text-faint">
-          Partners · Patrocinadores · Ligas · Federaciones
+          {d.partners.subtitle}
         </h2>
       </div>
 

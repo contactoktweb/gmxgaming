@@ -4,10 +4,7 @@ import { useRef } from 'react'
 import { motion, useScroll, useTransform } from 'motion/react'
 import { GmxButton } from '@/components/gmx-button'
 import { useAuth } from '@/lib/auth-context'
-
-const TICKER_ITEMS = [
-  'LIGAS', 'TORNEOS', 'EVENTOS', 'MOBILE LEGENDS', 'HONOR OF KINGS', 'ESPORTS'
-]
+import { useLanguage } from '@/lib/language-context'
 
 // Animations
 const containerVariants = {
@@ -33,6 +30,7 @@ const titleCharVariants = {
 export function Hero({ ready }: { ready: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const { user } = useAuth()
+  const { d } = useLanguage()
   
   const { scrollYProgress } = useScroll({
     target: containerRef,
@@ -44,6 +42,12 @@ export function Hero({ ready }: { ready: boolean }) {
   const playerY = useTransform(scrollYProgress, [0, 1], ['0%', '-10%'])
   const playerScale = useTransform(scrollYProgress, [0, 1], [1, 0.95])
   const textY = useTransform(scrollYProgress, [0, 1], ['0%', '15%'])
+
+  const word1 = d.hero.titleWords[0] || 'AQUÍ'
+  const word2 = d.hero.titleWords[1] || 'COMIENZA'
+  const word3 = d.hero.titleWords[2] || 'EL'
+  const word4 = d.hero.titleWords[3] || 'CAMINO'
+  const tickerItems = d.hero.ticker
 
   return (
     <section ref={containerRef} id="hero" className="relative flex min-h-[100svh] w-full flex-col justify-center overflow-hidden bg-deep">
@@ -94,16 +98,16 @@ export function Hero({ ready }: { ready: boolean }) {
         
         {/* HUD: Top Left Technical Details */}
         <motion.div variants={fadeUpVariants} className="absolute left-6 top-24 hidden items-center gap-4 text-[10px] font-500 tracking-[0.3em] text-faint lg:flex xl:left-12">
-          <span>EST. 2024</span>
+          <span>{d.hero.hudEst}</span>
           <span className="h-px w-8 bg-border" />
-          <span>GMX GAMING / ESPORTS / COMPETITION</span>
+          <span>{d.hero.hudSubtitle}</span>
         </motion.div>
 
         {/* HUD: Competitive Floating Panel */}
         <motion.div variants={fadeUpVariants} className="absolute right-6 top-[35%] hidden flex-col gap-3 border-l border-primary/40 pl-4 text-[10px] font-600 tracking-[0.2em] text-muted-foreground lg:flex xl:right-12">
-          <span className="hover:text-white transition-colors">01 / COMPITE</span>
-          <span className="hover:text-white transition-colors">02 / CRECE</span>
-          <span className="hover:text-white transition-colors">03 / DOMINA</span>
+          <span className="hover:text-white transition-colors">{d.hero.hudCompete}</span>
+          <span className="hover:text-white transition-colors">{d.hero.hudGrow}</span>
+          <span className="hover:text-white transition-colors">{d.hero.hudDominate}</span>
         </motion.div>
 
         <div className="mt-auto max-w-[700px] lg:max-w-[850px] xl:max-w-[1000px]">
@@ -111,7 +115,7 @@ export function Hero({ ready }: { ready: boolean }) {
           <motion.div variants={fadeUpVariants} className="mb-6 flex items-center gap-4 lg:mb-8">
             <span className="h-px w-10 bg-primary lg:w-16" />
             <span className="font-display text-xs font-700 uppercase tracking-[0.3em] text-primary sm:text-sm">
-              ¡BIENVENIDOS A GMX GAMING!
+              {d.hero.welcomeBadge}
             </span>
           </motion.div>
 
@@ -119,7 +123,7 @@ export function Hero({ ready }: { ready: boolean }) {
             {/* Title Line 1 */}
             <div className="overflow-hidden pb-1">
               <motion.div variants={titleLineVariants} className="origin-left">
-                {Array.from("AQUÍ").map((char, i) => (
+                {Array.from(word1).map((char, i) => (
                   <motion.span key={i} variants={titleCharVariants} className="inline-block">{char}</motion.span>
                 ))}
               </motion.div>
@@ -128,7 +132,7 @@ export function Hero({ ready }: { ready: boolean }) {
             {/* Title Line 2 */}
             <div className="overflow-hidden pb-1">
               <motion.div variants={titleLineVariants} className="origin-left ml-[2vw] lg:ml-[1vw]">
-                {Array.from("COMIENZA").map((char, i) => (
+                {Array.from(word2).map((char, i) => (
                   <motion.span key={i} variants={titleCharVariants} className="inline-block">{char}</motion.span>
                 ))}
               </motion.div>
@@ -138,12 +142,12 @@ export function Hero({ ready }: { ready: boolean }) {
             <div className="overflow-hidden pb-4">
               <motion.div variants={titleLineVariants} className="flex flex-wrap items-center gap-[3vw] origin-left lg:gap-8">
                 <span>
-                  {Array.from("EL").map((char, i) => (
+                  {Array.from(word3).map((char, i) => (
                     <motion.span key={i} variants={titleCharVariants} className="inline-block">{char}</motion.span>
                   ))}
                 </span>
                 <span className="text-primary drop-shadow-[0_0_15px_rgba(255,45,32,0.4)]">
-                  {Array.from("CAMINO").map((char, i) => (
+                  {Array.from(word4).map((char, i) => (
                     <motion.span key={i} variants={titleCharVariants} className="inline-block">{char}</motion.span>
                   ))}
                 </span>
@@ -152,25 +156,25 @@ export function Hero({ ready }: { ready: boolean }) {
           </h1>
 
           <motion.h2 variants={fadeUpVariants} className="mt-8 max-w-2xl font-display text-sm font-600 uppercase tracking-[0.2em] text-white sm:text-base lg:text-xl">
-            CONVIÉRTETE EN JUGADOR PROFESIONAL DE ESPORTS
+            {d.hero.subtitle}
           </motion.h2>
 
           <motion.p variants={fadeUpVariants} className="mt-5 max-w-[480px] text-sm font-400 leading-relaxed text-muted-foreground sm:text-base lg:mt-6">
-            Compite, crece y demuestra tu nivel dentro de una comunidad creada para llevar el talento gamer al siguiente nivel.
+            {d.hero.description}
           </motion.p>
 
           <motion.div variants={fadeUpVariants} className="mt-10 flex flex-col items-start gap-4 sm:flex-row sm:items-center lg:mt-12">
             {user ? (
               <GmxButton href="/micuenta" className="w-full sm:w-auto">
-                IR A TU PERFIL
+                {d.hero.goToProfile}
               </GmxButton>
             ) : (
               <GmxButton href="/crear-cuenta" className="w-full sm:w-auto">
-                CREA TU USUARIO
+                {d.hero.createUserBtn}
               </GmxButton>
             )}
             <GmxButton href="#torneos" variant="secondary" className="w-full sm:w-auto border-white/20 hover:border-white">
-              EXPLORA LOS TORNEOS
+              {d.hero.exploreTournaments}
             </GmxButton>
           </motion.div>
 
@@ -187,7 +191,7 @@ export function Hero({ ready }: { ready: boolean }) {
         <div className="flex w-max animate-marquee-left items-center">
           {[...Array(4)].map((_, i) => (
             <div key={i} className="flex shrink-0 items-center">
-              {TICKER_ITEMS.map((item, j) => (
+              {tickerItems.map((item, j) => (
                 <div key={j} className="flex items-center">
                   <span className="mx-6 font-display text-xs font-600 uppercase tracking-[0.2em] text-faint hover:text-white transition-colors cursor-default">
                     {item}
@@ -208,7 +212,7 @@ export function Hero({ ready }: { ready: boolean }) {
         className="absolute bottom-24 right-6 z-30 hidden flex-col items-center gap-4 xl:right-12 lg:flex"
       >
         <span className="font-display text-[9px] font-600 uppercase tracking-[0.3em] text-faint" style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}>
-          SCROLL TO EXPLORE
+          {d.hero.scrollIndicator}
         </span>
         <span className="h-14 w-[1px] animate-pulse bg-gradient-to-b from-primary to-transparent" />
       </motion.div>

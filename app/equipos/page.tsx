@@ -11,6 +11,7 @@ import { SiteFooter } from '@/components/sections/site-footer'
 import { Reveal } from '@/components/anim'
 import { ShieldAlert, MapPin, ArrowUpRight, Search } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
+import { useLanguage } from '@/lib/language-context'
 import Link from 'next/link'
 
 export default function EquiposPage() {
@@ -18,6 +19,7 @@ export default function EquiposPage() {
   const [teams, setTeams] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
+  const { d } = useLanguage()
 
   useEffect(() => {
     async function fetchTeams() {
@@ -53,10 +55,10 @@ export default function EquiposPage() {
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-16">
             <Reveal direction="up" className="flex-1">
               <h1 className="font-display text-4xl font-700 uppercase tracking-tight text-white sm:text-5xl lg:text-6xl mb-4">
-                Equipos Afiliados
+                {d.teamsPage.title}
               </h1>
               <p className="text-lg text-muted-foreground max-w-xl">
-                Conoce a las organizaciones y escuadras profesionales que forman parte del ecosistema competitivo de GMX Gaming.
+                {d.teamsPage.subtitle}
               </p>
             </Reveal>
 
@@ -65,7 +67,7 @@ export default function EquiposPage() {
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                 <input
                   type="text"
-                  placeholder="Buscar equipo..."
+                  placeholder={d.teamsPage.searchPlaceholder}
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   className="w-full rounded-full border border-border bg-surface pl-12 pr-6 py-3 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-all"
@@ -82,18 +84,18 @@ export default function EquiposPage() {
             <Reveal direction="up">
               <div className="text-center py-24 border border-dashed border-border rounded-xl bg-surface">
                 <ShieldAlert className="w-16 h-16 text-muted-foreground mx-auto mb-6 opacity-50" />
-                <h3 className="font-display text-2xl text-white font-700 uppercase tracking-tight mb-2">No hay equipos afiliados</h3>
+                <h3 className="font-display text-2xl text-white font-700 uppercase tracking-tight mb-2">{d.teamsPage.noTeamsTitle}</h3>
                 <p className="text-muted-foreground text-sm max-w-md mx-auto">
-                  Actualmente no contamos con equipos registrados en la plataforma. ¡Sé el primero en afiliar a tu organización!
+                  {d.teamsPage.noTeamsDesc}
                 </p>
                 <Link href="/registro/alta-de-equipo" className="inline-flex items-center justify-center px-6 py-3 mt-8 bg-primary text-white font-600 rounded uppercase tracking-widest text-xs hover:bg-primary-dark transition-colors clip-corner">
-                  Registrar Equipo
+                  {d.teamsPage.registerTeamBtn}
                 </Link>
               </div>
             </Reveal>
           ) : filteredTeams.length === 0 ? (
             <div className="text-center py-24 border border-dashed border-border rounded-xl bg-surface">
-              <p className="text-muted-foreground">No se encontraron equipos que coincidan con la búsqueda.</p>
+              <p className="text-muted-foreground">{d.teamsPage.noSearchResults}</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -119,7 +121,7 @@ export default function EquiposPage() {
                     
                     <div className="flex items-center justify-center gap-1.5 mt-2 text-muted-foreground relative z-10">
                       <MapPin className="w-3.5 h-3.5" />
-                      <span className="text-xs font-500 uppercase tracking-widest">{team.country || 'Internacional'}</span>
+                      <span className="text-xs font-500 uppercase tracking-widest">{team.country || d.teamsPage.international}</span>
                     </div>
 
                     <div className="absolute top-4 right-4 w-8 h-8 rounded-full border border-border bg-background flex items-center justify-center text-white opacity-0 -translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300">

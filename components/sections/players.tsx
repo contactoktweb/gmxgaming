@@ -7,6 +7,7 @@ import { SplitText } from '@/components/split-text'
 import { Reveal } from '@/components/anim'
 import { PLAYERS } from '@/lib/site-data'
 import { createClient } from '@/utils/supabase/client'
+import { useLanguage } from '@/lib/language-context'
 
 type FeaturedPlayer = {
   id: string
@@ -20,6 +21,7 @@ type FeaturedPlayer = {
 export function Players() {
   const [players, setPlayers] = useState<FeaturedPlayer[]>([])
   const [loading, setLoading] = useState(true)
+  const { d } = useLanguage()
 
   useEffect(() => {
     async function loadFeaturedPlayers() {
@@ -77,7 +79,7 @@ export function Players() {
               name: p.nickname || p.name,
               nickname: p.name,
               game: 'Mobile Legends',
-              team: p.team || 'Agente Libre',
+              team: p.team || d.players.freeAgent,
               img: p.avatar_url || p.avatar || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
             }))
             setPlayers(formatted)
@@ -89,7 +91,7 @@ export function Players() {
         if (sourceList && sourceList.length > 0) {
           const formatted = sourceList.map((p: any) => {
             const activeContract = p.contracts?.find((c: any) => c.status === 'activo' || c.status === 'active')
-            const teamName = activeContract?.teams?.name || 'Agente Libre'
+            const teamName = activeContract?.teams?.name || d.players.freeAgent
             const finalImg = p.avatar_url || p.avatar || (p as any).photo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
 
             return {
@@ -113,7 +115,7 @@ export function Players() {
       setLoading(false)
     }
     loadFeaturedPlayers()
-  }, [])
+  }, [d])
 
   if (loading || players.length === 0) return null
 
@@ -126,14 +128,14 @@ export function Players() {
               <div className="mb-5 flex items-center gap-3">
                 <span className="h-px w-10 bg-primary" />
                 <span className="font-display text-xs font-600 uppercase tracking-[0.3em] text-primary sm:text-sm">
-                  Conviértete en uno de los mejores
+                  {d.players.badge}
                 </span>
               </div>
             </Reveal>
             <SplitText
               as="h2"
               variant="title"
-              lines={['CONVIÉRTETE EN', 'UNA ESTRELLA']}
+              lines={[d.players.title1, d.players.title2]}
               className="font-display text-5xl font-700 uppercase leading-[0.95] tracking-tight text-white sm:text-6xl lg:text-7xl"
             />
           </div>

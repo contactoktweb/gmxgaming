@@ -8,31 +8,32 @@ export function cn(...inputs: ClassValue[]) {
 /**
  * Convierte variables internas / roles de base de datos a títulos legibles y elegantes.
  * Ejemplos:
- * - 'ROL_JUEGO: Oro' -> 'Línea: Oro'
- * - 'JUGADOR(A)' -> 'Jugador'
+ * - 'ROL_JUEGO: Oro' -> 'Línea: Oro' / 'Lane: Oro'
+ * - 'JUGADOR(A)' -> 'Jugador' / 'Player'
  * - 'COACH' -> 'Coach'
- * - 'ANALISTA' -> 'Analista'
- * - 'PSICOLOGO DEPORTIVO' -> 'Psicólogo Deportivo'
+ * - 'ANALISTA' -> 'Analista' / 'Analyst'
+ * - 'PSICOLOGO DEPORTIVO' -> 'Psicólogo Deportivo' / 'Sports Psychologist'
  */
-export function formatRoleTitle(role: string): string {
+export function formatRoleTitle(role: string, lang: 'es' | 'en' = 'es'): string {
   if (!role || typeof role !== 'string') return ''
 
   const trimmed = role.trim()
+  const lineLabel = lang === 'en' ? 'Lane' : 'Línea'
 
   // Manejar variantes de rol de juego / línea
   if (/^ROL_?JUEGO\s*:\s*/i.test(trimmed)) {
     const value = trimmed.replace(/^ROL_?JUEGO\s*:\s*/i, '').trim()
-    return `Línea: ${value}`
+    return `${lineLabel}: ${value}`
   }
 
   if (/^ROL_?DE_?JUEGO\s*:\s*/i.test(trimmed)) {
     const value = trimmed.replace(/^ROL_?DE_?JUEGO\s*:\s*/i, '').trim()
-    return `Línea: ${value}`
+    return `${lineLabel}: ${value}`
   }
 
   if (/^L[IÍ]NEA\s*:\s*/i.test(trimmed)) {
     const value = trimmed.replace(/^L[IÍ]NEA\s*:\s*/i, '').trim()
-    return `Línea: ${value}`
+    return `${lineLabel}: ${value}`
   }
 
   // Manejar formatos genéricos "CLAVE: Valor"
@@ -53,25 +54,25 @@ export function formatRoleTitle(role: string): string {
     case 'JUGADOR(A)':
     case 'JUGADOR':
     case 'JUGADORA':
-      return 'Jugador'
+      return lang === 'en' ? 'Player' : 'Jugador'
     case 'COACH':
     case 'ENTRENADOR':
       return 'Coach'
     case 'ANALISTA':
-      return 'Analista'
+      return lang === 'en' ? 'Analyst' : 'Analista'
     case 'PSICOLOGO DEPORTIVO':
     case 'PSICÓLOGO DEPORTIVO':
-      return 'Psicólogo Deportivo'
+      return lang === 'en' ? 'Sports Psychologist' : 'Psicólogo Deportivo'
     case 'MANAGER':
       return 'Manager'
     case 'CAPITAN':
     case 'CAPITÁN':
-      return 'Capitán'
+      return lang === 'en' ? 'Captain' : 'Capitán'
     case 'SUPLENTE':
-      return 'Suplente'
+      return lang === 'en' ? 'Substitute' : 'Suplente'
     case 'CREADOR DE CONTENIDO':
     case 'CREADOR_DE_CONTENIDO':
-      return 'Creador de Contenido'
+      return lang === 'en' ? 'Content Creator' : 'Creador de Contenido'
     default:
       return trimmed
         .replace(/_/g, ' ')
@@ -84,27 +85,86 @@ export function formatRoleTitle(role: string): string {
  * Formatea una lista o array de roles en una cadena limpia y legible.
  * Ej: ['JUGADOR(A)', 'ROL_JUEGO: Oro'] -> 'Jugador, Línea: Oro'
  */
-export function formatRolesList(roles: any, separator = ', '): string {
-  if (!roles) return 'Sin rol asignado'
+export function formatRolesList(roles: any, separator = ', ', lang: 'es' | 'en' = 'es'): string {
+  const fallback = lang === 'en' ? 'No role assigned' : 'Sin rol asignado'
+  if (!roles) return fallback
 
   if (Array.isArray(roles)) {
-    const formatted = roles.map(r => formatRoleTitle(r)).filter(Boolean)
-    return formatted.length > 0 ? formatted.join(separator) : 'Sin rol asignado'
+    const formatted = roles.map(r => formatRoleTitle(r, lang)).filter(Boolean)
+    return formatted.length > 0 ? formatted.join(separator) : fallback
   }
 
   if (typeof roles === 'string') {
     try {
       const parsed = JSON.parse(roles)
       if (Array.isArray(parsed)) {
-        return formatRolesList(parsed, separator)
+        return formatRolesList(parsed, separator, lang)
       }
     } catch {
       // String plano
     }
-    return formatRoleTitle(roles)
+    return formatRoleTitle(roles, lang)
   }
 
-  return 'Sin rol asignado'
+  return fallback
+}
+
+/**
+ * Traduce y formatea estatus de torneos, partidos, contratos, equipos y usuarios.
+ */
+export function formatStatus(status: string | null | undefined, lang: 'es' | 'en' = 'es'): string {
+  if (!status) return lang === 'en' ? 'Unknown' : 'Desconocido'
+  const norm = status.toLowerCase().trim()
+
+  const map: Record<string, { es: string; en: string }> = {
+    upcoming: { es: 'Próximo', en: 'Upcoming' },
+    proximo: { es: 'Próximo', en: 'Upcoming' },
+    próximo: { es: 'Próximo', en: 'Upcoming' },
+    ongoing: { es: 'En Curso', en: 'Ongoing' },
+    en_curso: { es: 'En Curso', en: 'Ongoing' },
+    live: { es: 'En Vivo', en: 'Live Now' },
+    finished: { es: 'Finalizado', en: 'Finished' },
+    finalizado: { es: 'Finalizado', en: 'Finished' },
+    completed: { es: 'Completado', en: 'Completed' },
+    completado: { es: 'Completado', en: 'Completed' },
+    active: { es: 'Activo', en: 'Active' },
+    activo: { es: 'Activo', en: 'Active' },
+    inactive: { es: 'Inactivo', en: 'Inactive' },
+    inactivo: { es: 'Inactivo', en: 'Inactive' },
+    pending: { es: 'Pendiente', en: 'Pending' },
+    pendiente: { es: 'Pendiente', en: 'Pending' },
+    rejected: { es: 'Rechazado', en: 'Rejected' },
+    rechazado: { es: 'Rechazado', en: 'Rejected' },
+    approved: { es: 'Aprobado', en: 'Approved' },
+    aprobado: { es: 'Aprobado', en: 'Approved' },
+    banned: { es: 'Suspendido', en: 'Banned' },
+    scheduled: { es: 'Programado', en: 'Scheduled' },
+    programado: { es: 'Programado', en: 'Scheduled' },
+    pending_player_release: { es: 'Baja Pendiente', en: 'Pending Release' },
+    pending_manager_release: { es: 'Baja Pendiente', en: 'Pending Release' },
+    free_agent: { es: 'Agente Libre', en: 'Free Agent' },
+  }
+
+  if (map[norm]) {
+    return map[norm][lang]
+  }
+
+  return status.charAt(0).toUpperCase() + status.slice(1)
+}
+
+/**
+ * Traduce divisiones de torneos (Varonil/Mixto o Femenil)
+ */
+export function formatDivision(division: string | null | undefined, lang: 'es' | 'en' = 'es'): string {
+  if (!division) return ''
+  const norm = division.toLowerCase()
+  if (norm.includes('femenil') || norm.includes('women') || norm.includes('female')) {
+    return lang === 'en' ? "Women's" : 'Femenil'
+  }
+  if (norm.includes('varonil') || norm.includes('mixt') || norm.includes('men')) {
+    return lang === 'en' ? "Men's / Mixed" : 'Varonil / Mixto'
+  }
+  return division
 }
 
 /**

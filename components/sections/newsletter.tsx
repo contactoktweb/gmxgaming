@@ -5,11 +5,13 @@ import { useRouter } from 'next/navigation'
 import { SplitText } from '@/components/split-text'
 import { Reveal } from '@/components/anim'
 import { useAuth } from '@/lib/auth-context'
+import { useLanguage } from '@/lib/language-context'
 
 function NewsletterForm() {
   const [email, setEmail] = useState('')
   const router = useRouter()
   const { user } = useAuth()
+  const { d } = useLanguage()
 
   return (
     <form
@@ -26,7 +28,7 @@ function NewsletterForm() {
       <div className="flex flex-col gap-3 sm:flex-row">
         {user ? (
           <div className="flex w-full items-center border border-white/20 bg-deep/60 px-4 py-4 text-sm text-white backdrop-blur-sm">
-            <span className="text-muted-foreground">Sesión activa como:</span>
+            <span className="text-muted-foreground">{d.newsletter.activeSession}</span>
             <span className="ml-2 font-600 text-primary">{user.name || user.email}</span>
           </div>
         ) : (
@@ -35,8 +37,8 @@ function NewsletterForm() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="Correo electrónico"
-            aria-label="Correo electrónico"
+            placeholder={d.newsletter.emailPlaceholder}
+            aria-label={d.newsletter.emailPlaceholder}
             className="w-full border border-white/20 bg-deep/60 px-4 py-4 text-sm text-white placeholder:text-faint outline-none backdrop-blur-sm transition-colors focus:border-primary"
           />
         )}
@@ -46,19 +48,19 @@ function NewsletterForm() {
           className="group relative shrink-0 overflow-hidden bg-primary px-7 py-4 font-display text-[13px] font-600 uppercase tracking-[0.18em] text-white clip-corner sm:text-sm"
         >
           <span className="absolute inset-0 origin-left scale-x-0 bg-primary-dark transition-transform duration-300 ease-out group-hover:scale-x-100" />
-          <span className="relative z-10">{user ? 'IR A TU PERFIL' : 'CREA TU USUARIO'}</span>
+          <span className="relative z-10">{user ? d.newsletter.goToProfile : d.newsletter.createUser}</span>
         </button>
       </div>
       <p className="text-xs text-muted-foreground">
-        {user
-          ? 'Ya formas parte de la comunidad. Visita tu perfil para gestionar tus equipos, estadísticas y contratos.'
-          : 'Únete a la comunidad y recibe novedades de torneos y eventos.'}
+        {user ? d.newsletter.loggedInDesc : d.newsletter.loggedOutDesc}
       </p>
     </form>
   )
 }
 
 export function Newsletter() {
+  const { d } = useLanguage()
+
   return (
     <section className="bg-background px-5 py-8 lg:px-10 lg:py-12">
       <div className="relative mx-auto max-w-[1400px] overflow-hidden clip-corner">
@@ -77,7 +79,7 @@ export function Newsletter() {
             <SplitText
               as="h2"
               variant="title"
-              lines={['TU CAMINO EN LOS ESPORTS', 'COMIENZA HOY']}
+              lines={d.newsletter.title}
               className="font-display text-3xl font-700 uppercase leading-[1] tracking-tight text-white sm:text-4xl lg:text-5xl"
             />
           </div>

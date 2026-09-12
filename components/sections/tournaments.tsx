@@ -7,6 +7,7 @@ import { SplitText } from '@/components/split-text'
 import { Reveal } from '@/components/anim'
 import { createClient } from '@/utils/supabase/client'
 import { getTournamentSlug } from '@/lib/utils'
+import { useLanguage } from '@/lib/language-context'
 import Link from 'next/link'
 import { TOURNAMENTS as DEFAULT_TOURNAMENTS } from '@/lib/site-data'
 
@@ -18,6 +19,7 @@ const entrances = [
 
 export function Tournaments() {
   const [tournamentsList, setTournamentsList] = useState<any[]>([])
+  const { lang, d } = useLanguage()
   const supabase = createClient()
 
   useEffect(() => {
@@ -65,10 +67,6 @@ export function Tournaments() {
           }
 
           const formatted = tournamentsData.map((t: any) => {
-            const dateStr = t.start_date
-              ? new Date(t.start_date).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
-              : 'Próximamente'
-
             const tmplObj = Array.isArray(t.templates) ? t.templates[0] : t.templates
             const fallbackTmpl = templateMap.get(t.template_id)
             const matchedTmpl = tmplObj || fallbackTmpl
@@ -78,10 +76,10 @@ export function Tournaments() {
             return {
               id: t.id,
               slug: getTournamentSlug(t),
-              category: matchedTmpl?.type || t.game || 'Torneo Oficial',
+              category: matchedTmpl?.type || t.game || d.tournaments.officialTournament,
               title: t.name,
-              date: dateStr.toUpperCase(),
-              desc: t.description || `Torneo oficial de ${t.game || 'Mobile Legends'}. Los mejores equipos compiten por el título y la gloria.`,
+              start_date: t.start_date,
+              desc: t.description || d.tournaments.defaultDesc,
               img: imgUrl,
               href: `/torneos/${getTournamentSlug(t)}`
             }
@@ -97,7 +95,7 @@ export function Tournaments() {
     }
 
     fetchTournaments()
-  }, [])
+  }, [d])
 
   const itemsToDisplay = tournamentsList.length > 0 ? tournamentsList : DEFAULT_TOURNAMENTS
 
@@ -110,14 +108,14 @@ export function Tournaments() {
               <div className="mb-5 flex items-center gap-3">
                 <span className="h-px w-10 bg-primary" />
                 <span className="font-display text-xs font-600 uppercase tracking-[0.3em] text-primary sm:text-sm">
-                  Lo último de la escena
+                  {d.tournaments.badge}
                 </span>
               </div>
             </Reveal>
             <SplitText
               as="h2"
               variant="title"
-              lines={['ÚLTIMOS TORNEOS', 'Y NOTICIAS']}
+              lines={[d.tournaments.title1, d.tournaments.title2]}
               className="font-display text-4xl font-700 uppercase leading-[0.95] tracking-tight text-white sm:text-5xl lg:text-6xl"
             />
           </div>
@@ -126,7 +124,7 @@ export function Tournaments() {
             href="/torneos"
             className="inline-flex items-center gap-2 font-display text-xs font-700 uppercase tracking-widest text-primary hover:text-white transition-colors"
           >
-            Ver Todos los Torneos
+            {d.tournaments.viewAll}
             <ArrowUpRight className="size-4" />
           </Link>
         </div>
@@ -134,6 +132,10 @@ export function Tournaments() {
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           {itemsToDisplay.map((t, i) => {
             const entranceIndex = i % 3
+            const dateStr = t.start_date
+              ? new Date(t.start_date).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-ES', { month: 'long', year: 'numeric' })
+              : (t.date || d.tournaments.upcoming)
+
             return (
               <motion.article
                 key={t.id || t.title || i}
@@ -158,14 +160,14 @@ export function Tournaments() {
                   </div>
                   <div className="flex flex-1 flex-col p-6">
                     <span className="text-[11px] font-500 uppercase tracking-[0.25em] text-faint">
-                      {t.date}
+                      {dateStr.toUpperCase()}
                     </span>
                     <h3 className="mt-3 font-display text-xl font-700 uppercase leading-tight tracking-tight text-white group-hover:text-primary transition-colors">
                       {t.title}
                     </h3>
                     <p className="mt-3 flex-1 text-sm leading-relaxed text-muted-foreground line-clamp-3">{t.desc}</p>
                     <span className="mt-5 inline-flex items-center gap-2 font-display text-xs font-600 uppercase tracking-[0.18em] text-primary">
-                      Leer más
+                      {d.tournaments.readMore}
                       <ArrowUpRight className="size-4 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                     </span>
                   </div>

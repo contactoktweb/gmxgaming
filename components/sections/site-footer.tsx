@@ -1,39 +1,44 @@
 'use client'
 
+import { useMemo } from 'react'
 import { Stagger, StaggerItem } from '@/components/anim'
 import { GmxLogo } from '@/components/gmx-logo'
 import { SOCIALS } from '@/lib/site-data'
-
-const COLUMNS = [
-  {
-    title: 'NAVEGACIÓN',
-    links: [
-      { label: 'Inicio', href: '/' },
-      { label: 'Torneos', href: '/torneos' },
-      { label: 'Media / GMX TV', href: '#media' },
-      { label: 'Equipos', href: '#equipos' },
-    ],
-  },
-  {
-    title: 'COMUNIDAD',
-    links: [
-      { label: 'Jugadores Destacados', href: '#jugadores' },
-      { label: 'Nuestros Casters', href: '#casters' },
-      { label: 'Sé un Caster', href: 'https://wa.me/525567862008?text=Hola,%20me%20gustar%C3%ADa%20postularme%20como%20caster%20para%20GMX%20Gaming' },
-      { label: 'Discord', href: 'https://discord.gg/5vGVf2wBuD' },
-    ],
-  },
-  {
-    title: 'CUENTA',
-    links: [
-      { label: 'Ingresar', href: '/login' },
-      { label: 'Registrarse', href: '/crear-cuenta' },
-      { label: 'Mi Perfil', href: '/micuenta' },
-    ],
-  },
-]
+import { useLanguage } from '@/lib/language-context'
+import { cn } from '@/lib/utils'
 
 export function SiteFooter() {
+  const { lang, setLang, d } = useLanguage()
+
+  const columns = useMemo(() => [
+    {
+      title: d.footer.navTitle,
+      links: [
+        { label: d.footer.home, href: '/' },
+        { label: d.footer.tournaments, href: '/torneos' },
+        { label: d.footer.media, href: '#media' },
+        { label: d.footer.teams, href: '#equipos' },
+      ],
+    },
+    {
+      title: d.footer.communityTitle,
+      links: [
+        { label: d.footer.featuredPlayers, href: '#jugadores' },
+        { label: d.footer.casters, href: '#casters' },
+        { label: d.footer.beACaster, href: 'https://wa.me/525567862008?text=Hola,%20me%20gustar%C3%ADa%20postularme%20como%20caster%20para%20GMX%20Gaming' },
+        { label: d.footer.discord, href: 'https://discord.gg/5vGVf2wBuD' },
+      ],
+    },
+    {
+      title: d.footer.accountTitle,
+      links: [
+        { label: d.footer.login, href: '/login' },
+        { label: d.footer.register, href: '/crear-cuenta' },
+        { label: d.footer.profile, href: '/micuenta' },
+      ],
+    },
+  ], [d])
+
   return (
     <footer className="border-t border-border bg-deep">
       <div className="mx-auto max-w-[1400px] px-5 py-10 lg:px-10 lg:py-14">
@@ -41,8 +46,7 @@ export function SiteFooter() {
           <StaggerItem className="lg:pr-8">
             <GmxLogo variant="footer" />
             <p className="mt-6 max-w-xs text-sm leading-relaxed text-muted-foreground">
-              GMX Gaming, la organización número 1 en ligas, torneos y eventos de eSports en MOBAs de
-              habla hispana.
+              {d.footer.tagline}
             </p>
             <div className="mt-6 flex flex-wrap gap-2.5">
               {SOCIALS.map((s) => (
@@ -61,7 +65,7 @@ export function SiteFooter() {
             </div>
           </StaggerItem>
 
-          {COLUMNS.map((col) => (
+          {columns.map((col) => (
             <StaggerItem key={col.title}>
               <h3 className="mb-5 font-display text-sm font-600 uppercase tracking-[0.2em] text-white">
                 {col.title}
@@ -88,7 +92,9 @@ export function SiteFooter() {
 
       <div className="border-t border-border">
         <div className="mx-auto flex max-w-[1400px] flex-col items-center justify-between gap-4 px-5 py-6 text-xs text-faint sm:flex-row lg:px-10">
-          <p>Copyright &copy; {new Date().getFullYear()} GMX Gaming. Todos los Derechos Reservados.</p>
+          <p>
+            {d.footer.copyright.replace('{year}', new Date().getFullYear().toString())}
+          </p>
           
           <a
             href="https://www.kytcode.lat"
@@ -104,16 +110,32 @@ export function SiteFooter() {
 
           <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
             <div className="flex gap-4">
-              <a href="/privacidad" className="transition-colors hover:text-white">Privacidad</a>
-              <a href="/terminos" className="transition-colors hover:text-white">Términos</a>
-              <a href="/cookies" className="transition-colors hover:text-white">Cookies</a>
+              <a href="/privacidad" className="transition-colors hover:text-white">{d.footer.privacy}</a>
+              <a href="/terminos" className="transition-colors hover:text-white">{d.footer.terms}</a>
+              <a href="/cookies" className="transition-colors hover:text-white">{d.footer.cookies}</a>
             </div>
             
-            {/* Language Selector (Static UI for now) */}
+            {/* Interactive Language Selector */}
             <div className="flex items-center gap-2 border-l border-border pl-4">
-              <button className="text-white font-600 transition-colors hover:text-primary">ES</button>
+              <button 
+                onClick={() => setLang('es')}
+                className={cn(
+                  "transition-colors cursor-pointer",
+                  lang === 'es' ? "text-white font-600" : "text-muted-foreground hover:text-white"
+                )}
+              >
+                ES
+              </button>
               <span className="text-border">/</span>
-              <button className="text-muted-foreground transition-colors hover:text-white">EN</button>
+              <button 
+                onClick={() => setLang('en')}
+                className={cn(
+                  "transition-colors cursor-pointer",
+                  lang === 'en' ? "text-white font-600" : "text-muted-foreground hover:text-white"
+                )}
+              >
+                EN
+              </button>
             </div>
           </div>
         </div>

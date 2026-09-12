@@ -5,12 +5,14 @@ import { SplitText } from '@/components/split-text'
 import { Reveal } from '@/components/anim'
 import { createClient } from '@/utils/supabase/client'
 import { getTeamSlug } from '@/lib/utils'
+import { useLanguage } from '@/lib/language-context'
 import { ChevronLeft, ChevronRight, MapPin } from 'lucide-react'
 import Link from 'next/link'
 
 export function Teams() {
   const [teams, setTeams] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const { d } = useLanguage()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -47,7 +49,7 @@ export function Teams() {
           <div className="mb-5 flex items-center gap-3">
             <span className="h-px w-10 bg-primary" />
             <span className="font-display text-xs font-600 uppercase tracking-[0.3em] text-primary sm:text-sm">
-              La élite compite con nosotros
+              {d.teams.badge}
             </span>
           </div>
         </Reveal>
@@ -56,20 +58,20 @@ export function Teams() {
           <SplitText
             as="h2"
             variant="title"
-            text="EQUIPOS AFILIADOS"
+            text={d.teams.title}
             className="font-display text-4xl font-700 uppercase leading-[0.95] tracking-tight text-white sm:text-5xl lg:text-6xl"
           />
           
           <div className="flex items-center gap-3">
             <button 
               onClick={() => scroll('left')}
-              className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-surface text-white hover:border-primary hover:text-primary transition-colors"
+              className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-surface text-white hover:border-primary hover:text-primary transition-colors cursor-pointer"
             >
               <ChevronLeft className="h-6 w-6" />
             </button>
             <button 
               onClick={() => scroll('right')}
-              className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-surface text-white hover:border-primary hover:text-primary transition-colors"
+              className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-surface text-white hover:border-primary hover:text-primary transition-colors cursor-pointer"
             >
               <ChevronRight className="h-6 w-6" />
             </button>
@@ -106,7 +108,7 @@ export function Teams() {
                 <div className="flex items-center justify-center gap-1.5 mt-2">
                   <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
                   <span className="text-xs font-600 uppercase tracking-widest text-muted-foreground">
-                    {t.country || 'Desconocido'}
+                    {t.country || d.teams.unknownCountry}
                   </span>
                 </div>
               </div>

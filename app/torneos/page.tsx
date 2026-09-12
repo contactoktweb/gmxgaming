@@ -10,13 +10,15 @@ import { SiteFooter } from '@/components/sections/site-footer'
 import { Reveal } from '@/components/anim'
 import { Calendar, Users, Trophy, ArrowUpRight, Gamepad2 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
-import { getTournamentSlug } from '@/lib/utils'
+import { getTournamentSlug, formatStatus } from '@/lib/utils'
+import { useLanguage } from '@/lib/language-context'
 import Link from 'next/link'
 
 export default function TorneosPage() {
   const [ready, setReady] = useState(false)
   const [tournaments, setTournaments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const { lang, d } = useLanguage()
 
   useEffect(() => {
     async function fetchTournaments() {
@@ -89,7 +91,7 @@ export default function TorneosPage() {
                 t.status === 'ongoing' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
                 'bg-white/5 text-muted-foreground border border-white/10'
               }`}>
-                {t.status === 'upcoming' ? 'Próximo' : t.status === 'ongoing' ? 'En Curso' : 'Finalizado'}
+                {formatStatus(t.status, lang)}
               </span>
               <span className="text-xs font-600 text-primary uppercase tracking-widest flex items-center gap-1">
                 <Gamepad2 className="w-3 h-3" /> {t.game}
@@ -102,7 +104,7 @@ export default function TorneosPage() {
           <div className="grid grid-cols-2 gap-4 mt-6">
             <div className="flex items-center gap-2 text-sm text-white font-500">
               <Calendar className="w-4 h-4 text-muted-foreground" />
-              {t.start_date ? new Date(t.start_date).toLocaleDateString() : 'TBD'}
+              {t.start_date ? new Date(t.start_date).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-ES', { month: 'short', day: 'numeric', year: 'numeric' }) : d.tournamentsPage.tbd}
             </div>
             <div className="flex items-center gap-2 text-sm text-white font-500">
               <Trophy className="w-4 h-4 text-emerald-400" />
@@ -138,10 +140,10 @@ export default function TorneosPage() {
           <div className="text-center mb-20">
             <Reveal direction="up">
               <h1 className="font-display text-4xl font-700 uppercase tracking-tight text-white sm:text-5xl lg:text-6xl mb-4">
-                Torneos y Ligas
+                {d.tournamentsPage.title}
               </h1>
               <p className="text-lg text-muted-foreground">
-                El ecosistema competitivo oficial de GMX Gaming.
+                {d.tournamentsPage.subtitle}
               </p>
             </Reveal>
           </div>
@@ -161,7 +163,7 @@ export default function TorneosPage() {
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                         <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-500"></span>
                       </span>
-                      En Curso
+                      {d.tournamentsPage.ongoing}
                     </h2>
                     <div className="h-px bg-border flex-1 ml-4" />
                   </Reveal>
@@ -175,7 +177,7 @@ export default function TorneosPage() {
                 <div>
                   <Reveal direction="fade" className="flex items-center gap-4 mb-8">
                     <h2 className="font-display text-3xl font-700 uppercase text-white tracking-widest text-blue-400">
-                      Próximos Torneos
+                      {d.tournamentsPage.upcoming}
                     </h2>
                     <div className="h-px bg-border flex-1 ml-4" />
                   </Reveal>
@@ -189,7 +191,7 @@ export default function TorneosPage() {
                 <div>
                   <Reveal direction="fade" className="flex items-center gap-4 mb-8">
                     <h2 className="font-display text-3xl font-700 uppercase text-white tracking-widest text-muted-foreground">
-                      Torneos Pasados
+                      {d.tournamentsPage.past}
                     </h2>
                     <div className="h-px bg-border flex-1 ml-4" />
                   </Reveal>
@@ -202,8 +204,8 @@ export default function TorneosPage() {
               {tournaments.length === 0 && (
                 <div className="text-center py-24 border border-dashed border-border rounded-xl bg-surface">
                   <Trophy className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="font-display text-xl text-white font-700 mb-2">No hay torneos registrados</h3>
-                  <p className="text-muted-foreground text-sm">Los próximos torneos aparecerán aquí automáticamente.</p>
+                  <h3 className="font-display text-xl text-white font-700 mb-2">{d.tournamentsPage.noTournaments}</h3>
+                  <p className="text-muted-foreground text-sm">{d.tournamentsPage.noTournamentsDesc}</p>
                 </div>
               )}
 

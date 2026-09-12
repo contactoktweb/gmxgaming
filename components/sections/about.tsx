@@ -4,11 +4,12 @@ import { useRef } from 'react'
 import { motion, useScroll, useTransform } from 'motion/react'
 import { Reveal, Stagger, StaggerItem } from '@/components/anim'
 import { SplitText } from '@/components/split-text'
-import { BENEFITS } from '@/lib/site-data'
+import { useLanguage } from '@/lib/language-context'
 import { cn } from '@/lib/utils'
 
 export function About() {
   const ref = useRef<HTMLDivElement>(null)
+  const { d } = useLanguage()
   const { scrollYProgress } = useScroll({
     target: ref,
     offset: ['start end', 'end start'],
@@ -32,7 +33,7 @@ export function About() {
             <div className="mb-5 flex items-center gap-3">
               <span className="h-px w-10 bg-primary" />
               <span className="font-display text-xs font-600 uppercase tracking-[0.3em] text-primary sm:text-sm">
-                ¿Por qué registrarte?
+                {d.about.badge}
               </span>
             </div>
           </Reveal>
@@ -40,18 +41,13 @@ export function About() {
           <SplitText
             as="h2"
             variant="title"
-            lines={['SUPERA', 'TUS LÍMITES']}
+            lines={[d.about.title1, d.about.title2]}
             className="font-display text-5xl font-700 uppercase leading-[0.95] tracking-tight text-white sm:text-6xl lg:text-7xl"
           />
 
           <Reveal direction="up" delay={0.15} className="mt-7">
             <p className="max-w-xl text-[15px] leading-relaxed text-muted-foreground">
-              ¡Aquí comienza tu aventura épica en el mundo gamer! Únete a una comunidad apasionada y
-              vive la emoción de torneos electrizantes, competencias de alto nivel y eventos únicos
-              que te conectan con jugadores de todo el mundo. Ya seas un principiante o un experto,
-              GMX Gaming te ofrece la oportunidad de demostrar tus habilidades, ganar premios
-              increíbles y formar parte de una revolución gaming sin igual. ¡Regístrate hoy y
-              descubre un universo donde cada partida cuenta y la diversión no tiene límites!
+              {d.about.description}
             </p>
           </Reveal>
         </div>
@@ -81,9 +77,9 @@ export function About() {
           </motion.div>
 
           <div className="absolute right-0 sm:right-2 top-4 sm:top-6 border border-primary/50 bg-deep/70 px-3 sm:px-4 py-2 sm:py-3 backdrop-blur-sm z-10">
-            <p className="font-display text-2xl sm:text-3xl font-700 leading-none text-primary">+100</p>
+            <p className="font-display text-2xl sm:text-3xl font-700 leading-none text-primary">{d.about.playersCount}</p>
             <p className="mt-1 text-[9px] sm:text-[10px] font-500 uppercase tracking-[0.2em] text-muted-foreground">
-              Jugadores
+              {d.about.playersLabel}
             </p>
           </div>
         </div>
@@ -91,12 +87,14 @@ export function About() {
 
       {/* Benefit blocks */}
       <Stagger className="mx-auto mt-20 grid max-w-[1400px] grid-cols-1 gap-px overflow-hidden border border-border bg-border px-0 sm:grid-cols-2 lg:mt-24 lg:grid-cols-4 lg:mx-auto" amount={0.15}>
-        {BENEFITS.map((b) => (
+        {d.about.benefits.map((b, idx) => {
+          const isAccent = idx === 0 || idx === 3
+          return (
           <StaggerItem key={b.n} className="h-full">
             <div
               className={cn(
                 'group relative flex h-full flex-col justify-between gap-8 p-8 transition-colors duration-300',
-                b.accent
+                isAccent
                   ? 'bg-primary text-white hover:bg-primary-dark'
                   : 'bg-surface text-white hover:bg-elevated',
               )}
@@ -105,7 +103,7 @@ export function About() {
               <span
                 className={cn(
                   'font-display text-5xl font-700 leading-none',
-                  b.accent ? 'text-white/40' : 'text-primary/60',
+                  isAccent ? 'text-white/40' : 'text-primary/60',
                 )}
               >
                 {b.n}
@@ -117,7 +115,7 @@ export function About() {
                 <p
                   className={cn(
                     'mt-3 text-sm leading-relaxed',
-                    b.accent ? 'text-white/85' : 'text-muted-foreground',
+                    isAccent ? 'text-white/85' : 'text-muted-foreground',
                   )}
                 >
                   {b.desc}
@@ -126,12 +124,12 @@ export function About() {
               <span
                 className={cn(
                   'h-0.5 w-8 transition-all duration-300 group-hover:w-16',
-                  b.accent ? 'bg-white/60' : 'bg-primary',
+                  isAccent ? 'bg-white/60' : 'bg-primary',
                 )}
               />
             </div>
           </StaggerItem>
-        ))}
+        )})}
       </Stagger>
     </section>
   )

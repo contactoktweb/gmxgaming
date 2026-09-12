@@ -7,6 +7,7 @@ import { Loader2, Eye, EyeOff, Mail } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { createClient } from '@/utils/supabase/client'
 import { translateAuthError } from '@/lib/utils'
+import { useLanguage } from '@/lib/language-context'
 
 function RegisterFormContent() {
   const [email, setEmail] = useState('')
@@ -19,6 +20,7 @@ function RegisterFormContent() {
   const [error, setError] = useState('')
   const [emailNotConfirmed, setEmailNotConfirmed] = useState(false)
   const { register } = useAuth()
+  const { d } = useLanguage()
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
@@ -61,7 +63,7 @@ function RegisterFormContent() {
     setEmailNotConfirmed(false)
 
     if (password !== confirmPassword) {
-      setError('Las contraseñas no coinciden')
+      setError(d.auth.passwordsDoNotMatch)
       setIsLoading(false)
       return
     }
@@ -92,17 +94,17 @@ function RegisterFormContent() {
     >
       <div className="text-center">
         <h2 className="font-display text-3xl font-700 uppercase tracking-tight text-white">
-          CREA TU USUARIO
+          {d.auth.registerTitle}
         </h2>
         <p className="mt-3 text-sm text-muted-foreground">
-          Regístrate para acceder a todas las funciones de GMX Gaming.
+          {d.auth.registerSubtitle}
         </p>
       </div>
 
       <div className="space-y-6">
         <div className="space-y-2">
           <label htmlFor="email" className="text-sm font-500 text-white">
-            Correo Electrónico <span className="text-primary">*</span>
+            {d.auth.emailLabel} <span className="text-primary">*</span>
           </label>
           <input
             type="email"
@@ -116,7 +118,7 @@ function RegisterFormContent() {
 
         <div className="space-y-2">
           <label htmlFor="password" className="text-sm font-500 text-white">
-            Contraseña <span className="text-primary">*</span>
+            {d.auth.passwordLabel} <span className="text-primary">*</span>
           </label>
           <div className="relative">
             <input
@@ -132,7 +134,7 @@ function RegisterFormContent() {
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white transition-colors"
-              aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              aria-label={showPassword ? d.auth.hidePassword : d.auth.showPassword}
             >
               {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
             </button>
@@ -141,7 +143,7 @@ function RegisterFormContent() {
 
         <div className="space-y-2">
           <label htmlFor="confirmPassword" className="text-sm font-500 text-white">
-            Confirmar Contraseña <span className="text-primary">*</span>
+            {d.auth.confirmPasswordLabel} <span className="text-primary">*</span>
           </label>
           <div className="relative">
             <input
@@ -157,7 +159,7 @@ function RegisterFormContent() {
               type="button"
               onClick={() => setShowConfirm(!showConfirm)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white transition-colors"
-              aria-label={showConfirm ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              aria-label={showConfirm ? d.auth.hidePassword : d.auth.showPassword}
             >
               {showConfirm ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
             </button>
@@ -177,9 +179,9 @@ function RegisterFormContent() {
         <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
           <Mail className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-600 text-amber-400">Verifica tu correo</p>
+            <p className="text-sm font-600 text-amber-400">{d.auth.emailNotConfirmedTitle}</p>
             <p className="text-xs text-amber-400/80 mt-1">
-              Te enviamos un correo de verificación. Puedes continuar usando la plataforma, pero te recomendamos verificarlo pronto.
+              {d.auth.emailNotConfirmedDesc}
             </p>
           </div>
         </div>
@@ -192,13 +194,13 @@ function RegisterFormContent() {
           className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden bg-primary px-8 py-4 font-display text-[15px] font-600 uppercase tracking-[0.18em] text-white transition-colors duration-300 clip-corner hover:bg-primary-dark disabled:opacity-70 disabled:cursor-not-allowed"
         >
           <span className="relative z-10 flex items-center gap-2">
-            {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'CREAR CUENTA'}
+            {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : d.auth.submitRegister}
           </span>
         </button>
 
         <div className="relative flex items-center py-2">
           <div className="flex-grow border-t border-border"></div>
-          <span className="flex-shrink-0 mx-4 text-muted-foreground text-xs uppercase tracking-wider">O</span>
+          <span className="flex-shrink-0 mx-4 text-muted-foreground text-xs uppercase tracking-wider">{d.auth.orLetter}</span>
           <div className="flex-grow border-t border-border"></div>
         </div>
 
@@ -231,14 +233,14 @@ function RegisterFormContent() {
             </svg>
           )}
           <span className="relative z-10 flex items-center gap-2">
-            {isGoogleLoading ? 'CONECTANDO CON GOOGLE...' : 'CONTINUAR CON GOOGLE'}
+            {isGoogleLoading ? d.auth.connectingWithGoogle : d.auth.continueWithGoogleBtn}
           </span>
         </button>
       </div>
       
       <div className="text-center mt-4">
         <Link href="/login" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-          ¿Ya tienes una cuenta? Inicia sesión aquí.
+          {d.auth.alreadyHaveAccount}
         </Link>
       </div>
     </form>

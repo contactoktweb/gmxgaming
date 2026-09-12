@@ -1,14 +1,11 @@
-'use client'
-
-const LINE_ONE = ['GMX GAMING', 'AQUÍ COMIENZA EL CAMINO', 'SUPERA TUS LÍMITES', 'COMPITE. CRECE. DOMINA.']
-const LINE_TWO = ['TORNEOS DE ESPORTS', 'MOBILE LEGENDS', 'COMPETENCIA DE ALTO NIVEL', 'CONVIÉRTETE EN UNA ESTRELLA']
+import { useLanguage } from '@/lib/language-context'
 
 function Row({
   items,
   direction,
   variant,
 }: {
-  items: string[]
+  items: readonly string[]
   direction: 'left' | 'right'
   variant: 'red' | 'dark'
 }) {
@@ -46,10 +43,12 @@ function Row({
 }
 
 export function MarqueeBand() {
+  const { d } = useLanguage()
+
   return (
     <section aria-hidden className="relative">
-      <Row items={LINE_ONE} direction="left" variant="red" />
-      <Row items={LINE_TWO} direction="right" variant="dark" />
+      <Row items={d.marquee.line1} direction="left" variant="red" />
+      <Row items={d.marquee.line2} direction="right" variant="dark" />
     </section>
   )
 }

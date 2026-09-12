@@ -12,11 +12,13 @@ import { SiteFooter } from '@/components/sections/site-footer'
 import { Reveal } from '@/components/anim'
 import { Users, Trophy, ShieldAlert, MapPin, CheckCircle2, User, Swords } from 'lucide-react'
 import Link from 'next/link'
-import { cn, formatRoleTitle, formatRolesList, getPlayerSlug, slugify } from '@/lib/utils'
+import { cn, formatRoleTitle, formatRolesList, getPlayerSlug, slugify, formatStatus } from '@/lib/utils'
+import { useLanguage } from '@/lib/language-context'
 
 export default function TeamDetailsPage() {
   const params = useParams()
   const [ready, setReady] = useState(false)
+  const { lang, d } = useLanguage()
   
   const [team, setTeam] = useState<any>(null)
   const [manager, setManager] = useState<any>(null)
@@ -160,9 +162,9 @@ export default function TeamDetailsPage() {
     return (
       <div className="min-h-screen bg-background flex flex-col justify-center items-center text-center p-6">
         <ShieldAlert className="w-16 h-16 text-muted-foreground mb-4" />
-        <h1 className="font-display text-3xl text-white uppercase mb-2">Equipo no encontrado</h1>
-        <p className="text-muted-foreground mb-6">El equipo que buscas no existe o ha sido eliminado.</p>
-        <Link href="/" className="px-6 py-3 bg-primary text-white font-600 rounded uppercase tracking-widest text-sm hover:bg-primary-dark transition-colors">Volver al Inicio</Link>
+        <h1 className="font-display text-3xl text-white uppercase mb-2">{d.teamDetail.notFoundTitle}</h1>
+        <p className="text-muted-foreground mb-6">{d.teamDetail.notFoundDesc}</p>
+        <Link href="/" className="px-6 py-3 bg-primary text-white font-600 rounded uppercase tracking-widest text-sm hover:bg-primary-dark transition-colors">{d.teamDetail.backToHome}</Link>
       </div>
     )
   }
@@ -202,10 +204,10 @@ export default function TeamDetailsPage() {
                   team.status === 'pending' || team.status === 'pendiente' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
                   'bg-white/5 text-muted-foreground border-white/10'
                 )}>
-                  {isTeamActive ? 'Activo' : team.status === 'pending' || team.status === 'pendiente' ? 'Pendiente' : team.status === 'banned' ? 'Baneado' : 'Inactivo'}
+                  {formatStatus(isTeamActive ? 'active' : team.status, lang)}
                 </span>
                 <span className="text-xs font-600 text-muted-foreground uppercase tracking-widest flex items-center gap-1 bg-white/5 border border-white/10 px-3 py-1 rounded-full">
-                  <MapPin className="w-3 h-3" /> {team.country || 'Desconocido'}
+                  <MapPin className="w-3 h-3" /> {team.country || d.teamDetail.unknownCountry}
                 </span>
               </div>
               <h1 className="font-display text-4xl sm:text-6xl font-700 text-white uppercase tracking-tight mb-6">
@@ -214,14 +216,14 @@ export default function TeamDetailsPage() {
               
               <div className="flex flex-wrap justify-center md:justify-start gap-8">
                 <div className="flex flex-col text-center md:text-left">
-                  <span className="text-[10px] font-600 text-muted-foreground uppercase tracking-widest mb-1">Torneos Jugados</span>
+                  <span className="text-[10px] font-600 text-muted-foreground uppercase tracking-widest mb-1">{d.teamDetail.tournamentsPlayed}</span>
                   <div className="flex items-center justify-center md:justify-start gap-2 text-white">
                     <Trophy className="w-5 h-5 text-amber-400" />
                     <span className="font-display font-700 text-xl">{tournamentsCount}</span>
                   </div>
                 </div>
                 <div className="flex flex-col text-center md:text-left">
-                  <span className="text-[10px] font-600 text-muted-foreground uppercase tracking-widest mb-1">Manager</span>
+                  <span className="text-[10px] font-600 text-muted-foreground uppercase tracking-widest mb-1">{d.teamDetail.manager}</span>
                   <div className="flex items-center justify-center md:justify-start gap-2 text-white">
                     <User className="w-5 h-5 text-primary" />
                     <span className="font-600">
@@ -242,14 +244,14 @@ export default function TeamDetailsPage() {
             <div className="lg:col-span-2">
               <Reveal direction="fade" className="rounded-2xl border border-border bg-surface p-6 sm:p-8">
                 <h3 className="font-display text-2xl font-700 text-white uppercase flex items-center gap-2 mb-8">
-                  <Users className="w-6 h-6 text-primary" /> Roster Actual
+                  <Users className="w-6 h-6 text-primary" /> {d.teamDetail.currentRoster}
                 </h3>
 
                 {roster.length === 0 ? (
                   <div className="text-center py-12 border border-dashed border-border rounded-xl bg-background">
                     <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-                    <p className="text-white font-600 text-lg mb-1">Sin roster activo</p>
-                    <p className="text-muted-foreground text-sm">Este equipo no tiene jugadores con contrato activo.</p>
+                    <p className="text-white font-600 text-lg mb-1">{d.teamDetail.noRosterTitle}</p>
+                    <p className="text-muted-foreground text-sm">{d.teamDetail.noRosterDesc}</p>
                   </div>
                 ) : (
                   <div className="grid sm:grid-cols-2 gap-6">
@@ -279,7 +281,7 @@ export default function TeamDetailsPage() {
                             </h4>
                             <div className="flex items-center gap-2 mt-1">
                               <span className="text-[10px] font-600 text-primary uppercase tracking-widest">
-                                {formatRolesList(contract.roles)}
+                                {formatRolesList(contract.roles, ', ', lang)}
                               </span>
                             </div>
                           </div>
@@ -295,11 +297,11 @@ export default function TeamDetailsPage() {
             <div className="lg:col-span-1">
               <Reveal direction="fade" className="rounded-2xl border border-border bg-surface p-6">
                 <h3 className="font-display text-xl font-700 text-white uppercase flex items-center gap-2 mb-6">
-                  <Swords className="w-5 h-5 text-emerald-400" /> Últimos Encuentros
+                  <Swords className="w-5 h-5 text-emerald-400" /> {d.teamDetail.latestMatches}
                 </h3>
 
                 {matches.length === 0 ? (
-                  <p className="text-muted-foreground text-sm italic">No hay historial de encuentros.</p>
+                  <p className="text-muted-foreground text-sm italic">{d.teamDetail.noMatches}</p>
                 ) : (
                   <div className="space-y-4">
                     {matches.map(m => {
@@ -313,15 +315,15 @@ export default function TeamDetailsPage() {
                       return (
                         <div key={m.id} className="flex flex-col gap-2 p-3 rounded-lg bg-background border border-border hover:border-white/20 transition-colors">
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-600 text-primary uppercase truncate pr-4">{m.tournaments?.name || 'Torneo'}</span>
+                            <span className="text-[10px] font-600 text-primary uppercase truncate pr-4">{m.tournaments?.name || (lang === 'en' ? 'Tournament' : 'Torneo')}</span>
                             <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                              {m.match_date ? new Date(m.match_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'TBD'}
+                              {m.match_date ? new Date(m.match_date).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-ES', { month: 'short', day: 'numeric' }) : 'TBD'}
                             </span>
                           </div>
                           <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2 flex-1 min-w-0">
                               <img src={enemy?.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} className="w-6 h-6 rounded bg-surface shrink-0" />
-                              <span className="font-600 text-xs text-white truncate">vs {enemy?.name || 'TBD'}</span>
+                              <span className="font-600 text-xs text-white truncate">{d.teamDetail.vs} {enemy?.name || 'TBD'}</span>
                             </div>
                             <div className={cn("px-2 py-1 rounded text-xs font-700 min-w-[50px] text-center", 
                               !isPlayed ? "bg-surface text-muted-foreground" :

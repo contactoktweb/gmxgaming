@@ -16,12 +16,14 @@ import { TournamentInscriptionModal } from '@/components/tournaments/tournament-
 import { Calendar, Users, Trophy, Gamepad2, Swords, DollarSign } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { cn, getTeamSlug, slugify } from '@/lib/utils'
+import { cn, getTeamSlug, slugify, formatStatus } from '@/lib/utils'
+import { useLanguage } from '@/lib/language-context'
 
 export default function TournamentDetailsPage() {
   const params = useParams()
   const router = useRouter()
   const { user } = useAuth()
+  const { lang, d } = useLanguage()
   const [ready, setReady] = useState(false)
   
   const [tournament, setTournament] = useState<any>(null)
@@ -136,7 +138,7 @@ export default function TournamentDetailsPage() {
 
   const handleInscriptionClick = () => {
     if (!user) {
-      toast.info('Debes registrarte o iniciar sesión para inscribir a tu equipo.')
+      toast.info(d.tournamentDetail.toastLoginRequired)
       router.push('/crear-cuenta')
       return
     }
@@ -155,9 +157,9 @@ export default function TournamentDetailsPage() {
     return (
       <div className="min-h-screen bg-background flex flex-col justify-center items-center text-center p-6">
         <Trophy className="w-16 h-16 text-muted-foreground mb-4" />
-        <h1 className="font-display text-3xl text-white uppercase mb-2">Torneo no encontrado</h1>
-        <p className="text-muted-foreground mb-6">El torneo que buscas no existe o ha sido eliminado.</p>
-        <Link href="/torneos" className="px-6 py-3 bg-primary text-white font-600 rounded uppercase tracking-widest text-sm hover:bg-primary-dark transition-colors">Volver a Torneos</Link>
+        <h1 className="font-display text-3xl text-white uppercase mb-2">{d.tournamentDetail.notFoundTitle}</h1>
+        <p className="text-muted-foreground mb-6">{d.tournamentDetail.notFoundDesc}</p>
+        <Link href="/torneos" className="px-6 py-3 bg-primary text-white font-600 rounded uppercase tracking-widest text-sm hover:bg-primary-dark transition-colors">{d.tournamentDetail.backToTournaments}</Link>
       </div>
     )
   }
@@ -200,13 +202,13 @@ export default function TournamentDetailsPage() {
                   tournament.status === 'ongoing' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
                   'bg-white/5 text-muted-foreground border border-white/10'
                 )}>
-                  {tournament.status === 'upcoming' ? 'Próximo' : tournament.status === 'ongoing' ? 'En Curso' : 'Finalizado'}
+                  {formatStatus(tournament.status, lang)}
                 </span>
                 <span className="text-xs font-600 text-primary uppercase tracking-widest flex items-center gap-1 bg-primary/10 px-3 py-1 rounded-full">
                   <Gamepad2 className="w-3 h-3" /> {tournament.game}
                 </span>
                 <span className="text-xs font-600 text-muted-foreground uppercase tracking-widest bg-white/5 border border-white/10 px-3 py-1 rounded-full">
-                  {tournament.templates?.type || 'Torneo'}
+                  {tournament.templates?.type || (lang === 'en' ? 'Tournament' : 'Torneo')}
                 </span>
               </div>
               <h1 className="font-display text-4xl sm:text-5xl font-700 text-white uppercase tracking-tight mb-6">
@@ -215,7 +217,7 @@ export default function TournamentDetailsPage() {
               <div className="flex flex-wrap justify-center md:justify-start gap-6">
                 <div className="flex items-center gap-2 text-white">
                   <Calendar className="w-5 h-5 text-primary" />
-                  <span className="font-500">{tournament.start_date ? new Date(tournament.start_date).toLocaleDateString() : 'TBD'} - {tournament.end_date ? new Date(tournament.end_date).toLocaleDateString() : 'TBD'}</span>
+                  <span className="font-500">{tournament.start_date ? new Date(tournament.start_date).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-ES', { month: 'short', day: 'numeric', year: 'numeric' }) : d.tournamentDetail.tbd} - {tournament.end_date ? new Date(tournament.end_date).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-ES', { month: 'short', day: 'numeric', year: 'numeric' }) : d.tournamentDetail.tbd}</span>
                 </div>
                 <div className="flex items-center gap-2 text-white">
                   <Trophy className="w-5 h-5 text-emerald-400" />
@@ -223,7 +225,7 @@ export default function TournamentDetailsPage() {
                 </div>
                 <div className="flex items-center gap-2 text-white">
                   <Users className="w-5 h-5 text-blue-400" />
-                  <span className="font-500">{teams.length} Equipos</span>
+                  <span className="font-500">{teams.length} {d.tournamentDetail.teamsCount}</span>
                 </div>
               </div>
 
@@ -241,7 +243,7 @@ export default function TournamentDetailsPage() {
                     className="px-8 py-3.5 text-sm flex items-center gap-2.5 shadow-[0_0_25px_rgba(255,45,32,0.35)] hover:shadow-[0_0_35px_rgba(255,45,32,0.5)] transition-shadow"
                   >
                     <Trophy className="w-4 h-4 text-white" />
-                    INSCRIBIRME AL TORNEO
+                    {d.tournamentDetail.inscribeBtn}
                   </GmxButton>
                 </div>
               )}
@@ -255,10 +257,10 @@ export default function TournamentDetailsPage() {
               {/* Prizepool */}
               <Reveal direction="fade" className="rounded-2xl border border-border bg-surface p-6">
                 <h3 className="font-display text-xl font-700 text-white uppercase flex items-center gap-2 mb-6">
-                  <DollarSign className="w-5 h-5 text-emerald-400" /> Distribución
+                  <DollarSign className="w-5 h-5 text-emerald-400" /> {d.tournamentDetail.distributionTitle}
                 </h3>
                 {(!tournament.prizepool_distribution || tournament.prizepool_distribution.length === 0 || tournament.prizepool_distribution[0] === '') ? (
-                  <p className="text-muted-foreground text-sm italic">Distribución no anunciada.</p>
+                  <p className="text-muted-foreground text-sm italic">{d.tournamentDetail.noDistribution}</p>
                 ) : (
                   <div className="space-y-3">
                     {tournament.prizepool_distribution.map((val: string, idx: number) => (
@@ -274,10 +276,10 @@ export default function TournamentDetailsPage() {
               {/* Teams */}
               <Reveal direction="fade" className="rounded-2xl border border-border bg-surface p-6">
                 <h3 className="font-display text-xl font-700 text-white uppercase flex items-center gap-2 mb-6">
-                  <Users className="w-5 h-5 text-primary" /> Participantes ({teams.length})
+                  <Users className="w-5 h-5 text-primary" /> {d.tournamentDetail.participantsTitle} ({teams.length})
                 </h3>
                 {teams.length === 0 ? (
-                  <p className="text-muted-foreground text-sm italic">Equipos por anunciar.</p>
+                  <p className="text-muted-foreground text-sm italic">{d.tournamentDetail.noParticipants}</p>
                 ) : (
                   <div className="grid grid-cols-2 gap-4">
                     {teams.map(team => (
@@ -300,14 +302,14 @@ export default function TournamentDetailsPage() {
             <div className="lg:col-span-2">
               <Reveal direction="fade" className="rounded-2xl border border-border bg-surface p-6 sm:p-8">
                 <h3 className="font-display text-2xl font-700 text-white uppercase flex items-center gap-2 mb-8">
-                  <Swords className="w-6 h-6 text-primary" /> Encuentros y Resultados
+                  <Swords className="w-6 h-6 text-primary" /> {d.tournamentDetail.matchesTitle}
                 </h3>
 
                 {matches.length === 0 ? (
                   <div className="text-center py-16 border border-dashed border-border rounded-xl bg-background">
                     <Swords className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-white font-600 text-lg mb-1">Calendario en preparación</p>
-                    <p className="text-muted-foreground text-sm">Los encuentros serán publicados pronto.</p>
+                    <p className="text-white font-600 text-lg mb-1">{d.tournamentDetail.noMatchesTitle}</p>
+                    <p className="text-muted-foreground text-sm">{d.tournamentDetail.noMatchesDesc}</p>
                   </div>
                 ) : (
                   <div className="space-y-12">
@@ -323,12 +325,12 @@ export default function TournamentDetailsPage() {
                             return (
                               <div key={m.id} className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 rounded-xl bg-background border border-border hover:border-primary/30 transition-colors">
                                 <div className="w-full sm:w-24 shrink-0 text-xs font-600 text-muted-foreground uppercase tracking-wider">
-                                  {m.match_date ? new Date(m.match_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'TBD'}
+                                  {m.match_date ? new Date(m.match_date).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-ES', { month: 'short', day: 'numeric' }) : d.tournamentDetail.tbd}
                                 </div>
                                 <div className="flex-1 flex items-center gap-4">
                                   {/* Team 1 */}
                                   <div className={cn("flex items-center gap-3 flex-1 justify-end", isPlayed && isT2Winner ? "opacity-50" : "", isPlayed && isT1Winner ? "font-700 text-white" : "font-500 text-muted-foreground")}>
-                                    <span className="text-sm truncate">{m.team1?.name || 'TBD'}</span>
+                                    <span className="text-sm truncate">{m.team1?.name || d.tournamentDetail.tbd}</span>
                                     <img src={m.team1?.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} className={cn("w-8 h-8 rounded-full bg-surface border border-border", isPlayed && isT1Winner && "ring-2 ring-primary border-transparent")} />
                                   </div>
                                   
@@ -341,14 +343,14 @@ export default function TournamentDetailsPage() {
                                         <span className={isT2Winner ? "text-primary" : ""}>{m.team2_score}</span>
                                       </span>
                                     ) : (
-                                      <span className="text-xs font-600 text-muted-foreground">VS</span>
+                                      <span className="text-xs font-600 text-muted-foreground">{d.tournamentDetail.vs}</span>
                                     )}
                                   </div>
 
                                   {/* Team 2 */}
                                   <div className={cn("flex items-center gap-3 flex-1", isPlayed && isT1Winner ? "opacity-50" : "", isPlayed && isT2Winner ? "font-700 text-white" : "font-500 text-muted-foreground")}>
                                     <img src={m.team2?.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} className={cn("w-8 h-8 rounded-full bg-surface border border-border", isPlayed && isT2Winner && "ring-2 ring-primary border-transparent")} />
-                                    <span className="text-sm truncate">{m.team2?.name || 'TBD'}</span>
+                                    <span className="text-sm truncate">{m.team2?.name || d.tournamentDetail.tbd}</span>
                                   </div>
                                 </div>
                               </div>

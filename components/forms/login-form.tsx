@@ -8,6 +8,7 @@ import { GmxButton } from '@/components/gmx-button'
 import { useAuth } from '@/lib/auth-context'
 import { createClient } from '@/utils/supabase/client'
 import { translateAuthError } from '@/lib/utils'
+import { useLanguage } from '@/lib/language-context'
 
 function LoginFormContent() {
   const [email, setEmail] = useState('')
@@ -17,6 +18,7 @@ function LoginFormContent() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [error, setError] = useState('')
   const { login } = useAuth()
+  const { d } = useLanguage()
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
@@ -72,17 +74,17 @@ function LoginFormContent() {
     >
       <div className="text-center">
         <h2 className="font-display text-3xl font-700 uppercase tracking-tight text-white">
-          INICIAR SESIÓN
+          {d.auth.loginTitle}
         </h2>
         <p className="mt-3 text-sm text-muted-foreground">
-          Ingresa a tu cuenta de GMX Gaming.
+          {d.auth.loginSubtitle}
         </p>
       </div>
 
       <div className="space-y-6">
         <div className="space-y-2">
           <label htmlFor="email" className="text-sm font-500 text-white">
-            Correo Electrónico <span className="text-primary">*</span>
+            {d.auth.emailLabel} <span className="text-primary">*</span>
           </label>
           <input
             type="email"
@@ -96,7 +98,7 @@ function LoginFormContent() {
 
         <div className="space-y-2">
           <label htmlFor="password" className="text-sm font-500 text-white">
-            Contraseña <span className="text-primary">*</span>
+            {d.auth.passwordLabel} <span className="text-primary">*</span>
           </label>
           <div className="relative">
             <input
@@ -111,14 +113,14 @@ function LoginFormContent() {
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white transition-colors"
-              aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              aria-label={showPassword ? d.auth.hidePassword : d.auth.showPassword}
             >
               {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
             </button>
           </div>
           <div className="flex justify-end pt-1">
             <Link href="/login/olvide-password" className="text-xs text-primary hover:text-primary-dark transition-colors">
-              ¿Olvidaste tu contraseña?
+              {d.auth.forgotPassword}
             </Link>
           </div>
         </div>
@@ -139,13 +141,13 @@ function LoginFormContent() {
           className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden bg-primary px-8 py-4 font-display text-[15px] font-600 uppercase tracking-[0.18em] text-white transition-colors duration-300 clip-corner hover:bg-primary-dark disabled:opacity-70 disabled:cursor-not-allowed"
         >
           <span className="relative z-10 flex items-center gap-2">
-            {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'INGRESAR'}
+            {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : d.auth.submitLogin}
           </span>
         </button>
 
         <div className="relative flex items-center py-2">
           <div className="flex-grow border-t border-border"></div>
-          <span className="flex-shrink-0 mx-4 text-muted-foreground text-xs uppercase tracking-wider">O</span>
+          <span className="flex-shrink-0 mx-4 text-muted-foreground text-xs uppercase tracking-wider">{d.auth.orLetter}</span>
           <div className="flex-grow border-t border-border"></div>
         </div>
 
@@ -178,14 +180,14 @@ function LoginFormContent() {
             </svg>
           )}
           <span className="relative z-10 flex items-center gap-2">
-            {isGoogleLoading ? 'CONECTANDO CON GOOGLE...' : 'CONTINUAR CON GOOGLE'}
+            {isGoogleLoading ? d.auth.connectingWithGoogle : d.auth.continueWithGoogleBtn}
           </span>
         </button>
       </div>
       
       <div className="text-center mt-4">
         <Link href="/crear-cuenta" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-          ¿No tienes una cuenta? Regístrate aquí.
+          {d.auth.dontHaveAccount}
         </Link>
       </div>
     </form>

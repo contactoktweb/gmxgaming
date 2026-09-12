@@ -6,10 +6,12 @@ import { SplitText } from '@/components/split-text'
 import { Reveal } from '@/components/anim'
 import { GmxButton } from '@/components/gmx-button'
 import { useAuth } from '@/lib/auth-context'
+import { useLanguage } from '@/lib/language-context'
 
 export function Cinematic() {
   const ref = useRef<HTMLDivElement>(null)
   const { user } = useAuth()
+  const { d } = useLanguage()
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end start'] })
   const y = useTransform(scrollYProgress, [0, 1], ['-12%', '12%'])
 
@@ -26,20 +28,20 @@ export function Cinematic() {
         <div className="lg:border-r lg:border-border lg:pr-16">
           <Reveal direction="fade">
             <span className="font-display text-xs font-600 uppercase tracking-[0.3em] text-primary sm:text-sm">
-              Compite al más alto nivel
+              {d.cinematic.badgeLeft}
             </span>
           </Reveal>
           <SplitText
             as="h2"
             variant="title"
-            lines={['CONSTRUYE', 'TU CAMINO', 'HACIA LA CIMA']}
+            lines={d.cinematic.titleLeft}
             className="mt-5 font-display text-4xl font-700 uppercase leading-[0.95] tracking-tight text-white sm:text-5xl lg:text-6xl"
           />
           <Reveal direction="up" delay={0.2} className="mt-8">
             {user ? (
-              <GmxButton href="/micuenta">IR A TU PERFIL</GmxButton>
+              <GmxButton href="/micuenta">{d.cinematic.goToProfile}</GmxButton>
             ) : (
-              <GmxButton href="#registro">REGÍSTRATE AHORA</GmxButton>
+              <GmxButton href="#registro">{d.cinematic.registerNow}</GmxButton>
             )}
           </Reveal>
         </div>
@@ -48,18 +50,18 @@ export function Cinematic() {
         <div>
           <Reveal direction="fade">
             <span className="font-display text-xs font-600 uppercase tracking-[0.3em] text-primary sm:text-sm">
-              Tu próxima partida puede cambiarlo todo
+              {d.cinematic.badgeRight}
             </span>
           </Reveal>
           <SplitText
             as="h2"
             variant="title"
-            lines={['JUEGA.', 'MEJORA.', 'CONQUISTA.']}
+            lines={d.cinematic.titleRight}
             className="mt-5 font-display text-4xl font-700 uppercase leading-[0.95] tracking-tight text-white sm:text-5xl lg:text-6xl"
           />
           <Reveal direction="up" delay={0.2} className="mt-8">
             <GmxButton href="#torneos" variant="secondary">
-              VER TORNEOS
+              {d.cinematic.viewTournaments}
             </GmxButton>
           </Reveal>
         </div>
