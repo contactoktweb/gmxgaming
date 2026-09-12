@@ -92,6 +92,17 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
     .in('status', ['active', 'activo', 'pending_player_release', 'pending_manager_release'])
 
   const gameInfo = player.player_game_info?.[0]
+  const playerCountry = gameInfo?.country_account || player.country || null
+  const activeContracts = contracts || []
+  const activeRoles = Array.from(
+    new Set(
+      activeContracts.flatMap((c: any) => {
+        if (!c.roles) return []
+        if (Array.isArray(c.roles)) return c.roles
+        return [c.roles]
+      }).filter(Boolean)
+    )
+  )
 
   return (
     <>
@@ -172,20 +183,26 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
                   {d.playerDetail.gameInfo}
                 </h3>
                 
-                {gameInfo ? (
-                  <div className="flex flex-col gap-4">
-                    <div>
-                      <p className="text-xs font-600 uppercase tracking-widest text-muted-foreground">{d.playerDetail.gameId}</p>
-                      <p className="mt-1 font-display text-lg text-white">{gameInfo.game_id || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-600 uppercase tracking-widest text-muted-foreground">{d.playerDetail.server}</p>
-                      <p className="mt-1 font-display text-lg text-white">{gameInfo.server || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-600 uppercase tracking-widest text-muted-foreground">{d.playerDetail.countryAccount}</p>
-                      <p className="mt-1 font-display text-lg text-white">{gameInfo.country_account || 'N/A'}</p>
-                    </div>
+                {playerCountry || (activeContracts.length > 0 && activeRoles.length > 0) ? (
+                  <div className="flex flex-col gap-5">
+                    {playerCountry && (
+                      <div>
+                        <p className="text-xs font-600 uppercase tracking-widest text-muted-foreground">{d.playerDetail.country}</p>
+                        <p className="mt-1 font-display text-lg text-white">{playerCountry}</p>
+                      </div>
+                    )}
+                    {activeContracts.length > 0 && activeRoles.length > 0 && (
+                      <div>
+                        <p className="text-xs font-600 uppercase tracking-widest text-muted-foreground">{d.playerDetail.contractRole}</p>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {activeRoles.map((r: string, i: number) => (
+                            <span key={i} className="rounded bg-white/5 px-2.5 py-1 text-xs font-600 text-white/90 border border-white/10">
+                              {formatRoleTitle(r, lang)}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <p className="text-sm text-faint">{d.playerDetail.noGameInfo}</p>
@@ -225,11 +242,17 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
                                 {team.name}
                               </span>
                               <div className="mt-1 flex flex-wrap gap-2 text-xs font-500 text-muted-foreground">
-                                {contract.roles && contract.roles.map((r: string, i: number) => (
-                                  <span key={i} className="rounded bg-white/5 px-2 py-0.5 text-xs font-600 text-white/80 border border-white/10">
-                                    {formatRoleTitle(r, lang)}
+                                {Array.isArray(contract.roles) ? (
+                                  contract.roles.map((r: string, i: number) => (
+                                    <span key={i} className="rounded bg-white/5 px-2 py-0.5 text-xs font-600 text-white/80 border border-white/10">
+                                      {formatRoleTitle(r, lang)}
+                                    </span>
+                                  ))
+                                ) : contract.roles ? (
+                                  <span className="rounded bg-white/5 px-2 py-0.5 text-xs font-600 text-white/80 border border-white/10">
+                                    {formatRoleTitle(contract.roles, lang)}
                                   </span>
-                                ))}
+                                ) : null}
                               </div>
                             </div>
                           </div>
