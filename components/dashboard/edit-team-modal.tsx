@@ -5,6 +5,7 @@ import { X, Upload, Image as ImageIcon, Loader2, AlertCircle, HelpCircle, Shield
 import { GmxButton } from '@/components/gmx-button'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
+import { useLanguage } from '@/lib/language-context'
 import { toast } from 'sonner'
 import { cn, formatNickname, formatPersonName } from '@/lib/utils'
 import { useDebounce } from '@/hooks/use-debounce'
@@ -60,6 +61,7 @@ export interface EditTeamModalProps {
 
 export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: EditTeamModalProps) {
   const { user } = useAuth()
+  const { t } = useLanguage()
   const supabase = createClient()
 
   // App settings config
@@ -132,9 +134,9 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
           .neq('id', team.id)
           .ilike('name', clean)
 
-        const match = existingTeams?.some(t => t.name?.trim().toUpperCase() === clean)
+        const match = existingTeams?.some(tObj => tObj.name?.trim().toUpperCase() === clean)
         if (match) {
-          setTeamNameError('Este nombre ya se encuentra en uso por otro equipo.')
+          setTeamNameError(t.editTeamModal.nameInUse)
           return
         }
 
@@ -152,7 +154,7 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
         })
 
         if (pendingMatch) {
-          setTeamNameError('Este nombre ya está en uso en una solicitud pendiente.')
+          setTeamNameError(t.editTeamModal.nameInPending)
           return
         }
 
@@ -163,7 +165,7 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
     }
 
     validateName()
-  }, [debouncedName, team, validation, supabase])
+  }, [debouncedName, team, validation, supabase, t])
 
   // Validar unicidad del tag del equipo al editar
   useEffect(() => {
@@ -182,9 +184,9 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
           .neq('id', team.id)
           .ilike('tag', clean)
 
-        const match = existingTags?.some(t => t.tag?.trim().toUpperCase() === clean)
+        const match = existingTags?.some(tObj => tObj.tag?.trim().toUpperCase() === clean)
         if (match) {
-          setTeamTagError('Este tag ya se encuentra en uso por otro equipo.')
+          setTeamTagError(t.editTeamModal.tagInUse)
           return
         }
 
@@ -202,7 +204,7 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
         })
 
         if (pendingMatch) {
-          setTeamTagError('Este tag ya está en uso en una solicitud pendiente.')
+          setTeamTagError(t.editTeamModal.tagInPending)
           return
         }
 
@@ -213,7 +215,7 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
     }
 
     validateTag()
-  }, [debouncedTag, team, validation, supabase])
+  }, [debouncedTag, team, validation, supabase, t])
 
   // Load config, team data, manager profile, and contracted players
   useEffect(() => {
@@ -446,8 +448,8 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
 
     // Regla estricta: No se permite cambiar a Femenil si hay jugadores varoniles en la plantilla
     if (tipoEquipo === 'Femenil' && malePlayers.length > 0) {
-      toast.error('Cambio a Femenil no permitido', {
-        description: `El equipo cuenta con ${malePlayers.length} jugador(es) varonil(es) en su plantilla activa. Debes tramitar su baja antes de solicitar el cambio a categoría Femenil.`
+      toast.error(t.editTeamModal.femaleBlockedTitle, {
+        description: t.editTeamModal.femaleBlockedDesc.replace('{count}', malePlayers.length.toString())
       })
       return
     }
@@ -547,8 +549,8 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
 
         if (error) throw error
 
-        toast.success('Solicitud de modificación actualizada', {
-          description: 'Tus cambios han sido actualizados en la solicitud en revisión.'
+        toast.success(t.editTeamModal.toastUpdatedTitle, {
+          description: t.editTeamModal.toastUpdatedDesc
         })
       } else {
         // Eliminar solicitudes de modificación previas ya resueltas para este equipo
@@ -570,8 +572,8 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
 
         if (error) throw error
 
-        toast.success('Solicitud enviada al Administrador', {
-          description: 'La modificación de tu equipo fue enviada para aprobación administrativa.'
+        toast.success(t.editTeamModal.toastCreatedTitle, {
+          description: t.editTeamModal.toastCreatedDesc
         })
       }
 
@@ -581,8 +583,8 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
       onClose()
     } catch (err: any) {
       console.error('Error submitting team modification:', err)
-      toast.error('Error al guardar la solicitud de modificación.', {
-        description: err.message || 'Inténtalo de nuevo más tarde.'
+      toast.error(t.editTeamModal.toastErrorTitle, {
+        description: err.message || 'Error'
       })
     } finally {
       setIsSubmitting(false)
@@ -600,11 +602,11 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-primary" />
               <h2 className="font-display text-xl sm:text-2xl font-700 uppercase tracking-tight text-white">
-                Editar Información del Equipo
+                {t.editTeamModal.title}
               </h2>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Todos los cambios pasan por revisión y aprobación del administrador antes de publicarse.
+              {t.editTeamModal.subtitle}
             </p>
           </div>
           <button 
@@ -620,7 +622,7 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
         {loadingConfig ? (
           <div className="p-12 flex flex-col items-center justify-center gap-3">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            <p className="text-xs text-muted-foreground uppercase tracking-wider">Cargando datos del equipo...</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">{t.editTeamModal.loadingTeamData}</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="p-6 space-y-8 overflow-y-auto flex-1 custom-scrollbar">
@@ -631,10 +633,10 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
                 <AlertCircle className="w-5 h-5 shrink-0 text-amber-400 mt-0.5" />
                 <div className="space-y-1">
                   <span className="font-700 uppercase tracking-wider text-amber-400 block">
-                    Solicitud de Modificación en Revisión
+                    {t.editTeamModal.pendingReviewTitle}
                   </span>
                   <p className="text-amber-200/90 leading-relaxed">
-                    Tienes una solicitud pendiente de revisión por el equipo administrativo. Al guardar cambios aquí, se actualizará tu solicitud en curso.
+                    {t.editTeamModal.pendingReviewDesc}
                   </p>
                 </div>
               </div>
@@ -645,13 +647,13 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
                 <AlertCircle className="w-5 h-5 shrink-0 text-red-400 mt-0.5" />
                 <div className="space-y-1">
                   <span className="font-700 uppercase tracking-wider text-red-400 block">
-                    Motivo de Rechazo de Solicitud Anterior
+                    {t.editTeamModal.rejectedReasonTitle}
                   </span>
                   <p className="text-white/90 leading-relaxed italic">
                     "{validation.details.rejection_reason}"
                   </p>
                   <p className="text-xs text-red-300/80 pt-1">
-                    Corrige los datos necesarios y vuelve a enviar la solicitud para su aprobación.
+                    {t.editTeamModal.rejectedReasonFix}
                   </p>
                 </div>
               </div>
@@ -661,9 +663,9 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
             <div className="space-y-5">
               <div className="border-b border-border/80 pb-2.5 flex items-center justify-between">
                 <h3 className="font-display text-base sm:text-lg font-700 uppercase tracking-widest text-primary flex items-center gap-2">
-                  <span>1. Datos del Equipo</span>
+                  <span>{t.editTeamModal.section1TeamData}</span>
                 </h3>
-                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Formulario Oficial</span>
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{t.editTeamModal.officialForm}</span>
               </div>
 
               {/* Logos y Jersey */}
@@ -672,24 +674,24 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
                 <div className="rounded-xl border border-border bg-deep/40 p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-600 text-white uppercase tracking-wider flex items-center gap-1">
-                      Logo del Equipo <span className="text-primary">*</span>
-                      <FieldTooltip text="Logo oficial del equipo. PNG o JPG transparente recomendado. Máx 5MB." />
+                      {t.editTeamModal.teamLogo} <span className="text-primary">*</span>
+                      <FieldTooltip text={t.editTeamModal.logoTooltip} />
                     </label>
                     {logoFile && (
-                      <span className="text-[10px] text-emerald-400 font-600">Nuevo logo seleccionado</span>
+                      <span className="text-[10px] text-emerald-400 font-600">{t.editTeamModal.newLogoSelected}</span>
                     )}
                   </div>
                   <div className="flex items-center gap-4">
                     <img 
                       src={logoUrl || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
-                      alt="Logo del Equipo"
+                      alt={t.editTeamModal.teamLogo}
                       className="w-16 h-16 rounded-xl object-cover border border-border bg-background shadow-md shrink-0" 
                     />
                     <label className="flex-1 cursor-pointer">
                       <div className="rounded-lg border border-dashed border-border hover:border-primary/50 bg-surface/50 hover:bg-surface p-3 text-center transition-all">
                         <Upload className="w-4 h-4 text-primary mx-auto mb-1" />
-                        <span className="text-[11px] font-600 text-white block">Cambiar Logo</span>
-                        <span className="text-[10px] text-muted-foreground block">Haz clic para seleccionar</span>
+                        <span className="text-[11px] font-600 text-white block">{t.editTeamModal.changeLogo}</span>
+                        <span className="text-[10px] text-muted-foreground block">{t.editTeamModal.clickToSelect}</span>
                       </div>
                       <input 
                         type="file" 
@@ -705,17 +707,17 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
                 <div className="rounded-xl border border-border bg-deep/40 p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-600 text-white uppercase tracking-wider flex items-center gap-1">
-                      Jersey del Equipo (Opcional)
-                      <FieldTooltip text="Uniforme o camiseta oficial del equipo. Formato PNG o JPG." />
+                      {t.editTeamModal.teamJersey}
+                      <FieldTooltip text={t.editTeamModal.jerseyTooltip} />
                     </label>
                     {jerseyFile && (
-                      <span className="text-[10px] text-emerald-400 font-600">Nuevo jersey seleccionado</span>
+                      <span className="text-[10px] text-emerald-400 font-600">{t.editTeamModal.newJerseySelected}</span>
                     )}
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="w-16 h-16 rounded-xl border border-border bg-background flex items-center justify-center overflow-hidden shrink-0">
                       {jerseyUrl ? (
-                        <img src={jerseyUrl} alt="Jersey del Equipo" className="w-full h-full object-cover" />
+                        <img src={jerseyUrl} alt={t.editTeamModal.teamJersey} className="w-full h-full object-cover" />
                       ) : (
                         <ImageIcon className="w-6 h-6 text-faint" />
                       )}
@@ -724,9 +726,9 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
                       <div className="rounded-lg border border-dashed border-border hover:border-primary/50 bg-surface/50 hover:bg-surface p-3 text-center transition-all">
                         <Upload className="w-4 h-4 text-primary mx-auto mb-1" />
                         <span className="text-[11px] font-600 text-white block">
-                          {jerseyUrl ? 'Cambiar Jersey' : 'Subir Jersey'}
+                          {jerseyUrl ? t.editTeamModal.changeJersey : t.editTeamModal.uploadJersey}
                         </span>
-                        <span className="text-[10px] text-muted-foreground block">Haz clic para seleccionar</span>
+                        <span className="text-[10px] text-muted-foreground block">{t.editTeamModal.clickToSelect}</span>
                       </div>
                       <input 
                         type="file" 
@@ -744,8 +746,8 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
                 {/* Nombre */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-600 text-white uppercase tracking-wider flex items-center gap-1">
-                    Nombre del Equipo <span className="text-primary">*</span>
-                    <FieldTooltip text="Solo mayúsculas y números, sin caracteres especiales." />
+                    {t.editTeamModal.teamName} <span className="text-primary">*</span>
+                    <FieldTooltip text={t.editTeamModal.teamNameTooltip} />
                   </label>
                   <input 
                     type="text"
@@ -768,8 +770,8 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
                 {/* Tag */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-600 text-white uppercase tracking-wider flex items-center gap-1">
-                    Tag del Equipo <span className="text-primary">*</span>
-                    <FieldTooltip text="Siglas en mayúsculas que abrevian el nombre. Ej: THK o GMX." />
+                    {t.editTeamModal.teamTag} <span className="text-primary">*</span>
+                    <FieldTooltip text={t.editTeamModal.teamTagTooltip} />
                   </label>
                   <input 
                     type="text"
@@ -792,8 +794,8 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
                 {/* Hashtag */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-600 text-white uppercase tracking-wider flex items-center gap-1">
-                    Hashtag del Equipo <span className="text-primary">*</span>
-                    <FieldTooltip text="Frase o hashtag de apoyo. Ej: #GODSQUADWIN" />
+                    {t.editTeamModal.teamHashtag} <span className="text-primary">*</span>
+                    <FieldTooltip text={t.editTeamModal.teamHashtagTooltip} />
                   </label>
                   <input 
                     type="text"
@@ -808,8 +810,8 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
                 {/* País */}
                 <div className="space-y-1.5 sm:col-span-2 lg:col-span-3">
                   <label className="text-xs font-600 text-white uppercase tracking-wider flex items-center gap-1">
-                    País del Equipo <span className="text-primary">*</span>
-                    <FieldTooltip text="País principal al que representa la escuadra." />
+                    {t.editTeamModal.teamCountry} <span className="text-primary">*</span>
+                    <FieldTooltip text={t.editTeamModal.teamCountryTooltip} />
                   </label>
                   <div className="relative">
                     <select
@@ -818,7 +820,7 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
                       onChange={e => setCountry(e.target.value)}
                       className="w-full appearance-none rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none"
                     >
-                      <option value="" disabled>Selecciona un país</option>
+                      <option value="" disabled>{t.editTeamModal.selectCountry}</option>
                       {countries.map(c => (
                         <option key={c} value={c} className="bg-surface text-white">
                           {c}
@@ -837,12 +839,14 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
                 <div className="space-y-2 sm:col-span-2 lg:col-span-3 pt-1">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-600 text-white uppercase tracking-wider flex items-center gap-1">
-                      Tipo de Equipo <span className="text-primary">*</span>
-                      <FieldTooltip text="Categoría competitiva del equipo. Las divisiones Femeniles no admiten jugadores varoniles." />
+                      {t.editTeamModal.teamType} <span className="text-primary">*</span>
+                      <FieldTooltip text={t.editTeamModal.teamTypeTooltip} />
                     </label>
                     {malePlayers.length > 0 && (
                       <span className="text-[11px] text-muted-foreground">
-                        {malePlayers.length} {malePlayers.length === 1 ? 'jugador varonil en plantilla' : 'jugadores varoniles en plantilla'}
+                        {malePlayers.length === 1 
+                          ? t.editTeamModal.malePlayerCount.replace('{count}', '1')
+                          : t.editTeamModal.malePlayersCount.replace('{count}', malePlayers.length.toString())}
                       </span>
                     )}
                   </div>
@@ -860,7 +864,7 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
                         onChange={() => setTipoEquipo('Varonil / Mixto')}
                         className="h-4 w-4 shrink-0 border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
                       />
-                      Varonil / Mixto
+                      {t.editTeamModal.maleMixed}
                     </label>
 
                     <label className={cn(
@@ -875,7 +879,7 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
                         onChange={() => setTipoEquipo('Femenil')}
                         className="h-4 w-4 shrink-0 border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
                       />
-                      Femenil
+                      {t.editTeamModal.female}
                     </label>
                   </div>
 
@@ -884,10 +888,10 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
                     <div className="rounded-xl border border-red-500/50 bg-red-500/10 p-4 text-xs text-red-200 space-y-2.5 animate-in fade-in duration-200 shadow-lg">
                       <div className="flex items-center gap-2 font-700 text-red-400 uppercase tracking-wider text-xs">
                         <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
-                        <span>No se permite el cambio a Equipo Femenil</span>
+                        <span>{t.editTeamModal.femaleBlockedTitle}</span>
                       </div>
                       <p className="text-red-200/90 leading-relaxed text-xs">
-                        Un equipo de categoría <strong className="text-white font-600">Femenil</strong> no puede contar con ningún jugador varonil en su plantilla activa ni en solicitudes pendientes. Actualmente tienes <strong className="text-white font-600">{malePlayers.length} {malePlayers.length === 1 ? 'jugador varonil' : 'jugadores varoniles'}</strong> registrados:
+                        {t.editTeamModal.femaleBlockedDesc.replace('{count}', malePlayers.length.toString())}
                       </p>
                       <div className="flex flex-wrap gap-2 pt-0.5">
                         {malePlayers.map(player => (
@@ -904,7 +908,7 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
                         ))}
                       </div>
                       <p className="text-[11px] text-red-300/80 pt-1.5 border-t border-red-500/20 leading-relaxed">
-                        Para poder solicitar el cambio a categoría <strong className="text-white font-600">Femenil</strong>, primero debes tramitar la baja de todos los jugadores varoniles desde el panel de Mi Cuenta en la sección de <strong className="text-white font-600">Roster</strong>.
+                        {t.editTeamModal.femaleBlockedHint}
                       </p>
                     </div>
                   )}
@@ -914,8 +918,8 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
               {/* Juegos en los que participa */}
               <div className="space-y-2 pt-2">
                 <label className="text-xs font-600 text-white uppercase tracking-wider flex items-center gap-1">
-                  Juegos en los que participa <span className="text-primary">*</span>
-                  <FieldTooltip text="Selecciona los títulos competitivos en los que participa el equipo." />
+                  {t.editTeamModal.gamesParticipating} <span className="text-primary">*</span>
+                  <FieldTooltip text={t.editTeamModal.gamesTooltip} />
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {games.map(game => {
@@ -965,10 +969,10 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
             <div className="space-y-4 pt-2">
               <div className="border-b border-border/80 pb-2.5">
                 <h3 className="font-display text-base sm:text-lg font-700 uppercase tracking-widest text-primary">
-                  2. Redes Sociales del Equipo
+                  {t.editTeamModal.section2Socials}
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Enlaces oficiales a las redes de la organización.
+                  {t.editTeamModal.socialsSubtitle}
                 </p>
               </div>
 
@@ -1056,10 +1060,10 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
             <div className="space-y-4 pt-2">
               <div className="border-b border-border/80 pb-2.5">
                 <h3 className="font-display text-base sm:text-lg font-700 uppercase tracking-widest text-primary">
-                  3. Datos del Gerente General, Manager o Líder
+                  {t.editTeamModal.section3Manager}
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Información de contacto del representante oficial ante la administración.
+                  {t.editTeamModal.managerSubtitle}
                 </p>
               </div>
 
@@ -1067,7 +1071,7 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
                 {/* Nombre */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-600 text-white uppercase tracking-wider flex items-center gap-1">
-                    Nombre(s) <span className="text-primary">*</span>
+                    {t.editTeamModal.managerFirstName} <span className="text-primary">*</span>
                   </label>
                   <input 
                     type="text"
@@ -1077,13 +1081,13 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
                     placeholder="EJ. JUAN CARLOS"
                     className="w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none uppercase"
                   />
-                  <span className="text-[10px] text-muted-foreground">Solo letras en mayúsculas.</span>
+                  <span className="text-[10px] text-muted-foreground">{t.editTeamModal.uppercaseLettersOnly}</span>
                 </div>
 
                 {/* Apellidos */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-600 text-white uppercase tracking-wider flex items-center gap-1">
-                    Apellidos <span className="text-primary">*</span>
+                    {t.editTeamModal.managerLastName} <span className="text-primary">*</span>
                   </label>
                   <input 
                     type="text"
@@ -1093,14 +1097,14 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
                     placeholder="EJ. PEREZ GOMEZ"
                     className="w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none uppercase"
                   />
-                  <span className="text-[10px] text-muted-foreground">Solo letras en mayúsculas.</span>
+                  <span className="text-[10px] text-muted-foreground">{t.editTeamModal.uppercaseLettersOnly}</span>
                 </div>
 
                 {/* Nickname */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-600 text-white uppercase tracking-wider flex items-center gap-1">
-                    Nickname del Manager <span className="text-primary">*</span>
-                    <FieldTooltip text="Seudónimo o IGN competitivo del Manager." />
+                    {t.editTeamModal.managerNickname} <span className="text-primary">*</span>
+                    <FieldTooltip text={t.editTeamModal.managerNicknameTooltip} />
                   </label>
                   <input 
                     type="text"
@@ -1115,8 +1119,8 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
                 {/* Discord */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-600 text-white uppercase tracking-wider flex items-center gap-1">
-                    Handle de Discord <span className="text-primary">*</span>
-                    <FieldTooltip text="Usuario de Discord sin el # (ej: mordongmx)." />
+                    {t.editTeamModal.managerDiscord} <span className="text-primary">*</span>
+                    <FieldTooltip text={t.editTeamModal.managerDiscordTooltip} />
                   </label>
                   <input 
                     type="text"
@@ -1131,7 +1135,7 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
                 {/* WhatsApp */}
                 <div className="space-y-1.5 sm:col-span-2">
                   <label className="text-xs font-600 text-white uppercase tracking-wider flex items-center gap-1">
-                    WhatsApp del Manager
+                    {t.editTeamModal.managerPhone}
                   </label>
                   <div className="flex gap-2">
                     <div className="relative shrink-0 w-28">
@@ -1172,7 +1176,7 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
                 disabled={isSubmitting}
                 className="px-5 py-2.5 rounded-lg border border-border text-sm font-600 text-white hover:bg-white/5 transition-colors"
               >
-                Cancelar
+                {t.editTeamModal.cancel}
               </button>
               <GmxButton
                 type="submit"
@@ -1185,19 +1189,19 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
                 {isSubmitting ? (
                   <span className="flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Enviando Solicitud...</span>
+                    <span>{t.editTeamModal.submitting}</span>
                   </span>
                 ) : (tipoEquipo === 'Femenil' && malePlayers.length > 0) ? (
                   <span className="flex items-center gap-2 text-red-300">
                     <AlertCircle className="w-4 h-4" />
-                    <span>Bloqueado: Plantilla Varonil</span>
+                    <span>{t.editTeamModal.blockedMaleRoster}</span>
                   </span>
                 ) : validation?.status === 'pending' ? (
-                  'Actualizar Solicitud'
+                  t.editTeamModal.updateRequest
                 ) : validation?.status === 'rejected' ? (
-                  'Reenviar Solicitud'
+                  t.editTeamModal.resendRequest
                 ) : (
-                  'Solicitar Modificación'
+                  t.editTeamModal.requestModification
                 )}
               </GmxButton>
             </div>

@@ -354,6 +354,9 @@ CREATE POLICY "Public Read Tournaments" ON public.tournaments FOR SELECT USING (
 DROP POLICY IF EXISTS "Public Read Tournament Teams" ON public.tournament_teams;
 CREATE POLICY "Public Read Tournament Teams" ON public.tournament_teams FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Admin Manage Tournament Teams" ON public.tournament_teams;
+CREATE POLICY "Admin Manage Tournament Teams" ON public.tournament_teams FOR ALL USING (true) WITH CHECK (true);
+
 DROP POLICY IF EXISTS "Public Read Matches" ON public.matches;
 CREATE POLICY "Public Read Matches" ON public.matches FOR SELECT USING (true);
 

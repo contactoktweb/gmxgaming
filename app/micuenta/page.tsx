@@ -16,6 +16,7 @@ import { Preloader } from '@/components/preloader'
 import { useAuth } from '@/lib/auth-context'
 import { createClient } from '@/utils/supabase/client'
 import { cn } from '@/lib/utils'
+import { useLanguage } from '@/lib/language-context'
 
 type Tab = 'perfil' | 'equipos' | 'jugadores' | 'contratos'
 
@@ -29,6 +30,7 @@ export default function MiCuentaPage() {
   
   const router = useRouter()
   const supabase = createClient()
+  const { t } = useLanguage()
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -82,7 +84,7 @@ export default function MiCuentaPage() {
       <main className="min-h-screen bg-deep flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="h-10 w-10 animate-spin text-primary" />
-          <p className="text-white font-display font-600 uppercase tracking-widest text-sm">Cargando...</p>
+          <p className="text-white font-display font-600 uppercase tracking-widest text-sm">{t.myAccount.loading}</p>
         </div>
       </main>
     )
@@ -102,10 +104,10 @@ export default function MiCuentaPage() {
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="font-display text-4xl font-700 uppercase tracking-tight text-white sm:text-5xl">
-              Mi Cuenta
+              {t.myAccount.title}
             </h1>
             <p className="mt-2 text-muted-foreground">
-              Gestiona tu perfil, equipos y contratos.
+              {t.myAccount.subtitle}
             </p>
           </div>
         </div>
@@ -115,7 +117,7 @@ export default function MiCuentaPage() {
           {/* Sidebar Navigation */}
           <aside className="w-full lg:w-64 shrink-0">
             <nav className="flex flex-row lg:flex-col gap-2 overflow-x-auto pb-4 lg:pb-0 scrollbar-hide">
-              {/* Perfil */}
+              {/* Profile */}
               <button
                 onClick={() => setActiveTab('perfil')}
                 className={cn(
@@ -126,10 +128,10 @@ export default function MiCuentaPage() {
                 )}
               >
                 <User className="h-5 w-5" />
-                Mi Perfil
+                {t.myAccount.tabProfile}
               </button>
               
-              {/* Equipos */}
+              {/* Teams */}
               <button
                 onClick={() => setActiveTab('equipos')}
                 className={cn(
@@ -141,16 +143,16 @@ export default function MiCuentaPage() {
               >
                 <div className="flex items-center gap-3">
                   <ShieldCheck className="h-5 w-5" />
-                  Equipos
+                  {t.myAccount.tabTeams}
                 </div>
                 {playerPendingReleaseCount > 0 && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-700 bg-amber-500 text-black animate-pulse shadow-sm" title="Tienes una solicitud de baja pendiente de responder">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-700 bg-amber-500 text-black animate-pulse shadow-sm" title={t.myAccount.pendingBadgeTitle}>
                     {playerPendingReleaseCount}
                   </span>
                 )}
               </button>
 
-              {/* Jugadores (Solo para líderes/managers de equipo) */}
+              {/* Players (manager only) */}
               {isManager && (
                 <button
                   onClick={() => setActiveTab('jugadores')}
@@ -163,25 +165,27 @@ export default function MiCuentaPage() {
                 >
                   <div className="flex items-center gap-3">
                     <Users className="h-5 w-5" />
-                    Jugadores
+                    {t.myAccount.tabPlayers}
                   </div>
                   {pendingRequestsCount > 0 && (
                     <div 
                       className="group/badge relative flex items-center"
-                      title={`${pendingRequestsCount} solicitud${pendingRequestsCount > 1 ? 'es' : ''} pendiente${pendingRequestsCount > 1 ? 's' : ''} por revisar`}
+                      title={pendingRequestsCount === 1
+                        ? t.myAccount.pendingSingular
+                        : t.myAccount.pendingPlural.replace('{n}', String(pendingRequestsCount))}
                     >
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-700 bg-amber-500 text-black animate-pulse shadow-sm">
                         {pendingRequestsCount}
                       </span>
-                      {/* Tooltip informativo al hacer hover */}
+                      {/* Informational tooltip on hover */}
                       <div className="pointer-events-none absolute right-0 bottom-full mb-2 hidden sm:block w-52 rounded-xl bg-surface border border-border p-3 text-xs font-500 normal-case tracking-normal text-white opacity-0 transition-all duration-200 group-hover/badge:opacity-100 z-50 text-left shadow-2xl">
                         <span className="font-700 text-amber-400 block mb-1">
-                          {pendingRequestsCount === 1 ? '1 Solicitud Pendiente' : `${pendingRequestsCount} Solicitudes Pendientes`}
+                          {pendingRequestsCount === 1
+                            ? t.myAccount.pendingSingular
+                            : t.myAccount.pendingPlural.replace('{n}', String(pendingRequestsCount))}
                         </span>
                         <p className="text-[11px] text-muted-foreground leading-snug">
-                          {pendingRequestsCount === 1 
-                            ? 'Tienes 1 solicitud de contrato o baja esperando tu aprobación.'
-                            : `Tienes ${pendingRequestsCount} solicitudes de contratos o bajas esperando tu aprobación.`}
+                          {t.myAccount.pendingDesc.replace('{n}', String(pendingRequestsCount))}
                         </p>
                         <div className="absolute top-full right-3 -mt-px border-4 border-transparent border-t-surface"></div>
                       </div>
@@ -190,7 +194,7 @@ export default function MiCuentaPage() {
                 </button>
               )}
 
-              {/* Contratos */}
+              {/* Contracts */}
               <button
                 onClick={() => setActiveTab('contratos')}
                 className={cn(
@@ -202,10 +206,10 @@ export default function MiCuentaPage() {
               >
                 <div className="flex items-center gap-3">
                   <ScrollText className="h-5 w-5" />
-                  Contratos
+                  {t.myAccount.tabContracts}
                 </div>
                 {playerPendingReleaseCount > 0 && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-700 bg-amber-500 text-black animate-pulse shadow-sm" title="Tienes una solicitud de baja pendiente de responder">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-700 bg-amber-500 text-black animate-pulse shadow-sm" title={t.myAccount.pendingBadgeTitle}>
                     {playerPendingReleaseCount}
                   </span>
                 )}

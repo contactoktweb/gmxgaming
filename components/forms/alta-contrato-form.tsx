@@ -7,6 +7,7 @@ import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { useLanguage } from '@/lib/language-context'
 
 function FieldTooltip({ text }: { text: string }) {
   return (
@@ -24,6 +25,7 @@ export function AltaContratoForm() {
   const [formStatus, setFormStatus] = useState<'idle' | 'loading' | 'success' | 'blocked'>('idle')
   const { user } = useAuth()
   const supabase = createClient()
+  const { t } = useLanguage()
   
   const [selectedRoles, setSelectedRoles] = useState<string[]>(['JUGADOR(A)'])
   const [playerGender, setPlayerGender] = useState<'Masculino' | 'Femenino'>('Masculino')
@@ -443,13 +445,13 @@ export function AltaContratoForm() {
           <AlertTriangle className="h-10 w-10 text-amber-500" />
         </div>
         <h2 className="font-display text-3xl font-700 uppercase tracking-tight text-white mb-4">
-          LÍMITE DE CONTRATOS ALCANZADO
+          {t.altaContrato.blockedTitle}
         </h2>
         <p className="text-muted-foreground mb-8 text-sm sm:text-base leading-relaxed max-w-lg mx-auto">
           {blockMessage}
         </p>
         <GmxButton href="/micuenta" className="px-8">
-          IR A MI CUENTA
+          {t.altaContrato.goToAccount}
         </GmxButton>
       </div>
     )
@@ -462,17 +464,17 @@ export function AltaContratoForm() {
           <CheckCircle2 className="h-10 w-10 text-emerald-500" />
         </div>
         <h2 className="font-display text-3xl font-700 uppercase tracking-tight text-white mb-3 text-center">
-          ACUERDO ENVIADO AL MANAGER
+          {t.altaContrato.successTitle}
         </h2>
         <p className="text-muted-foreground text-center max-w-md mx-auto mb-8 leading-relaxed">
-          Tu contrato ha sido registrado correctamente y se encuentra pendiente de aprobación. El Manager del equipo deberá revisarlo y aceptarlo en su panel de control para que sea válido.
+          {t.altaContrato.successDesc}
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <GmxButton href="/micuenta" className="w-full sm:w-auto px-8">
-            IR A MI CUENTA
+            {t.altaContrato.goToAccount}
           </GmxButton>
           <GmxButton href="/" variant="secondary" className="w-full sm:w-auto px-8">
-            VOLVER AL INICIO
+            {t.altaContrato.backToHome}
           </GmxButton>
         </div>
       </div>
@@ -488,17 +490,17 @@ export function AltaContratoForm() {
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-surface/95 backdrop-blur-sm animate-in fade-in duration-300">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
           <p className="mt-4 font-display text-lg font-600 uppercase tracking-widest text-white">
-            REGISTRANDO CONTRATO...
+            {t.altaContrato.submittingAgreement}
           </p>
         </div>
       )}
 
       <div className="text-center">
         <h2 className="font-display text-4xl font-700 uppercase tracking-tight text-white sm:text-5xl">
-          REGISTRO DE CONTRATO
+          {t.altaContrato.formTitle}
         </h2>
         <p className="mt-3 text-muted-foreground">
-          Formaliza tu vinculación y acuerdo con tu equipo en la plataforma oficial de GMX Gaming.
+          {t.altaContrato.formSubtitle}
         </p>
 
         {infoNotice && (
@@ -516,10 +518,10 @@ export function AltaContratoForm() {
           {/* Equipo */}
           <div className="space-y-2">
             <label htmlFor="field_8bh2e" className="text-sm font-500 text-white flex items-center justify-between">
-              <span>Equipo <span className="text-primary">*</span></span>
+              <span>{t.altaContrato.team} <span className="text-primary">*</span></span>
               {allowedDivision !== 'all' && (
                 <span className="text-[11px] font-600 text-primary uppercase tracking-wider">
-                  División: {allowedDivision}
+                  {t.altaContrato.division}: {allowedDivision === 'Femenil' ? t.altaEquipo.genderFemale : t.altaEquipo.genderMixed}
                 </span>
               )}
             </label>
@@ -531,7 +533,7 @@ export function AltaContratoForm() {
                 defaultValue=""
                 className="w-full appearance-none rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               >
-                <option value="" disabled>Selecciona tu equipo</option>
+                <option value="" disabled>{t.altaContrato.selectTeam}</option>
                 {teams.length > 0 ? (
                   teams.map(t => (
                     <option key={t.id} value={t.id}>
@@ -539,7 +541,7 @@ export function AltaContratoForm() {
                     </option>
                   ))
                 ) : (
-                  <option value="" disabled>No hay equipos disponibles en esta división</option>
+                  <option value="" disabled>{t.altaContrato.noTeamsAvailable}</option>
                 )}
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-muted-foreground">
@@ -553,8 +555,8 @@ export function AltaContratoForm() {
           {/* Fecha de Termino */}
           <div className="space-y-2">
             <label htmlFor="field_bgj19" className="text-sm font-500 text-white">
-              Duración Máxima del Contrato <span className="text-primary">*</span>
-              <FieldTooltip text="Fecha límite en la que el contrato expira." />
+              {t.altaContrato.durationLabel} <span className="text-primary">*</span>
+              <FieldTooltip text={t.altaContrato.durationTooltip} />
             </label>
             <input
               type="date"
@@ -575,7 +577,7 @@ export function AltaContratoForm() {
               </p>
             ) : (
               <p className="text-xs text-muted-foreground mt-1">
-                Solo se permiten fechas futuras posteriores al día de hoy.
+                {t.altaContrato.durationHint}
               </p>
             )}
           </div>
@@ -583,8 +585,8 @@ export function AltaContratoForm() {
           {/* Roles en el Equipo */}
           <div className="space-y-4 sm:col-span-2 pt-4 border-t border-border/50">
             <label className="text-sm font-500 text-white">
-              Roles en el Equipo <span className="text-primary">*</span>
-              <FieldTooltip text="Puedes seleccionar varios roles, pero al menos uno es obligatorio." />
+              {t.altaContrato.rolesLabel} <span className="text-primary">*</span>
+              <FieldTooltip text={t.altaContrato.rolesTooltip} />
             </label>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {['JUGADOR(A)', 'COACH', 'ANALISTA', 'PSICOLOGO DEPORTIVO'].map((rol) => (
@@ -608,7 +610,7 @@ export function AltaContratoForm() {
           {selectedRoles.includes('JUGADOR(A)') && (
             <div className="space-y-2 sm:col-span-2 animate-in fade-in slide-in-from-top-2">
               <label htmlFor="field_linea" className="text-sm font-500 text-white">
-                Línea del Jugador <span className="text-primary">*</span>
+                {t.altaContrato.playerLine} <span className="text-primary">*</span>
               </label>
               <div className="relative">
                 <select
@@ -618,12 +620,12 @@ export function AltaContratoForm() {
                   defaultValue=""
                   className="w-full appearance-none rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 >
-                  <option value="" disabled>Selecciona tu línea principal</option>
-                  <option value="Oro">Línea de Oro / Tirador</option>
-                  <option value="Experiencia">Línea de Experiencia / Combatiente</option>
-                  <option value="Mid">Línea Media / Mago</option>
-                  <option value="Jungla">Jungla / Asesino</option>
-                  <option value="Roamer">Roamer / Tanque / Soporte</option>
+                  <option value="" disabled>{t.altaContrato.selectLane}</option>
+                  <option value="Oro">{t.altaContrato.laneGold}</option>
+                  <option value="Experiencia">{t.altaContrato.laneExp}</option>
+                  <option value="Mid">{t.altaContrato.laneMid}</option>
+                  <option value="Jungla">{t.altaContrato.laneJungle}</option>
+                  <option value="Roamer">{t.altaContrato.laneRoam}</option>
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-muted-foreground">
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -640,13 +642,13 @@ export function AltaContratoForm() {
       <div className="space-y-6 pt-6">
         <div className="border-b border-border pb-3">
           <h3 className="font-display text-xl font-600 uppercase tracking-widest text-primary">
-            ACUERDOS Y CONDICIONES
+            {t.altaContrato.termsTitle}
           </h3>
         </div>
 
         <div className="rounded-lg border border-border bg-background p-6 space-y-4 text-sm leading-relaxed text-muted-foreground">
           <p className="font-500 text-white">
-            Mediante el envío de este registro, me comprometo formalmente a las siguientes condiciones para participar en los torneo, ligas y eventos de GMX Gaming:
+            {t.altaContrato.termsIntro}
           </p>
           <ul className="list-inside list-disc space-y-3">
             <li>
@@ -677,7 +679,7 @@ export function AltaContratoForm() {
           )}
         >
           <span className="relative z-10 flex items-center gap-2">
-            ACEPTAR ACUERDO Y ENVIAR AL MANAGER
+            {t.altaContrato.submitAgreement}
           </span>
         </button>
       </div>

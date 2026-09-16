@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Check, X, Shield, Users, Clock, AlertCircle } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
+import { useLanguage } from '@/lib/language-context'
 import { cn, formatRolesList } from '@/lib/utils'
 
 interface Contract {
@@ -27,6 +28,7 @@ interface Contract {
 
 export function ManagerDashboard() {
   const { user } = useAuth()
+  const { t } = useLanguage()
   const supabase = createClient()
   const [contracts, setContracts] = useState<Contract[]>([])
   const [loading, setLoading] = useState(true)
@@ -97,10 +99,10 @@ export function ManagerDashboard() {
       <div className="rounded-xl border border-border bg-surface p-12 text-center">
         <Shield className="mx-auto h-12 w-12 text-muted-foreground mb-4 opacity-50" />
         <h2 className="font-display text-2xl font-700 uppercase tracking-tight text-white mb-2">
-          No eres Manager de ningún Equipo
+          {t.managerDashboard.notManagerTitle}
         </h2>
         <p className="text-muted-foreground max-w-md mx-auto">
-          Esta sección es exclusiva para Managers de equipos registrados. Si ya registraste tu equipo, espera a que el staff valide tu solicitud.
+          {t.managerDashboard.notManagerDesc}
         </p>
       </div>
     )
@@ -117,7 +119,7 @@ export function ManagerDashboard() {
         </div>
         <div>
           <h2 className="font-display text-3xl font-700 uppercase tracking-tight text-white">
-            Panel de Manager
+            {t.managerDashboard.title}
           </h2>
           <p className="text-primary font-600 uppercase tracking-widest text-sm mt-1">{teamName}</p>
         </div>
@@ -127,14 +129,14 @@ export function ManagerDashboard() {
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="rounded-xl border border-border bg-surface p-6 flex items-center justify-between">
           <div>
-            <p className="text-sm font-600 uppercase tracking-widest text-muted-foreground mb-1">Contratos Activos</p>
+            <p className="text-sm font-600 uppercase tracking-widest text-muted-foreground mb-1">{t.managerDashboard.activeContracts}</p>
             <p className="font-display text-4xl font-700 text-white">{activeContracts.length}</p>
           </div>
           <Users className="h-10 w-10 text-primary opacity-20" />
         </div>
         <div className="rounded-xl border border-border bg-surface p-6 flex items-center justify-between">
           <div>
-            <p className="text-sm font-600 uppercase tracking-widest text-muted-foreground mb-1">Solicitudes Pendientes</p>
+            <p className="text-sm font-600 uppercase tracking-widest text-muted-foreground mb-1">{t.managerDashboard.pendingRequests}</p>
             <p className="font-display text-4xl font-700 text-white">{pendingContracts.length}</p>
           </div>
           <Clock className="h-10 w-10 text-yellow-500 opacity-20" />
@@ -144,12 +146,12 @@ export function ManagerDashboard() {
       {/* Pending Contracts */}
       <div className="space-y-4">
         <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
-          <Clock className="w-5 h-5 text-yellow-500" /> Solicitudes de Ingreso
+          <Clock className="w-5 h-5 text-yellow-500" /> {t.managerDashboard.joinRequests}
         </h3>
         
         {pendingContracts.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border bg-surface/50 p-8 text-center text-muted-foreground">
-            No tienes solicitudes pendientes de aprobación.
+            {t.managerDashboard.noPendingRequests}
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -165,11 +167,11 @@ export function ManagerDashboard() {
                 </div>
                 <div className="space-y-2 mb-6">
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Roles:</span>
+                    <span className="text-muted-foreground">{t.managerDashboard.roles}</span>
                     <span className="text-white font-500">{formatRolesList(contract.roles)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Vence:</span>
+                    <span className="text-muted-foreground">{t.managerDashboard.expires}</span>
                     <span className="text-white font-500">{new Date(contract.end_date).toLocaleDateString()}</span>
                   </div>
                 </div>
@@ -178,13 +180,13 @@ export function ManagerDashboard() {
                     onClick={() => handleReject(contract.id)}
                     className="flex-1 rounded border border-red-500/20 bg-red-500/10 py-2 text-xs font-600 text-red-500 hover:bg-red-500 hover:text-white transition-colors uppercase tracking-wider"
                   >
-                    Rechazar
+                    {t.managerDashboard.reject}
                   </button>
                   <button 
                     onClick={() => handleApprove(contract.id)}
                     className="flex-1 rounded border border-emerald-500/20 bg-emerald-500/10 py-2 text-xs font-600 text-emerald-500 hover:bg-emerald-500 hover:text-white transition-colors uppercase tracking-wider"
                   >
-                    Aprobar
+                    {t.managerDashboard.approve}
                   </button>
                 </div>
               </div>
@@ -196,12 +198,12 @@ export function ManagerDashboard() {
       {/* Active Contracts */}
       <div className="space-y-4 pt-6">
         <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
-          <Users className="w-5 h-5 text-primary" /> Roster Activo
+          <Users className="w-5 h-5 text-primary" /> {t.managerDashboard.activeRoster}
         </h3>
         
         {activeContracts.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border bg-surface/50 p-8 text-center text-muted-foreground">
-            No tienes jugadores activos en tu roster.
+            {t.managerDashboard.noActivePlayers}
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -215,7 +217,7 @@ export function ManagerDashboard() {
                   </div>
                 </div>
                 <div className="flex items-center justify-between text-xs pt-3 border-t border-border">
-                  <span className="text-muted-foreground">Contrato hasta:</span>
+                  <span className="text-muted-foreground">{t.managerDashboard.contractUntil}</span>
                   <span className="text-white">{new Date(contract.end_date).toLocaleDateString()}</span>
                 </div>
               </div>

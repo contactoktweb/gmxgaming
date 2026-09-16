@@ -109,7 +109,7 @@ export function GlobalSearch() {
       }
       if (playersResponse.data) {
         playersResponse.data.forEach(p => {
-          const displayNickname = p.nickname || p.game_nickname || d.header.searchTypePlayer
+          const displayNickname = p.nickname || (p as any).game_nickname || d.header.searchTypePlayer
           const slug = getPlayerSlug(p) || p.id
           results.push({
             id: p.id,

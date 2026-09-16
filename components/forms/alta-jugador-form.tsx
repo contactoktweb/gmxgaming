@@ -11,6 +11,7 @@ import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
 import { useDebounce } from '@/hooks/use-debounce'
 import { toast } from 'sonner'
+import { useLanguage } from '@/lib/language-context'
 
 function FieldTooltip({ text }: { text: string }) {
   return (
@@ -37,13 +38,13 @@ function FormContent() {
   const defaultEmail = searchParams.get('email') || ''
   const { user } = useAuth()
   const supabase = createClient()
+  const { t } = useLanguage()
 
   const [countries, setCountries] = useState<string[]>(DEFAULT_COUNTRIES)
   const [games, setGames] = useState<string[]>(['Mobile Legends'])
   const [selectedGame, setSelectedGame] = useState<string>('Mobile Legends')
   const [loadingConfig, setLoadingConfig] = useState(true)
 
-  // Nombre, Apellidos y Nickname (Mayúsculas y sin caracteres especiales)
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [nickname, setNickname] = useState('')
@@ -59,7 +60,6 @@ function FormContent() {
     async function init() {
       if (!user) return
 
-      // Verificar estado del jugador con más detalle
       const { data: profile } = await supabase.from('profiles')
         .select('is_player, player_status')
         .eq('id', user.id)
@@ -67,17 +67,14 @@ function FormContent() {
 
       if (profile) {
         if (profile.is_player && (profile.player_status === 'active' || profile.player_status === 'approved')) {
-          // Jugador activo y aprobado: no puede volver a registrarse
           setFormStatus('already_registered')
           setLoadingConfig(false)
           return
         } else if (profile.is_player && profile.player_status === 'pending') {
-          // Solicitud en revisión: bloquear sin permitir nuevo envío
           setFormStatus('pending_review')
           setLoadingConfig(false)
           return
         }
-        // Si fue rechazado o nunca registrado: permitir registrarse
       }
 
       const { data: settings } = await supabase.from('app_settings').select('*')
@@ -125,15 +122,15 @@ function FormContent() {
         .limit(1)
 
       if ((profileWithNick && profileWithNick.length > 0) || (gameWithNick && gameWithNick.length > 0)) {
-        setNicknameError('Este nickname ya está en uso por otro jugador.')
+        setNicknameError(t.altaJugador.nicknameInUse)
       } else {
         setNicknameError('')
       }
     }
     validateNickname()
-  }, [debouncedNickname, user?.id])
+  }, [debouncedNickname, user?.id, t])
 
-  // Auto-scroll al inicio cuando el registro se completa con éxito
+  // Auto-scroll on success
   useEffect(() => {
     if (formStatus === 'success') {
       if (typeof window !== 'undefined') {
@@ -147,7 +144,6 @@ function FormContent() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    // Capturar form y FormData de forma síncrona antes de cualquier await
     const form = e.currentTarget
     const formData = new FormData(form)
 
@@ -156,24 +152,23 @@ function FormContent() {
     const cleanNick = nickname.trim().toUpperCase()
 
     if (nicknameError) {
-      toast.error('Por favor, elige un Nickname diferente.')
+      toast.error(t.altaJugador.nicknameInUse)
       return
     }
 
     if (!cleanNick) {
-      toast.error('Por favor ingresa tu nickname.')
+      toast.error(t.altaJugador.nicknameLabel + ' is required.')
       return
     }
 
     if (!firstName.trim() || !lastName.trim()) {
-      toast.error('Por favor ingresa tu nombre y apellidos.')
+      toast.error(t.altaJugador.firstName + ' & ' + t.altaJugador.lastName + ' are required.')
       return
     }
 
     setFormStatus('loading')
 
     try {
-      // Re-verificar síncronamente antes de procesar archivos
       if (user?.id) {
         const { data: currentProfile } = await supabase
           .from('profiles')
@@ -182,7 +177,7 @@ function FormContent() {
           .maybeSingle()
 
         if (currentProfile?.is_player && (currentProfile.player_status === 'active' || currentProfile.player_status === 'approved' || currentProfile.player_status === 'pending')) {
-          toast.error('Ya cuentas con un registro de jugador activo o en proceso de revisión.')
+          toast.error(t.altaJugador.alreadyDesc)
           setFormStatus('idle')
           return
         }
@@ -204,29 +199,27 @@ function FormContent() {
           .limit(1)
 
         if ((profileWithNick && profileWithNick.length > 0) || (gameWithNick && gameWithNick.length > 0)) {
-          toast.error('El nickname ingresado ya está en uso por otro jugador. Por favor elige otro.')
+          toast.error(t.altaJugador.nicknameInUse)
           setFormStatus('idle')
           return
         }
       }
 
-      // Validar formato de correo electrónico
       const emailValue = (formData.get('item_meta[676]') as string || '').trim()
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       if (!emailValue || !emailRegex.test(emailValue)) {
-        toast.error('Por favor ingresa un correo electrónico válido.')
+        toast.error('Please enter a valid email address.')
         setFormStatus('idle')
         return
       }
 
-      // Validar fecha de nacimiento (no puede ser en el futuro)
       const birthDateValue = formData.get('item_meta[675]') as string
       if (birthDateValue) {
         const birthDate = new Date(birthDateValue)
         const today = new Date()
         today.setHours(0, 0, 0, 0)
         if (birthDate > today) {
-          toast.error('La fecha de nacimiento no puede ser una fecha futura.')
+          toast.error('Date of birth cannot be a future date.')
           setFormStatus('idle')
           return
         }
@@ -238,7 +231,6 @@ function FormContent() {
       const safeNick = cleanNick.replace(/[^a-zA-Z0-9_-]/g, '') || 'jugador'
 
       try {
-        // 1. Upload Fotografía
         if (fotoFile) {
           const fileExt = fotoFile.name.split('.').pop()?.toLowerCase() || 'png'
           const fileName = `${Date.now()}_foto_${safeNick}.${fileExt}`
@@ -247,11 +239,10 @@ function FormContent() {
             const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(data.path)
             urlFoto = publicUrlData.publicUrl
           } else if (uploadError) {
-            console.warn('Advertencia subiendo foto:', uploadError)
+            console.warn('Warning uploading photo:', uploadError)
           }
         }
 
-        // 2. Upload Documento Identidad
         if (identidadFile) {
           const fileExt = identidadFile.name.split('.').pop()?.toLowerCase() || 'png'
           const fileName = `${Date.now()}_ine_${safeNick}.${fileExt}`
@@ -260,11 +251,10 @@ function FormContent() {
             const { data: publicUrlData } = supabase.storage.from('documents').getPublicUrl(data.path)
             urlIdentidad = publicUrlData.publicUrl
           } else if (uploadError) {
-            console.warn('Advertencia subiendo INE/identidad:', uploadError)
+            console.warn('Warning uploading ID:', uploadError)
           }
         }
 
-        // 3. Upload Pasaporte
         if (pasaporteFile) {
           const fileExt = pasaporteFile.name.split('.').pop()?.toLowerCase() || 'png'
           const fileName = `${Date.now()}_pasaporte_${safeNick}.${fileExt}`
@@ -273,16 +263,15 @@ function FormContent() {
             const { data: publicUrlData } = supabase.storage.from('documents').getPublicUrl(data.path)
             urlPasaporte = publicUrlData.publicUrl
           } else if (uploadError) {
-            console.warn('Advertencia subiendo pasaporte:', uploadError)
+            console.warn('Warning uploading passport:', uploadError)
           }
         }
       } catch (err) {
-        console.error('Error procesando archivos del jugador:', err)
+        console.error('Error processing player files:', err)
       }
       
       const fullName = `${firstName.trim()} ${lastName.trim()}`.trim().toUpperCase()
 
-      // Payload principal — campos garantizados que existen en la tabla profiles
       const countryValue = (formData.get('item_meta[722]') as string) || (formData.get('item_meta[677]') as string) || 'México'
       const corePayload: Record<string, any> = {
         name: fullName,
@@ -293,7 +282,6 @@ function FormContent() {
         player_status: 'pending',
       }
 
-      // Campos opcionales — se agregan solo si tienen valor
       const socialLinks: Record<string, any> = {}
       const socialMap: Record<string, string> = {
         social_ig: 'social_instagram',
@@ -313,7 +301,6 @@ function FormContent() {
       if (urlIdentidad) corePayload.id_photo_url = urlIdentidad
       if (urlPasaporte) corePayload.passport_photo_url = urlPasaporte
 
-      // Fusionar con redes sociales
       const fullPayload = { ...corePayload, ...socialLinks }
 
       const { error: profileError } = await supabase
@@ -322,8 +309,7 @@ function FormContent() {
         .eq('id', user?.id)
 
       if (profileError) {
-        console.error('Error al actualizar perfil:', profileError)
-        // Si el error es de columna inexistente, intentar solo los campos core
+        console.error('Error updating profile:', profileError)
         if (profileError.code === '42703' || profileError.message?.includes('column')) {
           const { error: coreErr } = await supabase
             .from('profiles')
@@ -331,17 +317,16 @@ function FormContent() {
             .eq('id', user?.id)
           if (coreErr) {
             setFormStatus('idle')
-            toast.error('Error al guardar tu perfil: ' + coreErr.message)
+            toast.error('Error saving profile: ' + coreErr.message)
             return
           }
         } else {
           setFormStatus('idle')
-          toast.error('Error al enviar tu solicitud: ' + profileError.message)
+          toast.error('Error submitting request: ' + profileError.message)
           return
         }
       }
 
-      // Guardar información de juego (Mobile Legends u otro)
       if (formData.get('item_meta[697]')) {
         try {
           const gamePayload = {
@@ -354,11 +339,10 @@ function FormContent() {
           }
           await supabase.from('player_game_info').insert(gamePayload)
         } catch (gErr) {
-          console.warn('Error al guardar info de juego (no bloquea el registro):', gErr)
+          console.warn('Error saving game info (non-blocking):', gErr)
         }
       }
 
-      // Registrar en tabla validations para el panel de aprobaciones del admin
       try {
         const { data: existingVal } = await supabase
           .from('validations')
@@ -402,17 +386,17 @@ function FormContent() {
           })
         }
       } catch (valErr) {
-        console.warn('Advertencia al registrar en validations (no bloquea el alta):', valErr)
+        console.warn('Warning registering in validations (non-blocking):', valErr)
       }
 
-      toast.success('¡Registro de jugador enviado con éxito!')
+      toast.success(t.altaJugador.successTitle)
       setFormStatus('success')
       if (typeof window !== 'undefined') {
         window.scrollTo({ top: 0, behavior: 'smooth' })
       }
     } catch (err: any) {
-      console.error('Error inesperado al enviar alta de jugador:', err)
-      toast.error('Error inesperado al procesar registro: ' + (err?.message || 'Por favor intenta de nuevo.'))
+      console.error('Unexpected error submitting player registration:', err)
+      toast.error('Unexpected error: ' + (err?.message || 'Please try again.'))
       setFormStatus('idle')
     }
   }
@@ -428,13 +412,13 @@ function FormContent() {
           <Loader2 className="h-10 w-10 text-blue-400 animate-spin" />
         </div>
         <h2 className="font-display text-3xl font-700 uppercase tracking-tight text-white mb-4">
-          SOLICITUD EN REVISIÓN
+          {t.altaJugador.pendingTitle}
         </h2>
         <p className="text-muted-foreground mb-8 leading-relaxed">
-          Tu solicitud de alta como Jugador Profesional ya fue enviada y se encuentra en proceso de revisión por el equipo de GMX Gaming. Te notificaremos por Discord o correo electrónico cuando sea procesada.
+          {t.altaJugador.pendingDesc}
         </p>
         <GmxButton href="/micuenta" className="px-8">
-          IR A MI CUENTA
+          {t.altaJugador.goToAccount}
         </GmxButton>
       </div>
     )
@@ -447,13 +431,13 @@ function FormContent() {
           <AlertTriangle className="h-10 w-10 text-amber-500" />
         </div>
         <h2 className="font-display text-3xl font-700 uppercase tracking-tight text-white mb-4">
-          YA ESTÁS REGISTRADO
+          {t.altaJugador.alreadyTitle}
         </h2>
         <p className="text-muted-foreground mb-8">
-          Tu cuenta ya tiene un registro de jugador. Un jugador solo puede registrarse una vez por cuenta.
+          {t.altaJugador.alreadyDesc}
         </p>
         <GmxButton href="/micuenta" className="px-8">
-          IR A MI CUENTA
+          {t.altaJugador.goToAccount}
         </GmxButton>
       </div>
     )
@@ -466,17 +450,17 @@ function FormContent() {
           <CheckCircle2 className="h-10 w-10 text-emerald-500" />
         </div>
         <h2 className="font-display text-3xl font-700 uppercase tracking-tight text-white mb-3">
-          REGISTRO ENVIADO EXITOSAMENTE
+          {t.altaJugador.successTitle}
         </h2>
         <p className="text-muted-foreground text-center max-w-md mx-auto mb-8 leading-relaxed">
-          Tu información ha sido recibida correctamente. Nuestro equipo revisará tu solicitud y se pondrá en contacto contigo a través de Discord o correo electrónico.
+          {t.altaJugador.successDesc}
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <GmxButton href="/micuenta" className="w-full sm:w-auto px-8">
-            IR A MI CUENTA
+            {t.altaJugador.goToAccount}
           </GmxButton>
           <GmxButton href="/" variant="secondary" className="w-full sm:w-auto px-8">
-            VOLVER AL INICIO
+            {t.altaJugador.backToHome}
           </GmxButton>
         </div>
       </div>
@@ -492,32 +476,32 @@ function FormContent() {
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-surface/95 backdrop-blur-sm animate-in fade-in duration-300">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
           <p className="mt-4 font-display text-lg font-600 uppercase tracking-widest text-white">
-            ENVIANDO REGISTRO...
+            {t.altaJugador.submitting}
           </p>
         </div>
       )}
 
       <div className="text-center">
         <h2 className="font-display text-4xl font-700 uppercase tracking-tight text-white sm:text-5xl">
-          ALTA DE JUGADOR
+          {t.altaJugador.formTitle}
         </h2>
         <p className="mt-3 text-muted-foreground">
-          Regístrate como jugador competitivo en la plataforma oficial de GMX Gaming.
+          {t.altaJugador.formSubtitle}
         </p>
       </div>
 
-      {/* Section 1: INFORMACION DEL JUGADOR */}
+      {/* Section 1: PLAYER INFORMATION */}
       <div className="space-y-6">
         <div className="border-b border-border pb-3">
           <h3 className="font-display text-xl font-600 uppercase tracking-widest text-primary">
-            INFORMACIÓN DEL JUGADOR
+            {t.altaJugador.sectionPlayer}
           </h3>
         </div>
 
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           <div className="space-y-2">
             <label htmlFor="field_k57zx_first" className="text-sm font-500 text-white">
-              Nombre <span className="text-primary">*</span>
+              {t.altaJugador.firstName} <span className="text-primary">*</span>
             </label>
             <input
               type="text"
@@ -530,12 +514,12 @@ function FormContent() {
               placeholder="EJ. JUAN CARLOS"
               className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary uppercase"
             />
-            <p className="text-[11px] text-muted-foreground">Solo letras en mayúsculas, sin números ni caracteres especiales.</p>
+            <p className="text-[11px] text-muted-foreground">{t.altaJugador.uppercaseHint}</p>
           </div>
 
           <div className="space-y-2">
             <label htmlFor="field_k57zx_last" className="text-sm font-500 text-white">
-              Apellidos <span className="text-primary">*</span>
+              {t.altaJugador.lastName} <span className="text-primary">*</span>
             </label>
             <input
               type="text"
@@ -548,13 +532,13 @@ function FormContent() {
               placeholder="EJ. PEREZ GOMEZ"
               className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary uppercase"
             />
-            <p className="text-[11px] text-muted-foreground">Solo letras en mayúsculas, sin números ni caracteres especiales.</p>
+            <p className="text-[11px] text-muted-foreground">{t.altaJugador.uppercaseHint}</p>
           </div>
 
           <div className="space-y-2">
             <label htmlFor="field_hs7a9" className="text-sm font-500 text-white">
-              Nickname <span className="text-primary">*</span>
-              <FieldTooltip text="Tu apodo único en la plataforma. En mayúsculas y sin caracteres especiales." />
+              {t.altaJugador.nicknameLabel} <span className="text-primary">*</span>
+              <FieldTooltip text={t.altaJugador.nicknameTooltip} />
             </label>
             <input
               type="text"
@@ -568,7 +552,7 @@ function FormContent() {
                 nicknameError ? "border-red-500 focus:border-red-500 focus:ring-red-500" : "border-border focus:border-primary focus:ring-primary"
               )}
             />
-            <p className="text-[11px] text-muted-foreground">En mayúsculas, sin caracteres especiales.</p>
+            <p className="text-[11px] text-muted-foreground">{t.altaJugador.nicknameHint}</p>
             {nicknameError && (
               <p className="text-xs text-red-500 mt-1">{nicknameError}</p>
             )}
@@ -576,7 +560,7 @@ function FormContent() {
 
           <div className="space-y-2">
             <label htmlFor="field_3vhsb" className="text-sm font-500 text-white">
-              Género <span className="text-primary">*</span>
+              {t.altaJugador.gender} <span className="text-primary">*</span>
             </label>
             <div className="relative">
               <select
@@ -585,8 +569,8 @@ function FormContent() {
                 required
                 className="w-full appearance-none rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               >
-                <option value="Masculino">Masculino</option>
-                <option value="Femenino">Femenino</option>
+                <option value="Masculino">{t.altaJugador.genderMale}</option>
+                <option value="Femenino">{t.altaJugador.genderFemale}</option>
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-muted-foreground">
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -595,13 +579,13 @@ function FormContent() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              El género que elijas debe estar avalado por un documento oficial.
+              {t.altaJugador.genderNote}
             </p>
           </div>
 
           <div className="space-y-2">
             <label htmlFor="field_7jhiv" className="text-sm font-500 text-white">
-              Fecha de Nacimiento <span className="text-primary">*</span>
+              {t.altaJugador.birthDate} <span className="text-primary">*</span>
             </label>
             <input
               type="date"
@@ -615,7 +599,7 @@ function FormContent() {
 
           <div className="space-y-2">
             <label htmlFor="field_vlqx" className="text-sm font-500 text-white">
-              País de Nacimiento <span className="text-primary">*</span>
+              {t.altaJugador.birthCountry} <span className="text-primary">*</span>
             </label>
             <div className="relative">
               <select
@@ -637,7 +621,7 @@ function FormContent() {
 
           <div className="space-y-2">
             <label htmlFor="field_bb4bx" className="text-sm font-500 text-white">
-              País de Residencia <span className="text-primary">*</span>
+              {t.altaJugador.residenceCountry} <span className="text-primary">*</span>
             </label>
             <div className="relative">
               <select
@@ -659,7 +643,7 @@ function FormContent() {
 
           <div className="space-y-2">
             <label htmlFor="field_dznon" className="text-sm font-500 text-white">
-              Handle de Discord <span className="text-primary">*</span>
+              {t.altaJugador.discordHandle} <span className="text-primary">*</span>
               <FieldTooltip text="Ej: mordongmx" />
             </label>
             <input
@@ -674,7 +658,7 @@ function FormContent() {
 
           <div className="space-y-2">
             <label htmlFor="field_xc8wk" className="text-sm font-500 text-white">
-              Correo Electrónico <span className="text-primary">*</span>
+              {t.altaJugador.email} <span className="text-primary">*</span>
             </label>
             <input
               type="email"
@@ -689,17 +673,17 @@ function FormContent() {
 
           <div className="space-y-2">
             <label htmlFor="field_6if8l" className="text-sm font-500 text-white">
-              Teléfono (WhatsApp) <span className="text-primary">*</span>
+              {t.altaJugador.phone} <span className="text-primary">*</span>
             </label>
             <PhoneInput id="field_6if8l" name="item_meta[685]" required />
           </div>
         </div>
 
-        {/* Redes Sociales */}
+        {/* Social Media */}
         <div className="space-y-4 pt-4">
           <label className="text-sm font-500 text-white">
-            Redes Sociales
-            <FieldTooltip text="Pega los enlaces completos (Ej: https://instagram.com/tu-usuario). Déjalo vacío si no aplica." />
+            {t.altaJugador.socialNetworks}
+            <FieldTooltip text={t.altaJugador.socialTooltip} />
           </label>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {['Instagram', 'TikTok', 'YouTube', 'Facebook', 'Twitch', 'Kick', 'X'].map(social => (
@@ -717,21 +701,21 @@ function FormContent() {
         </div>
       </div>
 
-      {/* Section 2: FOTOGRAFIA & DOCUMENTOS */}
+      {/* Section 2: PHOTO & DOCUMENTS */}
       <div className="grid gap-12 lg:grid-cols-2 pt-6">
         <div className="space-y-6">
           <div className="border-b border-border pb-3">
             <h3 className="font-display text-xl font-600 uppercase tracking-widest text-primary">
-              FOTOGRAFÍA
+              {t.altaJugador.sectionPhoto}
             </h3>
           </div>
           
           <div className="space-y-4">
             <label className="text-sm font-500 text-white">
-              Fotografía <span className="text-primary">*</span>
+              {t.altaJugador.photoLabel} <span className="text-primary">*</span>
             </label>
             <p className="text-xs text-muted-foreground">
-              Sube tu foto utilizando una playera negra o el uniforme de tu equipo profesional.
+              {t.altaJugador.photoDesc}
             </p>
             <FileUpload name="item_meta[687]" required onFileSelect={setFotoFile} />
           </div>
@@ -740,36 +724,35 @@ function FormContent() {
         <div className="space-y-6">
           <div className="border-b border-border pb-3">
             <h3 className="font-display text-xl font-600 uppercase tracking-widest text-primary">
-              DOCUMENTO DE IDENTIFICACIÓN
+              {t.altaJugador.sectionDocuments}
             </h3>
           </div>
           
           <div className="space-y-4">
             <label className="text-sm font-500 text-white">
-              INE / ACTA DE NACIMIENTO
+              {t.altaJugador.idLabel}
             </label>
             <p className="text-xs text-muted-foreground">
-              Toma una foto clara de la parte frontal de tu documento oficial.
+              {t.altaJugador.idDesc}
             </p>
             <FileUpload name="item_meta[750]" icon={<FileText className="h-10 w-10" />} onFileSelect={setIdentidadFile} />
           </div>
         </div>
       </div>
 
-      {/* Section 3: INFORMACION VIDEOJUEGOS */}
+      {/* Section 3: GAME INFORMATION */}
       <div className="space-y-6 pt-6">
         <div className="border-b border-border pb-3">
           <h3 className="font-display text-xl font-600 uppercase tracking-widest text-primary">
-            INFORMACIÓN VIDEOJUEGOS
+            {t.altaJugador.sectionGame}
           </h3>
         </div>
 
         <div className="grid gap-6 sm:grid-cols-3">
-          {/* Si hay más de 1 juego habilitado en configuración, permitir seleccionar */}
           {games.length > 1 && (
             <div className="space-y-2">
               <label htmlFor="field_selected_game" className="text-sm font-500 text-white">
-                Juego Principal <span className="text-primary">*</span>
+                {t.altaJugador.mainGame} <span className="text-primary">*</span>
               </label>
               <div className="relative">
                 <select
@@ -823,20 +806,20 @@ function FormContent() {
         </div>
       </div>
 
-      {/* Section 4: PASAPORTE */}
+      {/* Section 4: PASSPORT */}
       <div className="space-y-6 pt-6">
         <div className="border-b border-border pb-3">
           <h3 className="font-display text-xl font-600 uppercase tracking-widest text-primary">
-            PASAPORTE
+            {t.altaJugador.sectionPassport}
           </h3>
         </div>
 
         <div className="max-w-xl space-y-4">
           <label className="text-sm font-500 text-white">
-            Pasaporte
+            {t.altaJugador.passportLabel}
           </label>
           <p className="text-xs text-muted-foreground">
-            Sube una imagen de tu pasaporte. Si no tienes uno, sube la cita generada.
+            {t.altaJugador.passportDesc}
           </p>
           <FileUpload name="item_meta[678]" onFileSelect={setPasaporteFile} />
         </div>
@@ -855,10 +838,10 @@ function FormContent() {
             {formStatus === 'loading' ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />
-                ENVIANDO REGISTRO...
+                {t.altaJugador.submitting}
               </>
             ) : (
-              'ENVIAR REGISTRO DE JUGADOR'
+              t.altaJugador.submit
             )}
           </span>
         </button>

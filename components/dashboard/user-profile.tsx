@@ -35,6 +35,7 @@ import { GmxButton } from '@/components/gmx-button'
 import { useAuth } from '@/lib/auth-context'
 import { createClient } from '@/utils/supabase/client'
 import { toast } from 'sonner'
+import { useLanguage } from '@/lib/language-context'
 
 interface UserProfileProps {
   onNavigateTab?: (tab: 'perfil' | 'equipos' | 'jugadores' | 'contratos') => void
@@ -42,6 +43,7 @@ interface UserProfileProps {
 
 export function UserProfile({ onNavigateTab }: UserProfileProps) {
   const { user } = useAuth()
+  const { t } = useLanguage()
   const [profilePhoto, setProfilePhoto] = useState<string | null>(user?.avatar || null)
   const [name, setName] = useState(user?.name || 'Usuario')
   const [bio, setBio] = useState('')
@@ -676,7 +678,6 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
     } catch (err: any) {
       console.error('Error al enviar enlace de recuperación:', err)
       toast.error('Error al enviar enlace: ' + (err?.message || ''))
-      setPasswordError('No se pudo enviar el correo de recuperación. Intenta más tarde.')
     } finally {
       setIsSendingResetEmail(false)
     }
@@ -703,7 +704,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               <button 
                 onClick={openEdit}
                 className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100 cursor-pointer"
-                title="Cambiar foto de perfil"
+                title={t.userProfile.changeProfilePhoto}
               >
                 <Camera className="h-6 w-6 text-white" />
               </button>
@@ -733,17 +734,17 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                 {user?.role === 'admin' ? (
                   <div className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-600 text-primary border border-primary/20 uppercase tracking-wider">
                     <ShieldCheck className="h-3.5 w-3.5" />
-                    Administrador
+                    {t.userProfile.admin}
                   </div>
                 ) : isPlayerApproved ? (
                   <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-600 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">
                     <UserCheck className="h-3.5 w-3.5" />
-                    Jugador Verificado
+                    {t.userProfile.verifiedPlayer}
                   </div>
                 ) : (
                   <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-600 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">
                     <UserCheck className="h-3.5 w-3.5" />
-                    Perfil Activo
+                    {t.userProfile.activeProfile}
                   </div>
                 )}
               </div>
@@ -770,14 +771,14 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-md px-4 py-3 text-xs sm:text-sm font-600 uppercase tracking-wider transition-all clip-corner bg-white/5 hover:bg-white/10 border border-white/10 text-muted-foreground hover:text-white cursor-pointer"
             >
               <KeyRound className="h-4 w-4 text-primary" />
-              Contraseña
+              {t.userProfile.password}
             </button>
             <button 
               onClick={openEdit}
               className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-md px-5 py-3 text-sm font-600 uppercase tracking-wider transition-all clip-corner bg-white/5 hover:bg-primary border border-white/10 text-white hover:border-primary cursor-pointer"
             >
               <Edit3 className="h-4 w-4" />
-              Editar Perfil
+              {t.userProfile.editProfile}
             </button>
           </div>
         </div>
@@ -793,11 +794,11 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
             <div className="space-y-1">
               <h4 className="text-sm font-700 uppercase tracking-wider text-red-400">
                 {hasRejectedModification 
-                  ? "Tu solicitud de modificación de perfil fue rechazada" 
-                  : "Tu registro como Jugador Profesional fue rechazado"}
+                  ? t.userProfile.modificationRejectionTitle
+                  : t.userProfile.rejectionNoticeTitle}
               </h4>
               <p className="text-sm text-white/90 leading-relaxed">
-                <span className="font-700 text-red-300">Motivo indicado por la administración: </span>
+                <span className="font-700 text-red-300">{t.userProfile.adminReasonLabel} </span>
                 {rejectionReasonText}
               </p>
             </div>
@@ -807,14 +808,14 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               onClick={openEdit}
               className="shrink-0 px-4 py-2.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-200 text-xs font-700 uppercase tracking-wider transition-colors"
             >
-              Editar y Reenviar
+              {t.userProfile.editAndResubmit}
             </button>
           ) : (
             <Link 
-              href="/registro/alta-de-jugador"
+              href="/registro/alta-de-jugador" 
               className="shrink-0 px-4 py-2.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-200 text-xs font-700 uppercase tracking-wider transition-colors"
             >
-              Reenviar Registro
+              {t.userProfile.resubmitRegistration}
             </Link>
           )}
         </div>
@@ -824,9 +825,9 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
       <div className="space-y-4">
         <div className="flex items-center justify-between px-1">
           <h3 className="font-display text-xl font-600 uppercase tracking-tight text-white">
-            Mis Registros
+            {t.userProfile.myRegistrations}
           </h3>
-          <span className="text-xs text-muted-foreground">Estado en tiempo real</span>
+          <span className="text-xs text-muted-foreground">{t.userProfile.realtimeStatus}</span>
         </div>
         
         <div className="grid gap-4 md:grid-cols-3">
@@ -861,15 +862,15 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                   isPlayerRejected ? "bg-red-500/10 text-red-400 border-red-500/20" :
                   "bg-white/5 text-muted-foreground border-border"
                 )}>
-                  {isPlayerApproved ? "Aprobado" :
-                   isPlayerPending ? "En Revisión" :
-                   isPlayerRejected ? "Rechazado" :
-                   "No Registrado"}
+                  {isPlayerApproved ? t.userProfile.approved :
+                   isPlayerPending ? t.userProfile.underReview :
+                   isPlayerRejected ? t.userProfile.rejected :
+                   t.userProfile.notRegistered}
                 </span>
               </div>
 
               <div>
-                <h4 className="font-display font-700 text-lg text-white">Jugador Profesional</h4>
+                <h4 className="font-display font-700 text-lg text-white">{t.userProfile.proPlayer}</h4>
                 {isPlayerApproved && (
                   <p className="text-xs font-600 text-emerald-400 uppercase tracking-wider mt-0.5">
                     IGN: {profileData?.nickname || profileData?.game_nickname || profileData?.name}
@@ -882,12 +883,12 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                 )}
                 <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
                   {isPlayerApproved 
-                    ? "Tu perfil como jugador profesional está verificado y activo en GMX Gaming." 
+                    ? t.userProfile.playerApprovedDesc
                     : isPlayerPending 
-                    ? "Tu solicitud está en proceso de revisión por los administradores."
+                    ? t.userProfile.playerPendingDesc
                     : isPlayerRejected
-                    ? "Tu solicitud fue rechazada. Puedes volver a enviar tus datos corregidos."
-                    : "No te has registrado como jugador profesional en la plataforma."}
+                    ? t.userProfile.playerRejectedDescText
+                    : t.userProfile.playerNotRegisteredDesc}
                 </p>
 
                 {/* Banner de Estado de Modificación Pendiente o Rechazada */}
@@ -895,9 +896,9 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                   <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 flex items-start gap-2.5 text-xs text-amber-300">
                     <Clock className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
                     <div>
-                      <span className="font-700 text-amber-400 block">Modificación en Revisión</span>
+                      <span className="font-700 text-amber-400 block">{t.userProfile.playerModPendingTitle}</span>
                       <span className="text-[11px] text-amber-300/90 leading-snug">
-                        Enviaste cambios a tus datos de jugador. Están pendientes de aprobación por el administrador.
+                        {t.userProfile.playerModPendingDesc}
                       </span>
                     </div>
                   </div>
@@ -907,9 +908,9 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                   <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 flex items-start gap-2.5 text-xs text-red-300">
                     <AlertCircle className="h-4 w-4 shrink-0 text-red-400 mt-0.5" />
                     <div>
-                      <span className="font-700 text-red-400 block">Modificación Rechazada</span>
+                      <span className="font-700 text-red-400 block">{t.userProfile.playerModRejectedTitle}</span>
                       <span className="text-[11px] text-red-300/90 leading-snug">
-                        {rejectionReasonText ? `Motivo: ${rejectionReasonText}` : "Tu solicitud de modificación fue rechazada por el administrador. Puedes corregir los datos y reenviarla."}
+                        {rejectionReasonText ? `${t.userProfile.adminReasonLabel} ${rejectionReasonText}` : t.userProfile.playerModRejectedDesc}
                       </span>
                     </div>
                   </div>
@@ -925,14 +926,14 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                     className="inline-flex items-center gap-2 rounded-lg bg-primary hover:bg-primary-dark text-white px-3.5 py-2 text-xs font-700 uppercase tracking-wider transition-all shadow-md shadow-primary/20 cursor-pointer"
                   >
                     <Edit3 className="h-3.5 w-3.5" />
-                    {isPlayerModificationPending ? "Editar Solicitud" : "Modificar Perfil"}
+                    {isPlayerModificationPending ? t.userProfile.editRequest : t.userProfile.modifyProfile}
                   </button>
                   <button 
                     onClick={() => setShowPlayerModal(true)}
                     className="inline-flex items-center gap-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white px-3 py-2 text-xs font-600 uppercase tracking-wider transition-colors cursor-pointer"
                   >
                     <Eye className="h-3.5 w-3.5 text-muted-foreground" />
-                    Ver Ficha
+                    {t.userProfile.viewCard}
                   </button>
                 </div>
               ) : isPlayerRejected ? (
@@ -940,14 +941,14 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                   href="/registro/alta-de-jugador" 
                   className="flex items-center gap-2 text-sm font-600 text-red-400 hover:text-red-300 transition-colors"
                 >
-                  Reenviar Solicitud <ArrowRight className="h-4 w-4" />
+                  {t.userProfile.resubmitRequest} <ArrowRight className="h-4 w-4" />
                 </Link>
               ) : (
                 <Link 
                   href="/registro/alta-de-jugador" 
                   className="flex items-center gap-2 text-sm font-600 text-primary hover:text-primary-dark transition-colors"
                 >
-                  Iniciar Registro <ArrowRight className="h-4 w-4" />
+                  {t.userProfile.startRegistration} <ArrowRight className="h-4 w-4" />
                 </Link>
               )}
             </div>
@@ -976,7 +977,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                 <div className="flex items-center gap-1.5">
                   {userTeam && (
                     <span className="px-2 py-0.5 rounded-full text-[9px] font-700 uppercase tracking-widest bg-primary/20 text-primary border border-primary/30">
-                      {userTeam.isManager ? "Manager" : "Jugador"}
+                      {userTeam.isManager ? "Manager" : t.userProfile.teamPlayerRole}
                     </span>
                   )}
                   <span className={cn(
@@ -985,14 +986,14 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                     userTeam ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
                     "bg-white/5 text-muted-foreground border-border"
                   )}>
-                    {userTeam ? (userTeam.status === 'active' ? "Activo" : "Pendiente") : "Sin Equipo"}
+                    {userTeam ? (userTeam.status === 'active' ? t.userProfile.active : t.userProfile.pending) : t.userProfile.noTeam}
                   </span>
                 </div>
               </div>
 
               <div>
                 <h4 className="font-display font-700 text-lg text-white">
-                  {userTeam ? userTeam.name : "Equipo Profesional"}
+                  {userTeam ? userTeam.name : t.userProfile.proTeam}
                 </h4>
                 {userTeam && (
                   <p className="text-xs font-600 text-muted-foreground uppercase tracking-wider mt-0.5">
@@ -1001,8 +1002,8 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                 )}
                 <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
                   {userTeam 
-                    ? `Actualmente formas parte de ${userTeam.name} como ${userTeam.isManager ? 'Manager del equipo' : 'Jugador'}.` 
-                    : "No has registrado ni perteneces a ningún equipo profesional en GMX Gaming."}
+                    ? t.userProfile.teamMemberDesc.replace('{team}', userTeam.name).replace('{role}', userTeam.isManager ? t.userProfile.teamManagerRole : t.userProfile.teamPlayerRole)
+                    : t.userProfile.noTeamDesc}
                 </p>
               </div>
             </div>
@@ -1013,14 +1014,14 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                   onClick={() => onNavigateTab ? onNavigateTab(userTeam.isManager ? 'jugadores' : 'equipos') : null}
                   className="flex items-center gap-2 text-sm font-600 text-primary hover:text-primary-dark transition-colors text-left"
                 >
-                  {userTeam.isManager ? "Gestionar Jugadores & Contratos" : "Ver Mi Equipo"} <ArrowRight className="h-4 w-4" />
+                  {userTeam.isManager ? t.userProfile.managePlayersContracts : t.userProfile.viewMyTeam} <ArrowRight className="h-4 w-4" />
                 </button>
               ) : (
                 <Link 
                   href="/registro/alta-de-equipo" 
                   className="flex items-center gap-2 text-sm font-600 text-muted-foreground hover:text-white transition-colors"
                 >
-                  Registrar Equipo <ArrowRight className="h-4 w-4" />
+                  {t.userProfile.registerTeam} <ArrowRight className="h-4 w-4" />
                 </Link>
               )}
             </div>
@@ -1049,27 +1050,27 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                   "bg-white/5 text-muted-foreground border-border"
                 )}>
                   {activeContract ? (
-                    (activeContract.status === 'active' || activeContract.status === 'activo') ? "Activo" :
-                    activeContract.status === 'pending_player_release' ? "Baja Solicitada" :
-                    activeContract.status === 'pending_manager_release' ? "Baja en Trámite" :
-                    "Pendiente"
-                  ) : "Sin Contratos"}
+                    (activeContract.status === 'active' || activeContract.status === 'activo') ? t.userProfile.active :
+                    activeContract.status === 'pending_player_release' ? t.userProfile.releaseRequested :
+                    activeContract.status === 'pending_manager_release' ? t.userProfile.releaseInProgress :
+                    t.userProfile.pending
+                  ) : t.userProfile.noContracts}
                 </span>
               </div>
 
               <div>
                 <h4 className="font-display font-700 text-lg text-white">
-                  {activeContract?.teams?.name ? `Contrato: ${activeContract.teams.name}` : "Contratos"}
+                  {activeContract?.teams?.name ? `${t.userProfile.contract}: ${activeContract.teams.name}` : t.userProfile.contracts}
                 </h4>
                 {activeContract && (
                   <p className="text-xs font-600 text-purple-400 uppercase tracking-wider mt-0.5 flex items-center gap-1.5">
                     <Calendar className="h-3 w-3" />
-                    {activeContract.end_date ? `Vence: ${new Date(activeContract.end_date).toLocaleDateString()}` : 'Contrato Vigente'}
+                    {activeContract.end_date ? t.userProfile.expiresOn.replace('{date}', new Date(activeContract.end_date).toLocaleDateString()) : t.userProfile.contractActive}
                   </p>
                 )}
                 {activeContract ? (
                   <div className="mt-2 space-y-1.5">
-                    <span className="text-xs text-muted-foreground block font-500">Roles Asignados:</span>
+                    <span className="text-xs text-muted-foreground block font-500">{t.userProfile.assignedRoles}</span>
                     <div className="flex flex-wrap gap-1.5">
                       {Array.isArray(activeContract.roles) ? (
                         activeContract.roles.map((r: string, idx: number) => (
@@ -1089,7 +1090,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                   </div>
                 ) : (
                   <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-                    No tienes ningún contrato activo registrado actualmente.
+                    {t.userProfile.noActiveContractDesc}
                   </p>
                 )}
               </div>
@@ -1101,14 +1102,14 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                   onClick={() => onNavigateTab ? onNavigateTab('contratos') : null}
                   className="flex items-center gap-2 text-sm font-600 text-purple-400 hover:text-purple-300 transition-colors text-left"
                 >
-                  Ver Mis Contratos <ArrowRight className="h-4 w-4" />
+                  {t.userProfile.viewMyContracts} <ArrowRight className="h-4 w-4" />
                 </button>
               ) : (
                 <Link 
                   href="/registro/alta-de-contrato" 
                   className="flex items-center gap-2 text-sm font-600 text-muted-foreground hover:text-white transition-colors"
                 >
-                  Registrar Contrato <ArrowRight className="h-4 w-4" />
+                  {t.userProfile.registerContract} <ArrowRight className="h-4 w-4" />
                 </Link>
               )}
             </div>
@@ -1126,14 +1127,14 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
             </div>
             <div>
               <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white">
-                Seguridad y Contraseña
+                {t.userProfile.securityAndPass}
               </h3>
               <p className="text-sm text-muted-foreground mt-1 max-w-xl leading-relaxed">
-                Protege tu cuenta de GMX Gaming. Puedes cambiar tu contraseña ingresando la clave actual y la nueva, o solicitar un enlace de restablecimiento a tu correo.
+                {t.userProfile.securityDesc}
               </p>
               <p className="text-xs text-primary mt-2 font-mono flex items-center gap-1.5">
                 <Mail className="w-3.5 h-3.5" />
-                <span>Correo registrado: <strong>{user?.email || 'No disponible'}</strong></span>
+                <span>{t.userProfile.registeredEmail} <strong>{user?.email || t.userProfile.notAvailable}</strong></span>
               </p>
             </div>
           </div>
@@ -1148,7 +1149,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-lg bg-primary hover:bg-primary/90 px-4 py-2.5 text-xs font-700 uppercase tracking-wider text-white transition-colors cursor-pointer"
             >
               <KeyRound className="w-4 h-4" />
-              Cambiar Contraseña
+              {t.userProfile.changePassword}
             </button>
             <button
               onClick={() => {
@@ -1160,7 +1161,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-lg border border-border bg-white/5 hover:bg-white/10 px-4 py-2.5 text-xs font-700 uppercase tracking-wider text-muted-foreground hover:text-white transition-colors cursor-pointer"
             >
               <Mail className="w-4 h-4" />
-              Recuperar por Correo
+              {t.userProfile.recoverByEmail}
             </button>
           </div>
         </div>
@@ -1176,10 +1177,10 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               <div>
                 <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
                   <User className="w-5 h-5 text-primary" />
-                  Editar Perfil Personal
+                  {t.userProfile.editPersonalProfile}
                 </h3>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Actualiza el nombre, foto de perfil y biografía de tu cuenta.
+                  {t.userProfile.editPersonalProfileDesc}
                 </p>
               </div>
               <button 
@@ -1195,7 +1196,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               {/* Foto de Perfil */}
               <div className="space-y-3">
                 <label className="text-xs font-600 uppercase tracking-widest text-primary block">
-                  Foto de Perfil
+                  {t.userProfile.profilePhoto}
                 </label>
                 
                 <input 
@@ -1224,10 +1225,10 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                       className="flex items-center gap-2 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2 text-xs font-600 uppercase tracking-wider text-white transition-colors cursor-pointer"
                     >
                       <Upload className="w-4 h-4 text-primary" />
-                      Subir Imagen
+                      {t.userProfile.uploadImage}
                     </button>
                     <p className="text-[11px] text-muted-foreground">
-                      Formatos recomendados: JPG, PNG o WebP.
+                      {t.userProfile.recommendedFormats}
                     </p>
                   </div>
                 </div>
@@ -1237,27 +1238,27 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               <div className="space-y-4 pt-2 border-t border-border/50">
                 <div className="space-y-2">
                   <label className="text-xs font-600 uppercase tracking-widest text-primary block">
-                    Nombre
+                    {t.userProfile.fullName}
                   </label>
                   <input 
                     type="text" 
                     value={editForm.name}
                     onChange={(e) => setEditForm(prev => ({ ...prev, name: formatPersonName(e.target.value) }))}
-                    placeholder="TU NOMBRE COMPLETO"
+                    placeholder={t.userProfile.fullNamePlaceholder}
                     className="w-full rounded-md border border-border bg-background px-4 py-3 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors uppercase"
                   />
-                  <p className="text-[11px] text-muted-foreground">Solo letras en mayúsculas, sin números ni caracteres especiales.</p>
+                  <p className="text-[11px] text-muted-foreground">{t.userProfile.fullNameHelp}</p>
                 </div>
                 
                 <div className="space-y-2">
                   <label className="text-xs font-600 uppercase tracking-widest text-primary block">
-                    Descripción / Biografía
+                    {t.userProfile.bioLabel}
                   </label>
                   <textarea 
                     value={editForm.bio}
                     onChange={(e) => setEditForm(prev => ({ ...prev, bio: e.target.value }))}
                     rows={3}
-                    placeholder="Cuéntanos sobre tu trayectoria o rol en eSports..."
+                    placeholder={t.userProfile.bioPlaceholderInput}
                     className="w-full rounded-md border border-border bg-background px-4 py-3 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors resize-none"
                   />
                 </div>
@@ -1265,7 +1266,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
 
               {/* Contacto */}
               <div className="space-y-4 pt-2 border-t border-border/50">
-                <p className="text-xs font-600 uppercase tracking-widest text-primary">Contacto</p>
+                <p className="text-xs font-600 uppercase tracking-widest text-primary">{t.userProfile.contact}</p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -1274,12 +1275,12 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                       type="text"
                       value={editForm.discord_handle}
                       onChange={(e) => setEditForm(prev => ({ ...prev, discord_handle: e.target.value }))}
-                      placeholder="usuario#0000"
+                      placeholder={t.userProfile.discordPlaceholder}
                       className="w-full rounded-md border border-border bg-background px-4 py-3 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-500 text-muted-foreground uppercase tracking-widest block">WhatsApp / Teléfono</label>
+                    <label className="text-xs font-500 text-muted-foreground uppercase tracking-widest block">{t.userProfile.phoneLabel}</label>
                     <input
                       type="tel"
                       value={editForm.phone}
@@ -1289,12 +1290,12 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                     />
                   </div>
                   <div className="space-y-2 sm:col-span-2">
-                    <label className="text-xs font-500 text-muted-foreground uppercase tracking-widest block">País de Residencia</label>
+                    <label className="text-xs font-500 text-muted-foreground uppercase tracking-widest block">{t.userProfile.countryLabel}</label>
                     <input
                       type="text"
                       value={editForm.country}
                       onChange={(e) => setEditForm(prev => ({ ...prev, country: e.target.value }))}
-                      placeholder="México"
+                      placeholder={t.userProfile.countryPlaceholder}
                       className="w-full rounded-md border border-border bg-background px-4 py-3 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
                     />
                   </div>
@@ -1303,7 +1304,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
 
               {/* Redes Sociales */}
               <div className="space-y-4 pt-2 border-t border-border/50">
-                <p className="text-xs font-600 uppercase tracking-widest text-primary">Redes Sociales</p>
+                <p className="text-xs font-600 uppercase tracking-widest text-primary">{t.userProfile.socialNetworks}</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {([
                     { key: 'social_ig', label: 'Instagram', placeholder: 'https://instagram.com/...' },
@@ -1332,7 +1333,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
             {/* Footer Fijo */}
             <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border p-6 bg-surface z-10">
               <span className="text-xs text-muted-foreground">
-                {!hasChanges ? "No has realizado cambios" : "Cambios pendientes por guardar"}
+                {!hasChanges ? t.userProfile.noChanges : t.userProfile.pendingChanges}
               </span>
 
               <div className="flex items-center gap-3">
@@ -1340,7 +1341,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                   onClick={() => setIsEditing(false)}
                   className="rounded-md border border-border bg-transparent px-4 py-2 text-sm font-600 text-muted-foreground hover:text-white transition-colors cursor-pointer"
                 >
-                  Cancelar
+                  {t.userProfile.cancel}
                 </button>
                 <button
                   onClick={handleSave}
@@ -1354,7 +1355,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                 >
                   <span className="relative z-10 flex items-center gap-2">
                     <Save className="w-4 h-4" />
-                    {isSubmitting ? "Guardando..." : "Guardar Cambios"}
+                    {isSubmitting ? t.userProfile.savingChanges : t.userProfile.saveChanges}
                   </span>
                 </button>
               </div>
@@ -1372,7 +1373,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
             <div className="flex shrink-0 items-center justify-between border-b border-border p-6 bg-surface z-10">
               <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
                 <ShieldAlert className="w-5 h-5 text-primary" />
-                Datos de Jugador
+                {t.userProfile.playerDataTitle}
               </h3>
               <button 
                 onClick={() => setShowPlayerModal(false)}
@@ -1387,11 +1388,11 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               
               <div className="space-y-4">
                 <div>
-                  <p className="text-xs font-500 text-muted-foreground uppercase tracking-widest mb-1">Nombre Real</p>
+                  <p className="text-xs font-500 text-muted-foreground uppercase tracking-widest mb-1">{t.userProfile.realName}</p>
                   <p className="text-sm text-white font-600">{profileData.name || 'N/A'}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-500 text-muted-foreground uppercase tracking-widest mb-1">Nickname (IGN)</p>
+                  <p className="text-xs font-500 text-muted-foreground uppercase tracking-widest mb-1">{t.userProfile.nickname}</p>
                   <p className="text-sm text-white font-600">{profileData.nickname || profileData.game_nickname || 'N/A'}</p>
                 </div>
                 <div>
@@ -1401,19 +1402,19 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
 
                 {profileData.player_game_info && profileData.player_game_info.length > 0 && (
                   <div className="border-t border-border pt-4 space-y-3">
-                    <p className="text-xs font-600 uppercase tracking-widest text-primary">Datos del Juego ({profileData.player_game_info[0].game})</p>
+                    <p className="text-xs font-600 uppercase tracking-widest text-primary">{t.userProfile.gameData.replace('{game}', profileData.player_game_info[0].game)}</p>
                     <div className="grid grid-cols-2 gap-3 text-xs">
                       <div className="rounded-lg bg-background p-3 border border-border">
-                        <span className="text-muted-foreground block mb-1">Game ID</span>
+                        <span className="text-muted-foreground block mb-1">{t.userProfile.gameId}</span>
                         <span className="text-white font-600">{profileData.player_game_info[0].game_id || 'N/A'}</span>
                       </div>
                       <div className="rounded-lg bg-background p-3 border border-border">
-                        <span className="text-muted-foreground block mb-1">Servidor</span>
+                        <span className="text-muted-foreground block mb-1">{t.userProfile.server}</span>
                         <span className="text-white font-600">{profileData.player_game_info[0].server || 'N/A'}</span>
                       </div>
                       {profileData.player_game_info[0].country_account && (
                         <div className="rounded-lg bg-background p-3 border border-border col-span-2">
-                          <span className="text-muted-foreground block mb-1">País de la Cuenta</span>
+                          <span className="text-muted-foreground block mb-1">{t.userProfile.accountCountry}</span>
                           <span className="text-white font-600">{profileData.player_game_info[0].country_account}</span>
                         </div>
                       )}
@@ -1424,7 +1425,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                 {/* Redes Sociales y Enlaces */}
                 {(profileData.social_ig || profileData.social_twitch || profileData.social_kick || profileData.social_yt || profileData.social_tiktok || profileData.social_x || profileData.social_fb) && (
                   <div className="border-t border-border pt-4 space-y-2.5">
-                    <p className="text-xs font-600 uppercase tracking-widest text-primary">Redes Sociales Vinculadas</p>
+                    <p className="text-xs font-600 uppercase tracking-widest text-primary">{t.userProfile.linkedSocials}</p>
                     <div className="flex flex-wrap gap-2 text-xs">
                       {profileData.social_ig && (
                         <a href={profileData.social_ig} target="_blank" rel="noreferrer" className="px-2.5 py-1 rounded bg-background border border-border text-white hover:text-primary transition-colors">
@@ -1467,15 +1468,15 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               </div>
 
               <div className="border-t border-border pt-4 space-y-4">
-                <p className="text-xs font-600 uppercase tracking-widest text-primary">Estado de Verificación</p>
+                <p className="text-xs font-600 uppercase tracking-widest text-primary">{t.userProfile.verificationStatus}</p>
                 <div className="flex items-center gap-2">
                   <div className={cn("px-3 py-1 rounded-full text-xs font-600 uppercase", 
                     (profileData.player_status === 'active' || profileData.player_status === 'approved') ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" :
                     profileData.player_status === 'rejected' ? "bg-red-500/10 text-red-500 border border-red-500/20" :
                     "bg-amber-500/10 text-amber-500 border border-amber-500/20"
                   )}>
-                    {(profileData.player_status === 'active' || profileData.player_status === 'approved') ? '✓ Aprobado' :
-                     profileData.player_status === 'rejected' ? '✕ Rechazado' : '⏳ Pendiente de Aprobación'}
+                    {(profileData.player_status === 'active' || profileData.player_status === 'approved') ? '✓ ' + t.userProfile.approved :
+                     profileData.player_status === 'rejected' ? '✕ ' + t.userProfile.rejected : '⏳ ' + t.userProfile.underReview}
                   </div>
                 </div>
               </div>
@@ -1484,7 +1485,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
             {/* Footer Fijo */}
             <div className="flex shrink-0 justify-end gap-3 border-t border-border p-6 bg-surface z-10">
               <GmxButton onClick={() => setShowPlayerModal(false)}>
-                Cerrar
+                {t.userProfile.close}
               </GmxButton>
             </div>
           </div>
@@ -1501,10 +1502,10 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               <div>
                 <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
                   <Gamepad2 className="w-5 h-5 text-primary" />
-                  {isPlayerModificationPending ? "Modificar Solicitud de Jugador" : "Modificar Perfil de Jugador"}
+                  {isPlayerModificationPending ? t.userProfile.editPlayerModalTitlePending : t.userProfile.editPlayerModalTitle}
                 </h3>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Todos los cambios deben ser aprobados por un administrador antes de publicarse.
+                  {t.userProfile.editPlayerModalSubtitle}
                 </p>
               </div>
               <button 
@@ -1522,7 +1523,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               <div className="rounded-xl border border-primary/30 bg-primary/10 p-3.5 flex items-start gap-3 text-xs text-primary-light">
                 <ShieldAlert className="h-4 w-4 shrink-0 text-primary mt-0.5" />
                 <span className="leading-relaxed">
-                  <strong>Aprobación Obligatoria:</strong> Al guardar, se enviará una solicitud al panel de administración. Tus datos públicos actuales se mantendrán intactos hasta que el administrador valide y apruebe tu actualización.
+                  <strong>{t.userProfile.mandatoryApproval}</strong> {t.userProfile.mandatoryApprovalDesc}
                 </span>
               </div>
 
@@ -1530,7 +1531,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               <div className="space-y-4">
                 <h4 className="text-xs font-700 uppercase tracking-widest text-primary flex items-center gap-2 border-b border-border/50 pb-2">
                   <User className="w-4 h-4" />
-                  1. Identidad eSports & Fotografía
+                  {t.userProfile.sectionIdentity}
                 </h4>
 
                 {/* Subir Foto de Perfil */}
@@ -1560,10 +1561,10 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                       className="flex items-center gap-2 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2 text-xs font-600 uppercase tracking-wider text-white transition-colors cursor-pointer"
                     >
                       <Upload className="w-4 h-4 text-primary" />
-                      Cambiar Foto de Jugador
+                      {t.userProfile.changePlayerPhoto}
                     </button>
                     <p className="text-[11px] text-muted-foreground">
-                      Formatos recomendados: JPG, PNG o WebP.
+                      {t.userProfile.recommendedFormats}
                     </p>
                   </div>
                 </div>
@@ -1571,35 +1572,35 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                   <div className="space-y-1.5">
                     <label className="text-xs font-600 uppercase tracking-wider text-white block">
-                      Nombre Real <span className="text-red-400">*</span>
+                      {t.userProfile.realName} <span className="text-red-400">*</span>
                     </label>
                     <input 
                       type="text" 
                       value={playerEditForm.name}
                       onChange={(e) => setPlayerEditForm(prev => ({ ...prev, name: formatPersonName(e.target.value) }))}
-                      placeholder="TU NOMBRE COMPLETO"
+                      placeholder={t.userProfile.fullNamePlaceholder}
                       className="w-full rounded-md border border-border bg-background px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors uppercase"
                     />
-                    <p className="text-[10px] text-muted-foreground">Solo letras en mayúsculas, sin caracteres especiales ni números.</p>
+                    <p className="text-[10px] text-muted-foreground">{t.userProfile.fullNameHelp}</p>
                   </div>
 
                   <div className="space-y-1.5">
                     <label className="text-xs font-600 uppercase tracking-wider text-white block">
-                      Nickname / IGN <span className="text-red-400">*</span>
+                      {t.userProfile.nicknameIgn} <span className="text-red-400">*</span>
                     </label>
                     <input 
                       type="text" 
                       value={playerEditForm.nickname}
                       onChange={(e) => setPlayerEditForm(prev => ({ ...prev, nickname: formatNickname(e.target.value) }))}
-                      placeholder="TU NICKNAME"
+                      placeholder={t.userProfile.nickname}
                       className="w-full rounded-md border border-border bg-background px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors uppercase"
                     />
-                    <p className="text-[10px] text-muted-foreground">En mayúsculas, sin caracteres especiales.</p>
+                    <p className="text-[10px] text-muted-foreground">{t.userProfile.nicknameHelp}</p>
                   </div>
 
                   <div className="space-y-1.5 sm:col-span-2">
                     <label className="text-xs font-600 uppercase tracking-wider text-white block">
-                      Usuario de Discord
+                      {t.userProfile.discordUser}
                     </label>
                     <input 
                       type="text" 
@@ -1613,13 +1614,13 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
 
                 <div className="space-y-1.5 pt-1">
                   <label className="text-xs font-600 uppercase tracking-wider text-white block">
-                    Biografía / Trayectoria eSports
+                    {t.userProfile.playerBioLabel}
                   </label>
                   <textarea 
                     value={playerEditForm.bio}
                     onChange={(e) => setPlayerEditForm(prev => ({ ...prev, bio: e.target.value }))}
                     rows={3}
-                    placeholder="Cuéntanos tus logros, experiencia en torneos, rol preferido, etc..."
+                    placeholder={t.userProfile.playerBioPlaceholder}
                     className="w-full rounded-md border border-border bg-background px-3.5 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors resize-none"
                   />
                 </div>
@@ -1629,13 +1630,13 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               <div className="space-y-4 pt-2">
                 <h4 className="text-xs font-700 uppercase tracking-widest text-primary flex items-center gap-2 border-b border-border/50 pb-2">
                   <Gamepad2 className="w-4 h-4" />
-                  2. Datos del Juego Competitivo
+                  {t.userProfile.sectionCompetitiveGame}
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-600 uppercase tracking-wider text-white block">
-                      Juego Principal
+                      {t.userProfile.mainGame}
                     </label>
                     <select
                       value={playerEditForm.game}
@@ -1653,7 +1654,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
 
                   <div className="space-y-1.5">
                     <label className="text-xs font-600 uppercase tracking-wider text-white block">
-                      ID de Jugador (Game ID)
+                      {t.userProfile.gameId}
                     </label>
                     <input 
                       type="text" 
@@ -1666,7 +1667,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
 
                   <div className="space-y-1.5">
                     <label className="text-xs font-600 uppercase tracking-wider text-white block">
-                      Servidor / Zona
+                      {t.userProfile.server}
                     </label>
                     <input 
                       type="text" 
@@ -1679,7 +1680,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
 
                   <div className="space-y-1.5">
                     <label className="text-xs font-600 uppercase tracking-wider text-white block">
-                      País de la Cuenta
+                      {t.userProfile.accountCountry}
                     </label>
                     <input 
                       type="text" 
@@ -1696,7 +1697,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               <div className="space-y-4 pt-2">
                 <h4 className="text-xs font-700 uppercase tracking-widest text-primary flex items-center gap-2 border-b border-border/50 pb-2">
                   <Share2 className="w-4 h-4" />
-                  3. Redes Sociales eSports (Opcional)
+                  {t.userProfile.sectionSocials}
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1785,7 +1786,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
             {/* Footer Fijo */}
             <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border p-6 bg-surface z-10">
               <span className="text-xs text-muted-foreground">
-                Se enviará para revisión del Staff
+                {t.userProfile.staffReviewNotice}
               </span>
 
               <div className="flex items-center gap-3">
@@ -1793,7 +1794,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                   onClick={() => setIsEditingPlayer(false)}
                   className="rounded-md border border-border bg-transparent px-4 py-2 text-sm font-600 text-muted-foreground hover:text-white transition-colors cursor-pointer"
                 >
-                  Cancelar
+                  {t.userProfile.cancel}
                 </button>
                 <button
                   onClick={handleSavePlayer}
@@ -1807,7 +1808,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                 >
                   <span className="relative z-10 flex items-center gap-2">
                     <Save className="w-4 h-4" />
-                    {isSubmitting ? "Enviando..." : isPlayerModificationPending ? "Actualizar Solicitud" : "Solicitar Modificación"}
+                    {isSubmitting ? t.userProfile.submitting : isPlayerModificationPending ? t.userProfile.updateApplication : t.userProfile.requestModification}
                   </span>
                 </button>
               </div>
@@ -1829,10 +1830,10 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                 </div>
                 <div>
                   <h3 className="font-display text-lg font-700 uppercase tracking-tight text-white">
-                    Seguridad y Contraseña
+                    {t.userProfile.securityAndPass}
                   </h3>
                   <p className="text-xs text-muted-foreground">
-                    Gestiona la clave de acceso a tu cuenta
+                    {t.userProfile.manageAccessKey}
                   </p>
                 </div>
               </div>
@@ -1860,7 +1861,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                     : "text-muted-foreground hover:text-white"
                 )}
               >
-                Cambiar con Clave Actual
+                {t.userProfile.changeWithCurrentPass}
               </button>
               <button
                 type="button"
@@ -1876,7 +1877,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                     : "text-muted-foreground hover:text-white"
                 )}
               >
-                Recuperar por Correo
+                {t.userProfile.recoverByEmail}
               </button>
             </div>
 
@@ -1904,7 +1905,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                 <form onSubmit={handleChangePassword} className="space-y-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-600 uppercase tracking-wider text-muted-foreground block">
-                      Contraseña Actual (Antigua) <span className="text-primary">*</span>
+                      {t.userProfile.currentPassword} <span className="text-primary">*</span>
                     </label>
                     <div className="relative">
                       <input
@@ -1912,7 +1913,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                         value={currentPassword}
                         onChange={(e) => setCurrentPassword(e.target.value)}
                         required
-                        placeholder="Ingresa tu clave actual"
+                        placeholder={t.userProfile.enterCurrentPass}
                         className="w-full rounded-lg border border-border bg-background py-2.5 pl-3 pr-10 text-sm text-white placeholder:text-muted-foreground/60 transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                       <button
@@ -1927,7 +1928,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
 
                   <div className="space-y-1.5">
                     <label className="text-xs font-600 uppercase tracking-wider text-muted-foreground block">
-                      Nueva Contraseña <span className="text-primary">*</span>
+                      {t.userProfile.newPassword} <span className="text-primary">*</span>
                     </label>
                     <div className="relative">
                       <input
@@ -1935,7 +1936,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         required
-                        placeholder="Mínimo 6 caracteres"
+                        placeholder={t.userProfile.minChars}
                         className="w-full rounded-lg border border-border bg-background py-2.5 pl-3 pr-10 text-sm text-white placeholder:text-muted-foreground/60 transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                       <button
@@ -1950,7 +1951,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
 
                   <div className="space-y-1.5">
                     <label className="text-xs font-600 uppercase tracking-wider text-muted-foreground block">
-                      Confirmar Nueva Contraseña <span className="text-primary">*</span>
+                      {t.userProfile.confirmNewPassword} <span className="text-primary">*</span>
                     </label>
                     <div className="relative">
                       <input
@@ -1958,7 +1959,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         required
-                        placeholder="Repite la nueva contraseña"
+                        placeholder={t.userProfile.repeatNewPass}
                         className="w-full rounded-lg border border-border bg-background py-2.5 pl-3 pr-10 text-sm text-white placeholder:text-muted-foreground/60 transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                       <button
@@ -1977,7 +1978,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                       onClick={() => setShowPasswordModal(false)}
                       className="px-4 py-2 text-xs font-600 uppercase tracking-wider rounded-lg border border-border text-muted-foreground hover:text-white transition-colors cursor-pointer"
                     >
-                      Cancelar
+                      {t.userProfile.cancel}
                     </button>
                     <button
                       type="submit"
@@ -1987,12 +1988,12 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                       {isChangingPassword ? (
                         <>
                           <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Guardando...</span>
+                          <span>{t.userProfile.savingChanges}</span>
                         </>
                       ) : (
                         <>
                           <Check className="w-4 h-4" />
-                          <span>Guardar Contraseña</span>
+                          <span>{t.userProfile.savePass}</span>
                         </>
                       )}
                     </button>
@@ -2001,15 +2002,15 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               ) : (
                 <div className="space-y-4">
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Si olvidaste tu contraseña o deseas restablecerla de forma segura a través de tu email, te enviaremos un enlace a:
+                    {t.userProfile.emailResetNotice}
                   </p>
 
                   <div className="p-3.5 rounded-lg bg-background border border-border text-center">
-                    <span className="font-mono text-xs text-white font-semibold">{user?.email || 'Sin correo disponible'}</span>
+                    <span className="font-mono text-xs text-white font-semibold">{user?.email || t.userProfile.notAvailable}</span>
                   </div>
 
                   <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    Al hacer clic en el botón, recibirás un correo oficial de GMX Gaming con las instrucciones de acceso para definir una nueva contraseña.
+                    {t.userProfile.emailResetNoticeSub}
                   </p>
 
                   <div className="pt-2 flex items-center justify-end gap-3">
@@ -2018,7 +2019,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                       onClick={() => setShowPasswordModal(false)}
                       className="px-4 py-2 text-xs font-600 uppercase tracking-wider rounded-lg border border-border text-muted-foreground hover:text-white transition-colors cursor-pointer"
                     >
-                      Cerrar
+                      {t.userProfile.close}
                     </button>
                     <button
                       type="button"
@@ -2029,12 +2030,12 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                       {isSendingResetEmail ? (
                         <>
                           <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Enviando...</span>
+                          <span>{t.userProfile.submitting}</span>
                         </>
                       ) : (
                         <>
                           <Mail className="w-4 h-4" />
-                          <span>Enviar Enlace por Correo</span>
+                          <span>{t.userProfile.sendResetLink}</span>
                         </>
                       )}
                     </button>

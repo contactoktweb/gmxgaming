@@ -9,6 +9,7 @@ import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
 import { cn, formatNickname, formatPersonName } from '@/lib/utils'
 import { toast } from 'sonner'
+import { useLanguage } from '@/lib/language-context'
 
 function FieldTooltip({ text }: { text: string }) {
   return (
@@ -33,6 +34,7 @@ export function AltaEquipoForm() {
   const [formStatus, setFormStatus] = useState<'idle' | 'loading' | 'success'>('idle')
   const { user } = useAuth()
   const supabase = createClient()
+  const { t } = useLanguage()
   const [countries, setCountries] = useState<string[]>(DEFAULT_COUNTRIES)
   const [games, setGames] = useState<{name: string, image: string}[]>([
     { name: 'Mobile Legends', image: '/images/mlbb-logo.png' }
@@ -538,7 +540,7 @@ export function AltaEquipoForm() {
         </div>
         <div>
           <h2 className="font-display text-2xl sm:text-3xl font-700 uppercase tracking-tight text-white">
-            Iniciar Sesión Requerido
+            {t.auth.loginTitle}
           </h2>
           <p className="mt-3 text-muted-foreground text-sm max-w-md mx-auto leading-relaxed">
             {blockMessage}
@@ -546,7 +548,7 @@ export function AltaEquipoForm() {
         </div>
         <div className="pt-2 flex justify-center">
           <GmxButton href="/login" className="px-8">
-            INICIAR SESIÓN
+            {t.auth.loginTitle}
           </GmxButton>
         </div>
       </div>
@@ -564,26 +566,26 @@ export function AltaEquipoForm() {
         </div>
         <div>
           <h2 className="font-display text-2xl sm:text-3xl font-700 uppercase tracking-tight text-white">
-            {isPending ? 'Solicitud de Equipo en Revisión' : 'Ya Tienes un Equipo Registrado'}
+            {isPending ? t.altaJugador.pendingTitle : t.altaEquipo.formTitle}
           </h2>
           <p className="mt-3 text-muted-foreground text-sm max-w-md mx-auto leading-relaxed">
             {isPending ? (
               <>
-                Tu solicitud de registro para el equipo <span className="font-600 text-white">&quot;{existingTeamInfo.teamName}&quot;</span> ya se encuentra en proceso de revisión por los administradores de GMX Gaming.
+                {t.altaJugador.pendingDesc} &quot;{existingTeamInfo.teamName}&quot;
               </>
             ) : (
               <>
-                Ya eres el manager de <span className="font-600 text-white">&quot;{existingTeamInfo.teamName}&quot;</span>. Puedes gestionar tus jugadores, contratos y detalles desde tu panel en Mi Cuenta.
+                {t.altaEquipo.goToAccount} &quot;{existingTeamInfo.teamName}&quot;
               </>
             )}
           </p>
         </div>
         <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-4">
           <GmxButton href="/micuenta" className="w-full sm:w-auto px-8">
-            IR A MI CUENTA
+            {t.altaEquipo.goToAccount}
           </GmxButton>
           <GmxButton href="/" variant="secondary" className="w-full sm:w-auto px-8">
-            VOLVER AL INICIO
+            {t.altaEquipo.backToHome}
           </GmxButton>
         </div>
       </div>
@@ -597,17 +599,17 @@ export function AltaEquipoForm() {
           <CheckCircle2 className="h-10 w-10 text-emerald-500" />
         </div>
         <h2 className="font-display text-3xl font-700 uppercase tracking-tight text-white mb-3">
-          REGISTRO ENVIADO EXITOSAMENTE
+          {t.altaEquipo.successTitle}
         </h2>
         <p className="text-muted-foreground text-center max-w-md mx-auto mb-8 leading-relaxed">
-          Tu información ha sido recibida correctamente. Nuestro equipo revisará la solicitud de tu equipo y se pondrá en contacto contigo a través de Discord o correo electrónico.
+          {t.altaEquipo.successDesc}
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <GmxButton href="/micuenta" className="w-full sm:w-auto px-8">
-            IR A MI CUENTA
+            {t.altaEquipo.goToAccount}
           </GmxButton>
           <GmxButton href="/" variant="secondary" className="w-full sm:w-auto px-8">
-            VOLVER AL INICIO
+            {t.altaEquipo.backToHome}
           </GmxButton>
         </div>
       </div>
@@ -623,32 +625,32 @@ export function AltaEquipoForm() {
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-surface/95 backdrop-blur-sm animate-in fade-in duration-300">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
           <p className="mt-4 font-display text-lg font-600 uppercase tracking-widest text-white">
-            ENVIANDO REGISTRO...
+            {t.altaEquipo.submitting}
           </p>
         </div>
       )}
 
       <div className="text-center">
         <h2 className="font-display text-4xl font-700 uppercase tracking-tight text-white sm:text-5xl">
-          ALTA DE EQUIPO
+          {t.altaEquipo.formTitle}
         </h2>
         <p className="mt-3 text-muted-foreground">
-          Registra a tu equipo en la plataforma oficial de GMX Gaming.
+          {t.altaEquipo.formSubtitle}
         </p>
       </div>
 
-      {/* Section 1: DATOS DEL EQUIPO */}
+      {/* Section 1: TEAM DATA */}
       <div className="space-y-6">
         <div className="border-b border-border pb-3">
           <h3 className="font-display text-xl font-600 uppercase tracking-widest text-primary">
-            DATOS DEL EQUIPO
+            {t.altaEquipo.sectionTeam}
           </h3>
         </div>
 
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           <div className="space-y-2">
             <label htmlFor="field_5d5a2" className="text-sm font-500 text-white">
-              Nombre del Equipo <span className="text-primary">*</span>
+              {t.altaEquipo.teamName} <span className="text-primary">*</span>
               <FieldTooltip text="Ej: GMX GAMING. Solo mayúsculas, sin caracteres especiales." />
             </label>
             <input
@@ -674,7 +676,7 @@ export function AltaEquipoForm() {
 
           <div className="space-y-2">
             <label htmlFor="item_meta_tag" className="text-sm font-500 text-white">
-              Tag del Equipo <span className="text-primary">*</span>
+              {t.altaEquipo.teamTag} <span className="text-primary">*</span>
               <FieldTooltip text="Las siglas que abrevian el nombre. Ej: GMX" />
             </label>
             <input
@@ -699,7 +701,7 @@ export function AltaEquipoForm() {
 
           <div className="space-y-2">
             <label htmlFor="item_meta_hashtag" className="text-sm font-500 text-white">
-              Hashtag del Equipo <span className="text-primary">*</span>
+              {t.altaEquipo.teamHashtag} <span className="text-primary">*</span>
               <FieldTooltip text="Una frase que representa al equipo. Ej: #GMXWIN" />
             </label>
             <input
@@ -714,7 +716,7 @@ export function AltaEquipoForm() {
 
           <div className="space-y-2">
             <label htmlFor="field_s3a0m2" className="text-sm font-500 text-white">
-              País del Equipo <span className="text-primary">*</span>
+              {t.altaEquipo.country} <span className="text-primary">*</span>
               <FieldTooltip text="País principal al que representa el equipo." />
             </label>
             <div className="relative">
@@ -725,7 +727,7 @@ export function AltaEquipoForm() {
                 defaultValue=""
                 className="w-full appearance-none rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               >
-                <option value="" disabled>Selecciona un país</option>
+                <option value="" disabled>{t.altaEquipo.countryPlaceholder}</option>
                 {countries.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-muted-foreground">
@@ -738,7 +740,7 @@ export function AltaEquipoForm() {
 
           <div className="space-y-2">
             <label className="text-sm font-500 text-white">
-              Tipo de Equipo <span className="text-primary">*</span>
+              {t.altaEquipo.gender} <span className="text-primary">*</span>
               <FieldTooltip text="Categoría competitiva del equipo." />
             </label>
             <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-md border border-border bg-background px-4 py-3">
@@ -750,7 +752,7 @@ export function AltaEquipoForm() {
                   required
                   className="h-4 w-4 shrink-0 border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
                 />
-                Varonil / Mixto
+                {t.altaEquipo.genderMixed}
               </label>
               <label className="flex cursor-pointer items-center gap-2 text-sm text-white transition-colors hover:text-primary">
                 <input
@@ -760,7 +762,7 @@ export function AltaEquipoForm() {
                   required
                   className="h-4 w-4 shrink-0 border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
                 />
-                Femenil
+                {t.altaEquipo.genderFemale}
               </label>
             </div>
           </div>
@@ -769,7 +771,7 @@ export function AltaEquipoForm() {
         <div className="grid gap-6 sm:grid-cols-2">
           <div className="space-y-2">
             <label className="text-sm font-500 text-white">
-              Logo del Equipo <span className="text-primary">*</span>
+              {t.altaEquipo.logo} <span className="text-primary">*</span>
               <FieldTooltip text="Formatos permitidos: PNG, JPG. Máximo 1 archivo." />
             </label>
             <FileUpload name="item_meta[624]" required accept="image/jpeg,image/png,.jpg,.jpeg,.png" onFileSelect={setLogoFile} />
@@ -777,7 +779,7 @@ export function AltaEquipoForm() {
 
           <div className="space-y-2">
             <label className="text-sm font-500 text-white">
-              Jersey del Equipo (Opcional)
+              {t.altaEquipo.jersey}
               <FieldTooltip text="Imagen del uniforme del equipo. Format: PNG, JPG." />
             </label>
             <FileUpload name="item_meta_jersey" accept="image/jpeg,image/png,.jpg,.jpeg,.png" onFileSelect={setJerseyFile} />
@@ -787,7 +789,7 @@ export function AltaEquipoForm() {
         {games.length > 1 ? (
           <div className="space-y-4 pt-4">
             <label className="text-sm font-500 text-white">
-              Juegos en los que participa su Equipo <span className="text-primary">*</span>
+              {t.altaEquipo.teamGames} <span className="text-primary">*</span>
               <FieldTooltip text="Debe seleccionar al menos un juego de la lista." />
             </label>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -828,7 +830,7 @@ export function AltaEquipoForm() {
         {/* Redes Sociales */}
         <div className="space-y-4 pt-4">
           <label className="text-sm font-500 text-white">
-            Redes Sociales del Equipo
+            {t.altaEquipo.sectionSocial}
             <FieldTooltip text="Pega los enlaces completos (Ej: https://instagram.com/tu-equipo). Déjalo vacío si no aplica." />
           </label>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -847,18 +849,18 @@ export function AltaEquipoForm() {
         </div>
       </div>
 
-      {/* Section 2: DATOS DEL GERENTE */}
+      {/* Section 2: MANAGER DATA */}
       <div className="space-y-6 pt-6">
         <div className="border-b border-border pb-3">
           <h3 className="font-display text-xl font-600 uppercase tracking-widest text-primary">
-            DATOS DEL GERENTE GENERAL, MANAGER, LÍDER O REPRESENTANTE
+            {t.altaEquipo.sectionManager}
           </h3>
         </div>
 
         <div className="grid gap-6 sm:grid-cols-2">
           <div className="space-y-2">
             <label htmlFor="field_p8e5q2_first" className="text-sm font-500 text-white">
-              Nombre(s) <span className="text-primary">*</span>
+              {t.altaEquipo.managerName} <span className="text-primary">*</span>
             </label>
             <input
               type="text"
@@ -871,12 +873,12 @@ export function AltaEquipoForm() {
               placeholder="EJ. JUAN CARLOS"
               className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary uppercase"
             />
-            <p className="text-[11px] text-muted-foreground">Solo letras en mayúsculas, sin números ni caracteres especiales.</p>
+            <p className="text-[11px] text-muted-foreground">{t.altaJugador.uppercaseHint}</p>
           </div>
 
           <div className="space-y-2">
             <label htmlFor="field_p8e5q2_last" className="text-sm font-500 text-white">
-              Apellidos <span className="text-primary">*</span>
+              {t.altaEquipo.managerLastName} <span className="text-primary">*</span>
             </label>
             <input
               type="text"
@@ -889,12 +891,12 @@ export function AltaEquipoForm() {
               placeholder="EJ. PEREZ GOMEZ"
               className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary uppercase"
             />
-            <p className="text-[11px] text-muted-foreground">Solo letras en mayúsculas, sin números ni caracteres especiales.</p>
+            <p className="text-[11px] text-muted-foreground">{t.altaJugador.uppercaseHint}</p>
           </div>
 
           <div className="space-y-2">
             <label htmlFor="field_xi2ck2" className="text-sm font-500 text-white">
-              Nickname <span className="text-primary">*</span>
+              {t.altaEquipo.managerNickname} <span className="text-primary">*</span>
               <FieldTooltip text="Seudónimo o nombre en el juego del Manager. En mayúsculas y sin caracteres especiales." />
             </label>
             <input
@@ -907,12 +909,12 @@ export function AltaEquipoForm() {
               placeholder="EJ. MORDON99"
               className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary uppercase"
             />
-            <p className="text-[11px] text-muted-foreground">En mayúsculas, sin caracteres especiales.</p>
+            <p className="text-[11px] text-muted-foreground">{t.altaJugador.nicknameHint}</p>
           </div>
 
           <div className="space-y-2">
             <label htmlFor="field_j8tvb2" className="text-sm font-500 text-white">
-              Handle de Discord <span className="text-primary">*</span>
+              {t.altaEquipo.managerDiscord} <span className="text-primary">*</span>
               <FieldTooltip text="Usuario de Discord actual (sin el #, ej: mordongmx)." />
             </label>
             <input
@@ -927,14 +929,14 @@ export function AltaEquipoForm() {
 
           <div className="space-y-2">
             <label htmlFor="field_4qz1w2" className="text-sm font-500 text-white">
-              WhatsApp <span className="text-primary">*</span>
+              {t.altaEquipo.managerPhone} <span className="text-primary">*</span>
             </label>
             <PhoneInput id="field_4qz1w2" name="item_meta[628]" required />
           </div>
 
           <div className="space-y-2">
             <label htmlFor="field_dz2202" className="text-sm font-500 text-white">
-              Correo Electrónico <span className="text-primary">*</span>
+              {t.altaEquipo.managerEmail} <span className="text-primary">*</span>
             </label>
             <input
               type="email"
@@ -947,7 +949,7 @@ export function AltaEquipoForm() {
               className="w-full rounded-md border border-border bg-background px-4 py-3 text-white transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
             />
             {user?.email && (
-              <p className="text-xs text-muted-foreground mt-1">Este es el correo asociado a tu cuenta.</p>
+              <p className="text-xs text-muted-foreground mt-1">{t.altaEquipo.emailAssociated}</p>
             )}
           </div>
         </div>
@@ -957,14 +959,14 @@ export function AltaEquipoForm() {
       <div className="space-y-6 pt-6">
         <div className="border-b border-border pb-3">
           <h3 className="font-display text-xl font-600 uppercase tracking-widest text-primary">
-            ACUERDO DE EXCLUSIVIDAD Y REGLAMENTO
+            {t.altaEquipo.exclusivitySection}
           </h3>
         </div>
 
         <div className="rounded-lg border border-border bg-background p-6 space-y-6">
           <div>
             <p className="mb-4 text-sm text-white">
-              Antes de Registrar a tu Equipo, o a ti mismo como Jugador Competitivo, asegúrate de leer los siguientes documentos:
+              {t.altaEquipo.exclusivityIntro}
             </p>
             <ul className="mb-6 list-inside list-disc space-y-2 text-sm">
               <li>
@@ -974,7 +976,7 @@ export function AltaEquipoForm() {
                   rel="noreferrer"
                   className="text-[#ffff00] hover:underline"
                 >
-                  Acuerdo de Exclusividad con GMX Gaming
+                  {t.altaEquipo.exclusivityAgreementLink}
                 </a>
               </li>
               <li>
@@ -984,7 +986,7 @@ export function AltaEquipoForm() {
                   rel="noreferrer"
                   className="text-[#ffff00] hover:underline"
                 >
-                  Reglamento General Vigente del Competitivo Varonil, Mixto y Femenil de GMX Gaming
+                  {t.altaEquipo.rulesLink}
                 </a>
               </li>
             </ul>
@@ -1001,7 +1003,7 @@ export function AltaEquipoForm() {
                 />
               </div>
               <span>
-                Confirmo que he leído y estoy de acuerdo con los Términos y Condiciones del Acuerdo de Exclusividad de GMX Gaming, así como el Reglamento General Vigente. <span className="text-primary">*</span>
+                {t.altaEquipo.confirmTerms} <span className="text-primary">*</span>
               </span>
             </label>
 
@@ -1015,7 +1017,7 @@ export function AltaEquipoForm() {
                 />
               </div>
               <span>
-                Confirmo que soy mayor de edad según las leyes de mi país de residencia. <span className="text-primary">*</span>
+                {t.altaEquipo.confirmAge} <span className="text-primary">*</span>
               </span>
             </label>
 
@@ -1029,7 +1031,7 @@ export function AltaEquipoForm() {
                 />
               </div>
               <span>
-                Declaro bajo protesta de decir verdad que toda la información proporcionada en este formulario es verídica y correcta. <span className="text-primary">*</span>
+                {t.altaEquipo.confirmTruth} <span className="text-primary">*</span>
               </span>
             </label>
           </div>
@@ -1046,10 +1048,10 @@ export function AltaEquipoForm() {
             {formStatus === 'loading' ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />
-                ENVIANDO REGISTRO...
+                {t.altaEquipo.submitting}
               </>
             ) : (
-              'ENVIAR REGISTRO'
+              t.altaEquipo.submit
             )}
           </span>
         </button>

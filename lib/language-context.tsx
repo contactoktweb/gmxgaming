@@ -3,13 +3,24 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
 import { translations, type Language } from './i18n/translations'
 
+type DeepWidened<T> = T extends (...args: any[]) => any
+  ? T
+  : T extends readonly (infer U)[]
+  ? readonly DeepWidened<U>[]
+  : T extends object
+  ? { readonly [K in keyof T]: DeepWidened<T[K]> }
+  : string
+
+export type TranslationDictionary = DeepWidened<(typeof translations)['es']>
+export type TranslationFunction = ((path: string, fallback?: string) => string) & TranslationDictionary
+
 interface LanguageContextType {
   lang: Language
   setLang: (lang: Language) => void
   setLanguage: (lang: Language) => void
   toggleLang: () => void
-  t: (key: string, fallback?: string) => string
-  d: (typeof translations)['es'] | (typeof translations)['en']
+  t: TranslationFunction
+  d: TranslationDictionary
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined)
@@ -61,34 +72,38 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const currentDict = useMemo(() => {
-    return translations[lang] || translations.es
+    return (translations[lang] || translations.es) as TranslationDictionary
   }, [lang])
 
-  // Helper function to resolve dot-notated paths e.g. "hero.welcomeBadge"
-  const t = useCallback((path: string, fallback?: string): string => {
-    const keys = path.split('.')
-    let current: any = translations[lang] || translations.es
+  // Helper function to resolve dot-notated paths e.g. "hero.welcomeBadge" or direct property access
+  const t = useMemo(() => {
+    const fn = (path: string, fallback?: string): string => {
+      const keys = path.split('.')
+      let current: any = translations[lang] || translations.es
 
-    for (const key of keys) {
-      if (current && typeof current === 'object' && key in current) {
-        current = current[key]
-      } else {
-        // Fallback to Spanish dictionary if not found in current language
-        let fallbackCurrent: any = translations.es
-        for (const fbKey of keys) {
-          if (fallbackCurrent && typeof fallbackCurrent === 'object' && fbKey in fallbackCurrent) {
-            fallbackCurrent = fallbackCurrent[fbKey]
-          } else {
-            fallbackCurrent = undefined
-            break
+      for (const key of keys) {
+        if (current && typeof current === 'object' && key in current) {
+          current = current[key]
+        } else {
+          // Fallback to Spanish dictionary if not found in current language
+          let fallbackCurrent: any = translations.es
+          for (const fbKey of keys) {
+            if (fallbackCurrent && typeof fallbackCurrent === 'object' && fbKey in fallbackCurrent) {
+              fallbackCurrent = fallbackCurrent[fbKey]
+            } else {
+              fallbackCurrent = undefined
+              break
+            }
           }
+          return typeof fallbackCurrent === 'string' ? fallbackCurrent : (fallback || path)
         }
-        return typeof fallbackCurrent === 'string' ? fallbackCurrent : (fallback || path)
       }
+
+      return typeof current === 'string' ? current : (fallback || path)
     }
 
-    return typeof current === 'string' ? current : (fallback || path)
-  }, [lang])
+    return Object.assign(fn, currentDict) as unknown as TranslationFunction
+  }, [lang, currentDict])
 
   const contextValue = useMemo(() => ({
     lang,

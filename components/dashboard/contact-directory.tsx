@@ -1,18 +1,22 @@
 'use client'
 
+import { useMemo } from 'react'
 import { MapPin, User, MessageCircle, Gamepad2, Mic, Users, ExternalLink } from 'lucide-react'
+import { useLanguage } from '@/lib/language-context'
 
 export function ContactDirectory() {
-  const DIRECTORY_DATA = [
+  const { t } = useLanguage()
+
+  const DIRECTORY_DATA = useMemo(() => [
     {
       id: 'ligas',
-      title: 'Información de Ligas, Torneos y Eventos',
+      title: t.contactDirectory.leaguesTitle,
       icon: <Gamepad2 className="h-6 w-6 text-primary" />,
       items: [
-        { label: 'PAÍS', value: 'Todos los Países', icon: <MapPin className="h-4 w-4" /> },
-        { label: 'RESPONSABLE', value: 'Mordon', icon: <User className="h-4 w-4" /> },
+        { label: t.contactDirectory.countryLabel, value: t.contactDirectory.allCountries, icon: <MapPin className="h-4 w-4" /> },
+        { label: t.contactDirectory.responsibleLabel, value: 'Mordon', icon: <User className="h-4 w-4" /> },
         { 
-          label: 'MEDIO DE CONTACTO', 
+          label: t.contactDirectory.contactMethodLabel, 
           value: 'Discord', 
           link: 'http://discordapp.com/users/510623536843587605',
           contactId: 'mordongmx',
@@ -22,12 +26,12 @@ export function ContactDirectory() {
     },
     {
       id: 'caster',
-      title: 'Información para ser Caster de GMX Gaming',
+      title: t.contactDirectory.casterTitle,
       icon: <Mic className="h-6 w-6 text-primary" />,
       items: [
-        { label: 'RESPONSABLE', value: 'Beba', icon: <User className="h-4 w-4" /> },
+        { label: t.contactDirectory.responsibleLabel, value: 'Beba', icon: <User className="h-4 w-4" /> },
         { 
-          label: 'MEDIO DE CONTACTO', 
+          label: t.contactDirectory.contactMethodLabel, 
           value: 'Discord', 
           link: 'http://discordapp.com/users/895824911749234748',
           contactId: 'kepler3',
@@ -37,13 +41,13 @@ export function ContactDirectory() {
     },
     {
       id: 'equipos',
-      title: 'Información de Equipos Profesionales',
+      title: t.contactDirectory.teamsTitle,
       icon: <Users className="h-6 w-6 text-primary" />,
       items: [
-        { label: 'EQUIPO', value: 'GMX Gaming', icon: <Users className="h-4 w-4" /> },
-        { label: 'RESPONSABLE', value: 'Mordon', icon: <User className="h-4 w-4" /> },
+        { label: t.contactDirectory.teamLabel, value: 'GMX Gaming', icon: <Users className="h-4 w-4" /> },
+        { label: t.contactDirectory.responsibleLabel, value: 'Mordon', icon: <User className="h-4 w-4" /> },
         { 
-          label: 'MEDIO DE CONTACTO', 
+          label: t.contactDirectory.contactMethodLabel, 
           value: 'Discord', 
           link: 'http://discordapp.com/users/510623536843587605',
           contactId: 'mordongmx',
@@ -51,16 +55,16 @@ export function ContactDirectory() {
         },
       ]
     }
-  ]
+  ], [t])
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-col gap-2">
         <h2 className="font-display text-2xl font-700 uppercase tracking-tight text-white">
-          Directorio de Contacto
+          {t.contactDirectory.title}
         </h2>
         <p className="text-muted-foreground">
-          Encuentra a los responsables de cada área dentro de GMX Gaming.
+          {t.contactDirectory.subtitle}
         </p>
       </div>
 

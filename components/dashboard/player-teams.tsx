@@ -9,6 +9,7 @@ import { toast } from 'sonner'
 import { GmxButton } from '@/components/gmx-button'
 import { cn, formatRoleTitle, formatRolesList, getTeamSlug } from '@/lib/utils'
 import { EditTeamModal } from '@/components/dashboard/edit-team-modal'
+import { useLanguage } from '@/lib/language-context'
 
 const DEFAULT_COUNTRIES = [
   "Argentina", "Bolivia", "Chile", "Colombia", "Costa Rica", "Cuba", 
@@ -33,6 +34,7 @@ export function PlayerTeams() {
   const [processingContractId, setProcessingContractId] = useState<string | null>(null)
 
   const supabase = createClient()
+  const { t } = useLanguage()
 
   useEffect(() => {
     async function fetchTeams() {
@@ -179,42 +181,42 @@ export function PlayerTeams() {
   }
 
   const handleApproveContract = async (contractId: string) => {
-    toast.loading('Aprobando contrato...', { id: 'contract-action' })
+    toast.loading(t.playerTeams.approvingContract, { id: 'contract-action' })
     const { error } = await supabase
       .from('contracts')
       .update({ status: 'active', start_date: new Date().toISOString() })
       .eq('id', contractId)
 
     if (!error) {
-      toast.success('Contrato Aprobado', { 
+      toast.success(t.playerTeams.contractApproved, { 
         id: 'contract-action',
-        description: 'El jugador ha sido incorporado al roster del equipo.' 
+        description: t.playerTeams.contractApprovedDesc 
       })
       setTeamContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'active' } : c))
     } else {
-      toast.error('Error al aprobar contrato', { id: 'contract-action' })
+      toast.error(t.playerTeams.contractApproveError, { id: 'contract-action' })
     }
   }
 
   const handleRejectContract = async (contractId: string) => {
-    toast.loading('Rechazando contrato...', { id: 'contract-action' })
+    toast.loading(t.playerTeams.rejectingContract, { id: 'contract-action' })
     const { error } = await supabase
       .from('contracts')
       .update({ status: 'rejected' })
       .eq('id', contractId)
 
     if (!error) {
-      toast.success('Contrato Rechazado', { id: 'contract-action' })
+      toast.success(t.playerTeams.contractRejected, { id: 'contract-action' })
       setTeamContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'rejected' } : c))
     } else {
-      toast.error('Error al rechazar contrato', { id: 'contract-action' })
+      toast.error(t.playerTeams.contractRejectError, { id: 'contract-action' })
     }
   }
 
   // Manager acepta baja solicitada por el jugador
   const handleManagerApprovePlayerRelease = async (contractId: string, playerName: string) => {
     setProcessingContractId(contractId)
-    toast.loading('Aceptando baja del jugador...', { id: 'manager-release' })
+    toast.loading(t.playerTeams.acceptingPlayerRelease, { id: 'manager-release' })
     const { error } = await supabase
       .from('contracts')
       .update({
@@ -224,13 +226,13 @@ export function PlayerTeams() {
       .eq('id', contractId)
 
     if (!error) {
-      toast.success('Baja Aceptada', {
+      toast.success(t.playerTeams.releaseAccepted, {
         id: 'manager-release',
-        description: `Se aceptó la baja de ${playerName}. Su contrato ha finalizado.`
+        description: t.playerTeams.releaseAcceptedDesc.replace('{name}', playerName)
       })
       setTeamContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'completado', conclusion_date: new Date().toISOString() } : c))
     } else {
-      toast.error('Error al aceptar la baja: ' + error.message, { id: 'manager-release' })
+      toast.error(t.playerTeams.releaseAcceptError.replace('{error}', error.message), { id: 'manager-release' })
     }
     setProcessingContractId(null)
   }
@@ -238,20 +240,20 @@ export function PlayerTeams() {
   // Manager rechaza baja solicitada por el jugador
   const handleManagerRejectPlayerRelease = async (contractId: string, playerName: string) => {
     setProcessingContractId(contractId)
-    toast.loading('Rechazando baja...', { id: 'manager-release' })
+    toast.loading(t.playerTeams.rejectingRelease, { id: 'manager-release' })
     const { error } = await supabase
       .from('contracts')
       .update({ status: 'active' })
       .eq('id', contractId)
 
     if (!error) {
-      toast.success('Baja Rechazada', {
+      toast.success(t.playerTeams.releaseRejected, {
         id: 'manager-release',
-        description: `Se rechazó la solicitud de baja de ${playerName}. El contrato se mantiene activo.`
+        description: t.playerTeams.releaseRejectedDesc.replace('{name}', playerName)
       })
       setTeamContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'active' } : c))
     } else {
-      toast.error('Error al rechazar la baja: ' + error.message, { id: 'manager-release' })
+      toast.error(t.playerTeams.releaseRejectError.replace('{error}', error.message), { id: 'manager-release' })
     }
     setProcessingContractId(null)
   }
@@ -260,7 +262,7 @@ export function PlayerTeams() {
   const handlePlayerAcceptTermination = async (contract: any) => {
     if (!contract) return
     setProcessingContractId(contract.id)
-    toast.loading('Aceptando baja del equipo...', { id: 'player-release' })
+    toast.loading(t.playerTeams.acceptingTeamRelease, { id: 'player-release' })
 
     const { error } = await supabase
       .from('contracts')
@@ -271,14 +273,14 @@ export function PlayerTeams() {
       .eq('id', contract.id)
 
     if (!error) {
-      toast.success('Baja Aceptada', {
+      toast.success(t.playerTeams.releaseAccepted, {
         id: 'player-release',
-        description: `Has aceptado la baja de ${contract.teams?.name || 'tu equipo'}. Tu cupo en esa división ha quedado liberado.`
+        description: t.playerTeams.teamReleaseAcceptedDesc.replace('{team}', contract.teams?.name || '')
       })
       setPastTeams(prev => [{ ...contract, status: 'completado', conclusion_date: new Date().toISOString() }, ...prev])
       setActiveTeams(prev => prev.filter(c => c.id !== contract.id))
     } else {
-      toast.error('Error al aceptar la baja: ' + error.message, { id: 'player-release' })
+      toast.error(t.playerTeams.releaseAcceptError.replace('{error}', error.message), { id: 'player-release' })
     }
     setProcessingContractId(null)
   }
@@ -287,7 +289,7 @@ export function PlayerTeams() {
   const handlePlayerRejectTermination = async (contract: any) => {
     if (!contract) return
     setProcessingContractId(contract.id)
-    toast.loading('Rechazando baja...', { id: 'player-release' })
+    toast.loading(t.playerTeams.rejectingRelease, { id: 'player-release' })
 
     const { error } = await supabase
       .from('contracts')
@@ -295,13 +297,13 @@ export function PlayerTeams() {
       .eq('id', contract.id)
 
     if (!error) {
-      toast.success('Baja Rechazada', {
+      toast.success(t.playerTeams.releaseRejected, {
         id: 'player-release',
-        description: 'Has rechazado la solicitud de baja. Tu contrato continúa activo.'
+        description: t.playerTeams.playerRejectReleaseDesc
       })
       setActiveTeams(prev => prev.map(c => c.id === contract.id ? { ...c, status: 'active' } : c))
     } else {
-      toast.error('Error al rechazar la baja: ' + error.message, { id: 'player-release' })
+      toast.error(t.playerTeams.releaseRejectError.replace('{error}', error.message), { id: 'player-release' })
     }
     setProcessingContractId(null)
   }
@@ -310,7 +312,7 @@ export function PlayerTeams() {
   const handlePlayerRequestLeave = async () => {
     if (!teamToLeave) return
     setProcessingContractId(teamToLeave.id)
-    toast.loading('Enviando solicitud de baja...', { id: 'player-leave' })
+    toast.loading(t.playerTeams.sendingLeaveRequest, { id: 'player-leave' })
 
     const { error } = await supabase
       .from('contracts')
@@ -318,15 +320,15 @@ export function PlayerTeams() {
       .eq('id', teamToLeave.id)
 
     if (!error) {
-      toast.success('Solicitud Enviada', {
+      toast.success(t.playerTeams.leaveRequestSent, {
         id: 'player-leave',
-        description: `Se notificó al manager de ${teamToLeave.teams?.name || 'equipo'}. En espera de su aprobación.`
+        description: t.playerTeams.leaveRequestSentDesc.replace('{team}', teamToLeave.teams?.name || '')
       })
       setActiveTeams(prev => prev.map(c => c.id === teamToLeave.id ? { ...c, status: 'pending_manager_release' } : c))
       setRequestingLeave(false)
       setTeamToLeave(null)
     } else {
-      toast.error('Error al solicitar la baja: ' + error.message, { id: 'player-leave' })
+      toast.error(t.playerTeams.leaveRequestError.replace('{error}', error.message), { id: 'player-leave' })
     }
     setProcessingContractId(null)
   }
@@ -335,7 +337,7 @@ export function PlayerTeams() {
   const handlePlayerCancelLeave = async (contract: any) => {
     if (!contract) return
     setProcessingContractId(contract.id)
-    toast.loading('Cancelando solicitud...', { id: 'cancel-leave' })
+    toast.loading(t.playerTeams.cancellingRequest, { id: 'cancel-leave' })
 
     const { error } = await supabase
       .from('contracts')
@@ -343,13 +345,13 @@ export function PlayerTeams() {
       .eq('id', contract.id)
 
     if (!error) {
-      toast.success('Solicitud Cancelada', {
+      toast.success(t.playerTeams.requestCancelled, {
         id: 'cancel-leave',
-        description: 'Tu solicitud de baja fue cancelada. Tu contrato continúa activo.'
+        description: t.playerTeams.requestCancelledDesc
       })
       setActiveTeams(prev => prev.map(c => c.id === contract.id ? { ...c, status: 'active' } : c))
     } else {
-      toast.error('Error al cancelar la solicitud: ' + error.message, { id: 'cancel-leave' })
+      toast.error(t.playerTeams.cancelRequestError.replace('{error}', error.message), { id: 'cancel-leave' })
     }
     setProcessingContractId(null)
   }
@@ -367,7 +369,7 @@ export function PlayerTeams() {
   )
 
   if (loading) {
-    return <div className="p-8 text-center text-muted-foreground animate-pulse">Cargando equipos...</div>
+    return <div className="p-8 text-center text-muted-foreground animate-pulse">{t.playerTeams.loading}</div>
   }
 
   return (
@@ -379,10 +381,10 @@ export function PlayerTeams() {
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-display text-2xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
               <Clock className="h-6 w-6 text-amber-400" />
-              Solicitudes de Contrato Pendientes ({pendingContractRequests.length})
+              {t.playerTeams.pendingContracts.replace('{n}', pendingContractRequests.length.toString())}
             </h3>
             <span className="px-3 py-1 rounded-full text-xs font-700 uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20">
-              Requiere Tu Aprobación
+              {t.playerTeams.requiresApproval}
             </span>
           </div>
 
@@ -408,7 +410,7 @@ export function PlayerTeams() {
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Equipo: <strong className="text-white">{contract.teams?.name}</strong>
+                        {t.playerTeams.team}: <strong className="text-white">{contract.teams?.name}</strong>
                       </p>
                       <div className="flex flex-wrap gap-1 mt-2">
                         {Array.isArray(contract.roles) ? (
@@ -428,7 +430,7 @@ export function PlayerTeams() {
 
                   <div className="pt-3 border-t border-border flex items-center justify-between gap-3 text-xs">
                     <span className="text-muted-foreground">
-                      Vence: <strong className="text-white">{contract.end_date ? new Date(contract.end_date).toLocaleDateString() : 'Indefinido'}</strong>
+                      {t.playerTeams.expires}: <strong className="text-white">{contract.end_date ? new Date(contract.end_date).toLocaleDateString() : t.playerTeams.indefinite}</strong>
                     </span>
 
                     <div className="flex items-center gap-2">
@@ -436,14 +438,14 @@ export function PlayerTeams() {
                         onClick={() => handleRejectContract(contract.id)}
                         className="px-3 py-1.5 rounded bg-red-500/10 hover:bg-red-500 hover:text-white text-red-400 border border-red-500/20 font-600 uppercase text-[11px] tracking-wider transition-colors"
                       >
-                        Rechazar
+                        {t.playerTeams.reject}
                       </button>
                       <button
                         onClick={() => handleApproveContract(contract.id)}
                         className="px-4 py-1.5 rounded bg-emerald-500/20 hover:bg-emerald-500 hover:text-white text-emerald-400 border border-emerald-500/30 font-600 uppercase text-[11px] tracking-wider transition-colors flex items-center gap-1"
                       >
                         <Check className="w-3.5 h-3.5" />
-                        Aprobar
+                        {t.playerTeams.approve}
                       </button>
                     </div>
                   </div>
@@ -460,15 +462,15 @@ export function PlayerTeams() {
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-display text-2xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
               <UserX className="h-6 w-6 text-red-400" />
-              Solicitudes de Baja por Jugadores ({pendingPlayerReleases.length})
+              {t.playerTeams.playerReleaseRequests.replace('{n}', pendingPlayerReleases.length.toString())}
             </h3>
             <span className="px-3 py-1 rounded-full text-xs font-700 uppercase tracking-wider bg-red-500/10 text-red-400 border border-red-500/20 animate-pulse">
-              Rescisión Solicitada
+              {t.playerTeams.rescissionRequested}
             </span>
           </div>
 
           <p className="text-xs text-muted-foreground mb-6">
-            Los siguientes jugadores han solicitado rescindir su contrato y darse de baja de tus equipos:
+            {t.playerTeams.playerReleaseDesc}
           </p>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -493,14 +495,14 @@ export function PlayerTeams() {
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Equipo: <strong className="text-white">{contract.teams?.name}</strong>
+                        {t.playerTeams.team}: <strong className="text-white">{contract.teams?.name}</strong>
                       </p>
                     </div>
                   </div>
 
                   <div className="pt-3 border-t border-border flex items-center justify-between gap-3 text-xs">
                     <span className="text-red-400 font-500">
-                      Pide rescisión de contrato
+                      {t.playerTeams.requestsRescission}
                     </span>
 
                     <div className="flex items-center gap-2">
@@ -509,7 +511,7 @@ export function PlayerTeams() {
                         disabled={processingContractId === contract.id}
                         className="px-3 py-1.5 rounded bg-surface hover:bg-white/10 text-muted-foreground hover:text-white border border-border font-600 uppercase text-[11px] tracking-wider transition-colors disabled:opacity-50"
                       >
-                        Rechazar
+                        {t.playerTeams.reject}
                       </button>
                       <button
                         onClick={() => handleManagerApprovePlayerRelease(contract.id, playerName)}
@@ -517,7 +519,7 @@ export function PlayerTeams() {
                         className="px-4 py-1.5 rounded bg-red-500/20 hover:bg-red-600 hover:text-white text-red-300 border border-red-500/30 font-600 uppercase text-[11px] tracking-wider transition-colors flex items-center gap-1 disabled:opacity-50"
                       >
                         <UserX className="w-3.5 h-3.5" />
-                        Aceptar Baja
+                        {t.playerTeams.acceptRelease}
                       </button>
                     </div>
                   </div>
@@ -533,7 +535,7 @@ export function PlayerTeams() {
         <div className="rounded-xl border border-border bg-surface p-6 sm:p-8">
           <h3 className="font-display text-2xl font-700 uppercase tracking-tight text-white mb-6 flex items-center gap-2">
             <Settings className="h-6 w-6 text-primary" />
-            Equipos que Administras
+            {t.playerTeams.managedTeams}
           </h3>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {managedTeams.map(team => {
@@ -554,15 +556,15 @@ export function PlayerTeams() {
                   <div className="text-xs font-500 uppercase tracking-widest mt-2 mb-4">
                     {isPending ? (
                       <span className="inline-flex items-center gap-1 text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full text-[10px] font-700 animate-pulse">
-                        <AlertCircle className="w-3 h-3" /> Modificación en Revisión
+                        <AlertCircle className="w-3 h-3" /> {t.playerTeams.modificationUnderReview}
                       </span>
                     ) : isRejected ? (
                       <span className="inline-flex items-center gap-1 text-red-400 bg-red-500/10 border border-red-500/20 px-2.5 py-1 rounded-full text-[10px] font-700">
-                        <X className="w-3 h-3" /> Modificación Rechazada
+                        <X className="w-3 h-3" /> {t.playerTeams.modificationRejected}
                       </span>
                     ) : (
                       <span className={team.status === 'active' ? 'text-emerald-500' : team.status === 'banned' ? 'text-red-500' : 'text-yellow-500'}>
-                        {team.status === 'active' ? 'ACTIVO' : team.status === 'banned' ? 'BANEADO' : 'PENDIENTE'}
+                        {team.status === 'active' ? t.playerTeams.active : team.status === 'banned' ? t.playerTeams.banned : t.playerTeams.pending}
                       </span>
                     )}
                   </div>
@@ -570,7 +572,7 @@ export function PlayerTeams() {
                   {/* Rejection Reason Alert if rejected */}
                   {isRejected && val?.details?.rejection_reason && (
                     <div className="w-full mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-left text-xs text-white animate-in fade-in">
-                      <span className="font-700 text-red-400 block mb-0.5">Motivo del Administrador:</span>
+                      <span className="font-700 text-red-400 block mb-0.5">{t.playerTeams.adminReason}</span>
                       <p className="text-white/90 leading-snug text-[11px]">{val.details.rejection_reason}</p>
                     </div>
                   )}
@@ -587,10 +589,10 @@ export function PlayerTeams() {
                           : "bg-surface border-border text-white hover:border-primary"
                       )}
                     >
-                      {isPending ? 'MODIFICAR SOLICITUD' : isRejected ? 'REENVIAR SOLICITUD' : 'EDITAR'}
+                      {isPending ? t.playerTeams.modifyRequest : isRejected ? t.playerTeams.resendRequest : t.playerTeams.edit}
                     </button>
                     <Link href={`/equipos/${getTeamSlug(team)}`} className="flex-1 py-2 rounded bg-primary/10 text-primary text-[11px] font-600 hover:bg-primary hover:text-white transition-colors text-center tracking-widest uppercase">
-                      PERFIL
+                      {t.playerTeams.profile}
                     </Link>
                   </div>
                 </div>
@@ -605,7 +607,7 @@ export function PlayerTeams() {
         <div className="rounded-xl border border-border bg-surface p-6 sm:p-8">
           <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white mb-6 flex items-center gap-2">
             <Users className="h-5 w-5 text-emerald-400" />
-            Roster Activo en tus Equipos ({activeRosterContracts.length})
+            {t.playerTeams.activeRoster.replace('{n}', activeRosterContracts.length.toString())}
           </h3>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {activeRosterContracts.map(contract => (
@@ -631,11 +633,11 @@ export function PlayerTeams() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
           <h3 className="font-display text-2xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
             <Shield className="h-6 w-6 text-primary" />
-            Mi Equipo Actual (Jugador)
+            {t.playerTeams.myCurrentTeam}
           </h3>
           {activeTeams.length > 1 && (
             <span className="text-xs font-600 text-primary bg-primary/10 border border-primary/20 px-3 py-1 rounded-full uppercase tracking-wider self-start sm:self-auto">
-              2 Contratos Activos (Femenil y Mixto)
+              {t.playerTeams.twoActiveContracts}
             </span>
           )}
         </div>
@@ -644,7 +646,7 @@ export function PlayerTeams() {
           <div className="space-y-6">
             {activeTeams.map((teamContract: any) => {
               const isFemale = teamContract.team_gender_category === 'female' || (teamContract.teams?.name || '').toLowerCase().includes('fem')
-              const divisionName = isFemale ? 'División Femenil' : 'División Varonil / Mixto'
+              const divisionName = isFemale ? t.playerTeams.femaleDivision : t.playerTeams.mixedDivision
 
               return (
                 <div key={teamContract.id} className="space-y-4">
@@ -656,10 +658,10 @@ export function PlayerTeams() {
                           <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
                           <div>
                             <h5 className="font-display font-700 text-amber-300 text-base uppercase tracking-wide">
-                              Solicitud de Baja por parte del Equipo
+                              {t.playerTeams.teamReleaseRequest}
                             </h5>
                             <p className="text-xs text-white/90 mt-1 leading-relaxed">
-                              El equipo <strong className="text-white">{teamContract.teams?.name}</strong> ha solicitado rescindir tu contrato. Puedes aceptar para quedar como agente libre en esta división o rechazar si deseas continuar.
+                              {t.playerTeams.teamReleaseDesc.replace('{team}', teamContract.teams?.name || '')}
                             </p>
                           </div>
                         </div>
@@ -669,7 +671,7 @@ export function PlayerTeams() {
                             disabled={processingContractId === teamContract.id}
                             className="px-4 py-2 rounded-lg bg-surface hover:bg-white/10 text-muted-foreground hover:text-white border border-border font-600 text-xs uppercase tracking-wider transition-colors disabled:opacity-50"
                           >
-                            Rechazar Baja
+                            {t.playerTeams.rejectRelease}
                           </button>
                           <button
                             onClick={() => handlePlayerAcceptTermination(teamContract)}
@@ -677,7 +679,7 @@ export function PlayerTeams() {
                             className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-600 text-xs uppercase tracking-wider transition-colors flex items-center gap-1.5 shadow-md disabled:opacity-50"
                           >
                             <Check className="w-4 h-4" />
-                            Aceptar Baja
+                            {t.playerTeams.acceptRelease}
                           </button>
                         </div>
                       </div>
@@ -690,7 +692,7 @@ export function PlayerTeams() {
                       <div className="flex items-center gap-2.5">
                         <Clock className="w-5 h-5 text-amber-400 shrink-0" />
                         <p className="text-xs text-amber-200">
-                          Has solicitado rescindir tu contrato con <strong className="text-white">{teamContract.teams?.name}</strong>. En espera de que el manager acepte tu baja.
+                          {t.playerTeams.pendingManagerRelease.replace('{team}', teamContract.teams?.name || '')}
                         </p>
                       </div>
                       <button
@@ -698,7 +700,7 @@ export function PlayerTeams() {
                         disabled={processingContractId === teamContract.id}
                         className="px-3 py-1.5 rounded bg-surface hover:bg-white/10 text-muted-foreground hover:text-white border border-border text-xs font-600 uppercase tracking-wider transition-colors self-end sm:self-center"
                       >
-                        Cancelar Solicitud
+                        {t.playerTeams.cancelRequest}
                       </button>
                     </div>
                   )}
@@ -729,12 +731,12 @@ export function PlayerTeams() {
                             : "bg-blue-500/10 text-blue-400 border-blue-500/20"
                         )}>
                           {teamContract.status === 'pending_player_release'
-                            ? 'Baja Solicitada por Equipo'
+                            ? t.playerTeams.releaseRequestedByTeam
                             : teamContract.status === 'pending_manager_release'
-                            ? 'Baja en Espera de Manager'
+                            ? t.playerTeams.releasePendingManager
                             : teamContract.status === 'active' || teamContract.status === 'activo'
-                            ? 'Contrato Activo'
-                            : 'Contrato Pendiente'}
+                            ? t.playerTeams.activeContract
+                            : t.playerTeams.pendingContract}
                         </div>
                       </div>
 
@@ -763,7 +765,7 @@ export function PlayerTeams() {
                         href={`/equipos/${getTeamSlug(teamContract.teams)}`} 
                         className="w-full sm:w-auto text-center px-5 py-2.5 rounded bg-primary/10 text-primary font-600 uppercase tracking-widest text-xs hover:bg-primary hover:text-white transition-colors"
                       >
-                        Ver Perfil
+                        {t.playerTeams.viewProfile}
                       </Link>
 
                       {(teamContract.status === 'active' || teamContract.status === 'activo') && (
@@ -775,7 +777,7 @@ export function PlayerTeams() {
                           className="w-full sm:w-auto px-4 py-2.5 rounded bg-red-500/10 hover:bg-red-500 hover:text-white text-red-400 border border-red-500/20 font-600 uppercase tracking-widest text-xs transition-colors flex items-center justify-center gap-1"
                         >
                           <UserX className="w-3.5 h-3.5" />
-                          Solicitar Baja
+                          {t.playerTeams.requestRelease}
                         </button>
                       )}
                     </div>
@@ -787,9 +789,9 @@ export function PlayerTeams() {
         ) : (
           <div className="text-center py-12 rounded-lg bg-background border border-dashed border-border">
             <ShieldAlert className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h4 className="font-display text-xl font-600 text-white">Sin Equipo Actual</h4>
+            <h4 className="font-display text-xl font-600 text-white">{t.playerTeams.noCurrentTeam}</h4>
             <p className="text-muted-foreground text-sm mt-2 max-w-sm mx-auto">
-              Actualmente eres un agente libre. Cuando firmes un contrato con un equipo, aparecerá aquí.
+              {t.playerTeams.noCurrentTeamDesc}
             </p>
           </div>
         )}
@@ -800,7 +802,7 @@ export function PlayerTeams() {
         <div className="rounded-xl border border-border bg-surface p-6 sm:p-8">
           <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white mb-6 flex items-center gap-2">
             <History className="h-5 w-5 text-muted-foreground" />
-            Historial de Equipos
+            {t.playerTeams.teamHistory}
           </h3>
 
           <div className="grid gap-4">
@@ -816,22 +818,22 @@ export function PlayerTeams() {
                     <h5 className="font-600 text-white uppercase">{contract.teams?.name}</h5>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
                       <Calendar className="w-3 h-3" />
-                      {contract.start_date ? new Date(contract.start_date).toLocaleDateString() : 'N/A'} - {contract.end_date ? new Date(contract.end_date).toLocaleDateString() : 'Cancelado'}
+                      {contract.start_date ? new Date(contract.start_date).toLocaleDateString() : 'N/A'} - {contract.end_date ? new Date(contract.end_date).toLocaleDateString() : t.playerTeams.cancelled}
                     </div>
                   </div>
                   <div className="text-xs font-600 uppercase tracking-widest text-muted-foreground">
-                    {contract.status === 'active' || contract.status === 'activo' ? 'Activo' :
-                     contract.status === 'pending' || contract.status === 'pendiente' || contract.status === 'pending_manager' ? 'Pendiente' :
-                     contract.status === 'cancelled' || contract.status === 'cancelado' || contract.status === 'rejected' ? 'Cancelado' :
-                     'Finalizado'}
+                    {contract.status === 'active' || contract.status === 'activo' ? t.playerTeams.activeContract :
+                     contract.status === 'pending' || contract.status === 'pendiente' || contract.status === 'pending_manager' ? t.playerTeams.pendingContract :
+                     contract.status === 'cancelled' || contract.status === 'cancelado' || contract.status === 'rejected' ? t.playerTeams.cancelled :
+                     t.playerTeams.completed}
                   </div>
                 </div>
 
                 {contract.bajaJustification && (
                   <div className="rounded bg-amber-500/10 border border-amber-500/20 p-2.5 text-xs text-amber-200">
                     <div className="flex items-center justify-between font-semibold text-[11px] uppercase tracking-wider text-amber-400 mb-1">
-                      <span>Motivo de Baja Administrativa</span>
-                      {contract.bajaAdmin && <span>Por: {contract.bajaAdmin}</span>}
+                      <span>{t.playerTeams.adminReleaseReason}</span>
+                      {contract.bajaAdmin && <span>{t.playerTeams.byAdmin.replace('{admin}', contract.bajaAdmin)}</span>}
                     </div>
                     <p className="italic">"{contract.bajaJustification}"</p>
                   </div>
@@ -874,11 +876,11 @@ export function PlayerTeams() {
             </div>
             
             <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white text-center mb-2">
-              ¿Solicitar baja del equipo?
+              {t.playerTeams.leaveModalTitle}
             </h3>
             
             <p className="text-sm text-muted-foreground text-center mb-6">
-              Estás a punto de solicitar la rescisión de tu contrato con <strong className="text-white">{teamToLeave.teams?.name}</strong>. Se notificará al manager del equipo para que apruebe tu desvinculación. Tu contrato continuará activo hasta que el manager la acepte.
+              {t.playerTeams.leaveModalDesc.replace('{team}', teamToLeave.teams?.name || '')}
             </p>
 
             <div className="flex gap-3 justify-end">
@@ -886,14 +888,14 @@ export function PlayerTeams() {
                 onClick={() => { setRequestingLeave(false); setTeamToLeave(null) }}
                 className="flex-1 py-2.5 rounded-md border border-border text-sm font-600 text-white hover:bg-white/5 transition-colors"
               >
-                Cancelar
+                {t.playerTeams.cancel}
               </button>
               <button
                 onClick={handlePlayerRequestLeave}
                 disabled={processingContractId === teamToLeave.id}
                 className="flex-1 py-2.5 rounded-md bg-red-600 hover:bg-red-700 text-sm font-600 text-white uppercase tracking-wider transition-colors disabled:opacity-50"
               >
-                Enviar Solicitud
+                {t.playerTeams.sendRequest}
               </button>
             </div>
           </div>

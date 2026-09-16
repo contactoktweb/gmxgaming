@@ -8,6 +8,7 @@ import { cn, formatRoleTitle, formatRolesList, getTeamSlug, getPlayerSlug } from
 import { GmxButton } from '@/components/gmx-button'
 import { toast } from 'sonner'
 import Link from 'next/link'
+import { useLanguage } from '@/lib/language-context'
 
 interface ManagedTeam {
   id: string
@@ -41,6 +42,7 @@ interface ContractRequest {
 export function ManagerPlayers() {
   const { user } = useAuth()
   const supabase = createClient()
+  const { t } = useLanguage()
 
   const [managedTeams, setManagedTeams] = useState<ManagedTeam[]>([])
   const [selectedTeamId, setSelectedTeamId] = useState<string>('')
@@ -425,7 +427,7 @@ export function ManagerPlayers() {
   }
 
   if (loading) {
-    return <div className="h-64 animate-pulse rounded-xl bg-surface border border-border"></div>
+    return <div className="p-8 text-center text-muted-foreground animate-pulse">{t.managerPlayers.loading}</div>
   }
 
   if (managedTeams.length === 0) {
@@ -433,13 +435,13 @@ export function ManagerPlayers() {
       <div className="rounded-xl border border-border bg-surface p-12 text-center shadow-xl">
         <Shield className="mx-auto h-16 w-16 text-muted-foreground mb-4 opacity-40" />
         <h2 className="font-display text-2xl font-700 uppercase tracking-tight text-white mb-2">
-          No eres Líder de ningún Equipo
+          {t.managerPlayers.noPlayers}
         </h2>
         <p className="text-muted-foreground max-w-md mx-auto mb-6 text-sm">
-          Esta sección está disponible para los líderes o managers de equipos registrados. Si ya solicitaste el alta de tu equipo, espera a que sea validado por los administradores.
+          {t.managerPlayers.noPlayersDesc}
         </p>
         <GmxButton href="/registro/alta-de-equipo" className="px-6 py-2">
-          REGISTRAR EQUIPO
+          {t.managerPlayers.registerTeam}
         </GmxButton>
       </div>
     )
@@ -475,10 +477,10 @@ export function ManagerPlayers() {
                 )}
               </div>
               <p className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
-                <span>Líder / Manager Oficial</span>
+                <span>{t.managerPlayers.officialLeader}</span>
                 <span>•</span>
                 <span className={currentTeam.status === 'active' ? 'text-emerald-400 font-600' : 'text-amber-400 font-600'}>
-                  {currentTeam.status === 'active' ? 'EQUIPO ACTIVO' : 'EN REVISIÓN'}
+                  {currentTeam.status === 'active' ? t.managerPlayers.activeTeamStatus : t.managerPlayers.reviewTeamStatus}
                 </span>
                 {currentTeam.country && (
                   <>
@@ -494,7 +496,7 @@ export function ManagerPlayers() {
           {managedTeams.length > 1 && (
             <div className="w-full md:w-auto">
               <label className="text-xs font-600 uppercase tracking-widest text-muted-foreground block mb-1.5">
-                Cambiar Equipo:
+                {t.managerPlayers.changeTeam}
               </label>
               <div className="relative">
                 <select
@@ -517,45 +519,45 @@ export function ManagerPlayers() {
         {/* Métricas Rápidas del Equipo */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6">
           <div className="rounded-lg bg-background border border-border p-4">
-            <p className="text-xs font-600 uppercase tracking-wider text-muted-foreground">Solicitudes Entrada</p>
+            <p className="text-xs font-600 uppercase tracking-wider text-muted-foreground">{t.managerPlayers.incomingRequests}</p>
             <p className="font-display text-2xl sm:text-3xl font-bold text-amber-400 mt-1">{pendingRequests.length}</p>
           </div>
           <div className="rounded-lg bg-background border border-border p-4">
-            <p className="text-xs font-600 uppercase tracking-wider text-muted-foreground">Bajas Solicitadas</p>
+            <p className="text-xs font-600 uppercase tracking-wider text-muted-foreground">{t.managerPlayers.releaseRequests}</p>
             <p className="font-display text-2xl sm:text-3xl font-bold text-red-400 mt-1">
               {pendingPlayerReleases.length}
             </p>
           </div>
           <div className="rounded-lg bg-background border border-border p-4">
-            <p className="text-xs font-600 uppercase tracking-wider text-muted-foreground">Jugadores Roster</p>
+            <p className="text-xs font-600 uppercase tracking-wider text-muted-foreground">{t.managerPlayers.rosterPlayers}</p>
             <p className="font-display text-2xl sm:text-3xl font-bold text-emerald-400 mt-1">{activeRoster.length}</p>
           </div>
           <div className="col-span-2 sm:col-span-1 rounded-lg bg-background border border-border p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-600 uppercase tracking-wider text-muted-foreground">Perfil del Equipo</p>
+              <p className="text-xs font-600 uppercase tracking-wider text-muted-foreground">{t.managerPlayers.teamProfile}</p>
               <Link href={`/equipos/${getTeamSlug(currentTeam)}`} className="text-xs font-700 text-primary hover:underline uppercase mt-1 inline-flex items-center gap-1">
-                Ver Página <ExternalLink className="w-3 h-3" />
+                {t.managerPlayers.viewPage} <ExternalLink className="w-3 h-3" />
               </Link>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 2. Solicitudes de Baja por Jugadores (Rescisión solicitada por el jugador) */}
+      {/* 2. Solicitudes de Baja por Jugadores */}
       {pendingPlayerReleases.length > 0 && (
         <div className="rounded-xl border border-red-500/40 bg-surface p-6 sm:p-8 shadow-xl animate-in fade-in">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-display text-2xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
               <UserX className="h-6 w-6 text-red-400" />
-              Solicitudes de Baja por Jugadores ({pendingPlayerReleases.length})
+              {t.managerPlayers.playerReleaseTitle} ({pendingPlayerReleases.length})
             </h3>
             <span className="px-3 py-1 rounded-full text-xs font-700 uppercase tracking-wider bg-red-500/10 text-red-400 border border-red-500/20 animate-pulse">
-              Rescisión Solicitada
+              {t.managerPlayers.releaseRequestedBadge}
             </span>
           </div>
 
           <p className="text-xs text-muted-foreground mb-6">
-            Los siguientes jugadores han solicitado rescindir su contrato y darse de baja del equipo. Puedes aceptar para dejarlos como agentes libres o rechazar la solicitud para mantener su contrato activo.
+            {t.managerPlayers.playerReleaseNotice}
           </p>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -608,7 +610,7 @@ export function ManagerPlayers() {
 
                   <div className="pt-3 border-t border-border flex items-center justify-between gap-3 text-xs">
                     <span className="text-red-400 font-500">
-                      Jugador solicita su baja
+                      {t.managerPlayers.playerRequestsRelease}
                     </span>
 
                     <div className="flex items-center gap-2">
@@ -617,7 +619,7 @@ export function ManagerPlayers() {
                         disabled={isProcessing}
                         className="px-3 py-1.5 rounded bg-surface hover:bg-white/10 text-muted-foreground hover:text-white border border-border font-600 uppercase text-[11px] tracking-wider transition-colors disabled:opacity-50"
                       >
-                        Rechazar
+                        {t.managerPlayers.reject}
                       </button>
                       <button
                         onClick={() => handleApprovePlayerRelease(contract.id, playerName)}
@@ -625,7 +627,7 @@ export function ManagerPlayers() {
                         className="px-4 py-1.5 rounded bg-red-500/20 hover:bg-red-600 hover:text-white text-red-300 border border-red-500/30 font-600 uppercase text-[11px] tracking-wider transition-colors flex items-center gap-1 disabled:opacity-50"
                       >
                         <UserX className="w-3.5 h-3.5" />
-                        Aceptar Baja
+                        {t.managerPlayers.acceptRelease}
                       </button>
                     </div>
                   </div>
@@ -641,18 +643,18 @@ export function ManagerPlayers() {
         <div className="flex items-center justify-between mb-6">
           <h3 className="font-display text-2xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
             <Clock className="h-6 w-6 text-amber-400" />
-            Solicitudes de Contrato Pendientes ({pendingRequests.length})
+            {t.managerPlayers.pendingContractTitle} ({pendingRequests.length})
           </h3>
           {pendingRequests.length > 0 && (
             <span className="px-3 py-1 rounded-full text-xs font-700 uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20">
-              Acción Requerida
+              {t.managerPlayers.actionRequired}
             </span>
           )}
         </div>
 
         {pendingRequests.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border bg-background/50 p-8 text-center text-muted-foreground">
-            <p>No tienes solicitudes de contrato pendientes para {currentTeam.name}.</p>
+            <p>{t.managerPlayers.noPendingRequests.replace('{team}', currentTeam.name)}</p>
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
@@ -705,7 +707,7 @@ export function ManagerPlayers() {
 
                   <div className="pt-3 border-t border-border flex items-center justify-between gap-3 text-xs">
                     <span className="text-muted-foreground">
-                      Fin de Contrato: <strong className="text-white">{contract.end_date ? new Date(contract.end_date).toLocaleDateString() : 'Indefinido'}</strong>
+                      {t.altaContrato.contractEnd}: <strong className="text-white">{contract.end_date ? new Date(contract.end_date).toLocaleDateString() : 'Indefinido'}</strong>
                     </span>
 
                     <div className="flex items-center gap-2">
@@ -714,7 +716,7 @@ export function ManagerPlayers() {
                         disabled={isProcessing}
                         className="px-3 py-1.5 rounded bg-red-500/10 hover:bg-red-500 hover:text-white text-red-400 border border-red-500/20 font-600 uppercase text-[11px] tracking-wider transition-colors disabled:opacity-50"
                       >
-                        Rechazar
+                        {t.managerPlayers.reject}
                       </button>
                       <button
                         onClick={() => handleApproveContract(contract.id, playerName)}
@@ -722,7 +724,7 @@ export function ManagerPlayers() {
                         className="px-4 py-1.5 rounded bg-emerald-500/20 hover:bg-emerald-500 hover:text-white text-emerald-400 border border-emerald-500/30 font-600 uppercase text-[11px] tracking-wider transition-colors flex items-center gap-1 disabled:opacity-50"
                       >
                         <Check className="w-3.5 h-3.5" />
-                        Aprobar
+                        {t.managerPlayers.approve}
                       </button>
                     </div>
                   </div>
@@ -737,12 +739,12 @@ export function ManagerPlayers() {
       <div className="rounded-xl border border-border bg-surface p-6 sm:p-8 shadow-xl">
         <h3 className="font-display text-2xl font-700 uppercase tracking-tight text-white mb-6 flex items-center gap-2">
           <Users className="h-6 w-6 text-primary" />
-          Roster Oficial de Jugadores ({activeRoster.length})
+          {t.managerPlayers.activeRosterTitle} ({activeRoster.length})
         </h3>
 
         {activeRoster.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border bg-background/50 p-8 text-center text-muted-foreground">
-            <p>Aún no hay jugadores activos en el roster de {currentTeam.name}.</p>
+            <p>{t.managerPlayers.noActivePlayers}</p>
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -763,14 +765,14 @@ export function ManagerPlayers() {
                     {isPendingPlayerRelease && (
                       <div className="mb-3 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300 font-600 flex items-center gap-1.5">
                         <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                        <span>Baja solicitada (Esperando al jugador)</span>
+                        <span>{t.managerPlayers.statusPendingRelease}</span>
                       </div>
                     )}
 
                     {isPendingManagerRelease && (
                       <div className="mb-3 px-2.5 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-[11px] text-red-300 font-600 flex items-center gap-1.5">
                         <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
-                        <span>El jugador solicitó su rescisión</span>
+                        <span>{t.managerPlayers.playerRequestsRelease}</span>
                       </div>
                     )}
 
@@ -807,7 +809,7 @@ export function ManagerPlayers() {
                       </div>
 
                       <div className="text-xs text-muted-foreground pt-2 border-t border-border flex justify-between">
-                        <span>Vencimiento:</span>
+                        <span>{t.altaContrato.contractEnd}:</span>
                         <strong className="text-white">{contract.end_date ? new Date(contract.end_date).toLocaleDateString() : 'Indefinido'}</strong>
                       </div>
                     </div>
@@ -819,7 +821,7 @@ export function ManagerPlayers() {
                         href={`/jugadores/${getPlayerSlug(contract.profiles)}`}
                         className="text-xs font-600 text-primary hover:underline uppercase tracking-wider"
                       >
-                        Ver Perfil
+                        {t.userProfile.myProfile}
                       </Link>
                     )}
 
@@ -830,7 +832,7 @@ export function ManagerPlayers() {
                         className="px-2.5 py-1.5 rounded bg-amber-500/10 hover:bg-amber-500 hover:text-black text-amber-300 border border-amber-500/20 font-600 uppercase text-[10px] tracking-wider transition-colors flex items-center gap-1 ml-auto"
                       >
                         <X className="w-3 h-3" />
-                        Cancelar Solicitud
+                        {t.managerPlayers.cancel}
                       </button>
                     ) : isPendingManagerRelease ? (
                       <div className="flex items-center gap-1.5 ml-auto">
@@ -839,14 +841,14 @@ export function ManagerPlayers() {
                           disabled={processingId === contract.id}
                           className="px-2.5 py-1 rounded bg-surface hover:bg-white/10 text-muted-foreground hover:text-white border border-border font-600 uppercase text-[10px] tracking-wider transition-colors"
                         >
-                          Rechazar
+                          {t.managerPlayers.reject}
                         </button>
                         <button
                           onClick={() => handleApprovePlayerRelease(contract.id, playerName)}
                           disabled={processingId === contract.id}
                           className="px-2.5 py-1 rounded bg-red-500/20 hover:bg-red-600 hover:text-white text-red-300 border border-red-500/30 font-600 uppercase text-[10px] tracking-wider transition-colors"
                         >
-                          Aceptar Baja
+                          {t.managerPlayers.acceptRelease}
                         </button>
                       </div>
                     ) : (
@@ -855,7 +857,7 @@ export function ManagerPlayers() {
                         className="px-3 py-1.5 rounded bg-red-500/10 hover:bg-red-500 hover:text-white text-red-400 border border-red-500/20 font-600 uppercase text-[10px] tracking-wider transition-colors flex items-center gap-1 ml-auto"
                       >
                         <UserX className="w-3 h-3" />
-                        Dar de Baja
+                        {t.managerPlayers.giveRelease}
                       </button>
                     )}
                   </div>
@@ -870,7 +872,7 @@ export function ManagerPlayers() {
       {pastContracts.length > 0 && (
         <div className="rounded-xl border border-border bg-surface p-6 sm:p-8 shadow-xl">
           <h3 className="font-display text-xl font-700 uppercase tracking-tight text-muted-foreground mb-4">
-            Historial de Contratos Pasados ({pastContracts.length})
+            {t.managerPlayers.pastContractsTitle} ({pastContracts.length})
           </h3>
           <div className="divide-y divide-border rounded-lg border border-border bg-background">
             {pastContracts.map(c => {
@@ -894,7 +896,7 @@ export function ManagerPlayers() {
                         "px-2 py-0.5 rounded font-600 uppercase tracking-wider text-[10px]",
                         c.status === 'rejected' ? 'bg-red-500/10 text-red-400' : 'bg-white/5 text-muted-foreground'
                       )}>
-                        {c.status === 'rejected' ? 'RECHAZADO' : 'FINALIZADO'}
+                        {c.status === 'rejected' ? t.managerPlayers.statusRejected : t.managerPlayers.statusCompleted}
                       </span>
                     </div>
                   </div>
@@ -930,26 +932,22 @@ export function ManagerPlayers() {
             </div>
             
             <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white text-center mb-2">
-              ¿Solicitar baja a este jugador?
+              {t.managerPlayers.releaseModalTitle}
             </h3>
             
             <p className="text-sm text-muted-foreground text-center mb-4">
-              Estás a punto de solicitar la baja del contrato de <strong className="text-white">{terminatingContract.profiles?.name}</strong> en <strong className="text-white">{currentTeam.name}</strong>.
+              {t.managerPlayers.releaseModalDesc.replace('{name}', terminatingContract.profiles?.name || 'Jugador')}
             </p>
 
             <div className="space-y-4 text-sm text-muted-foreground mb-6">
-              <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3.5 text-xs text-amber-200/90 leading-relaxed">
-                ℹ️ Se notificará al jugador para rescindir el contrato. <strong>No se dará de baja automáticamente</strong> hasta que el jugador revise y acepte la solicitud desde su panel de equipo.
-              </div>
-
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-white mb-1.5">
-                  Motivo de la baja (opcional)
+                  {t.managerPlayers.justificationLabel}
                 </label>
                 <textarea
                   value={terminationJustification}
                   onChange={(e) => setTerminationJustification(e.target.value)}
-                  placeholder="Escribe el motivo o justificación de la baja..."
+                  placeholder={t.managerPlayers.justificationPlaceholder}
                   rows={3}
                   className="w-full rounded-lg border border-border bg-background p-3 text-sm text-white placeholder:text-muted-foreground/60 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 transition-colors"
                 />
@@ -965,7 +963,7 @@ export function ManagerPlayers() {
                   }}
                   className="flex-1 py-2.5 rounded-md border border-border text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-white hover:bg-white/5 transition-colors disabled:opacity-50"
                 >
-                  Cancelar
+                  {t.managerPlayers.cancel}
                 </button>
                 <button
                   type="button"
@@ -974,7 +972,7 @@ export function ManagerPlayers() {
                   className="flex-1 py-2.5 rounded-md bg-red-600 hover:bg-red-500 text-xs font-semibold uppercase tracking-wider text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   <UserX className="w-4 h-4" />
-                  {submittingTermination ? 'Enviando Solicitud...' : 'Enviar Solicitud de Baja'}
+                  {submittingTermination ? t.managerPlayers.submittingTermination : t.managerPlayers.confirmTermination}
                 </button>
               </div>
             </div>

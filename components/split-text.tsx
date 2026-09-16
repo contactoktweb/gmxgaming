@@ -12,7 +12,7 @@ type Props = {
   delay?: number
   amount?: number
   /** Split multi-line strings on "\n" so each line wraps as a block */
-  lines?: string[]
+  lines?: string[] | readonly string[]
 }
 
 /**

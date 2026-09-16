@@ -6,6 +6,7 @@ import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
 import { cn, formatRoleTitle } from '@/lib/utils'
 import { toast } from 'sonner'
+import { useLanguage } from '@/lib/language-context'
 
 export function PlayerContracts() {
   const { user } = useAuth()
@@ -14,6 +15,7 @@ export function PlayerContracts() {
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [requestingReleaseContract, setRequestingReleaseContract] = useState<any | null>(null)
   const supabase = createClient()
+  const { t } = useLanguage()
 
   useEffect(() => {
     async function fetchContracts() {
@@ -85,7 +87,7 @@ export function PlayerContracts() {
   // Aceptar la baja enviada por el equipo
   const handleAcceptTermination = async (contractId: string, teamName: string) => {
     setProcessingId(contractId)
-    toast.loading('Aceptando baja del equipo...', { id: 'contract-action' })
+    toast.loading(t.playerContracts.acceptRelease + '...', { id: 'contract-action' })
 
     const { error } = await supabase
       .from('contracts')
@@ -96,13 +98,13 @@ export function PlayerContracts() {
       .eq('id', contractId)
 
     if (!error) {
-      toast.success('Baja Aceptada', {
+      toast.success(t.playerContracts.acceptRelease, {
         id: 'contract-action',
-        description: `Has aceptado la baja de ${teamName}. Ahora eres agente libre en esta división.`
+        description: `${t.playerContracts.acceptRelease}: ${teamName}.`
       })
       setContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'completado', conclusion_date: new Date().toISOString() } : c))
     } else {
-      toast.error('Error al aceptar la baja: ' + error.message, { id: 'contract-action' })
+      toast.error(t.playerContracts.acceptRelease + ': ' + error.message, { id: 'contract-action' })
     }
     setProcessingId(null)
   }
@@ -110,7 +112,7 @@ export function PlayerContracts() {
   // Rechazar la baja enviada por el equipo
   const handleRejectTermination = async (contractId: string, teamName: string) => {
     setProcessingId(contractId)
-    toast.loading('Rechazando baja...', { id: 'contract-action' })
+    toast.loading(t.playerContracts.reject + '...', { id: 'contract-action' })
 
     const { error } = await supabase
       .from('contracts')
@@ -118,13 +120,13 @@ export function PlayerContracts() {
       .eq('id', contractId)
 
     if (!error) {
-      toast.success('Baja Rechazada', {
+      toast.success(t.playerContracts.reject, {
         id: 'contract-action',
-        description: `Has rechazado la solicitud de baja con ${teamName}. Tu contrato se mantiene activo.`
+        description: `${t.playerContracts.reject}: ${teamName}.`
       })
       setContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'active' } : c))
     } else {
-      toast.error('Error al rechazar la baja: ' + error.message, { id: 'contract-action' })
+      toast.error(t.playerContracts.reject + ': ' + error.message, { id: 'contract-action' })
     }
     setProcessingId(null)
   }
@@ -136,7 +138,7 @@ export function PlayerContracts() {
     const teamName = requestingReleaseContract.teams?.name || 'el equipo'
 
     setProcessingId(contractId)
-    toast.loading('Enviando solicitud de baja...', { id: 'contract-action' })
+    toast.loading(t.playerContracts.requestRelease + '...', { id: 'contract-action' })
 
     const { error } = await supabase
       .from('contracts')
@@ -144,14 +146,14 @@ export function PlayerContracts() {
       .eq('id', contractId)
 
     if (!error) {
-      toast.success('Solicitud Enviada', {
+      toast.success(t.playerContracts.requestRelease, {
         id: 'contract-action',
-        description: `Se notificó al manager de ${teamName}. Tu contrato finalizará cuando el manager acepte tu baja.`
+        description: t.playerContracts.youRequestedRelease
       })
       setContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'pending_manager_release' } : c))
       setRequestingReleaseContract(null)
     } else {
-      toast.error('Error al solicitar la baja: ' + error.message, { id: 'contract-action' })
+      toast.error(t.playerContracts.requestRelease + ': ' + error.message, { id: 'contract-action' })
     }
     setProcessingId(null)
   }
@@ -159,7 +161,7 @@ export function PlayerContracts() {
   // Jugador cancela su solicitud de rescisión
   const handleCancelRelease = async (contractId: string, teamName: string) => {
     setProcessingId(contractId)
-    toast.loading('Cancelando solicitud...', { id: 'contract-action' })
+    toast.loading(t.playerContracts.cancelRequest + '...', { id: 'contract-action' })
 
     const { error } = await supabase
       .from('contracts')
@@ -167,19 +169,19 @@ export function PlayerContracts() {
       .eq('id', contractId)
 
     if (!error) {
-      toast.success('Solicitud Cancelada', {
+      toast.success(t.playerContracts.cancelRequest, {
         id: 'contract-action',
-        description: `Cancelaste tu solicitud de baja con ${teamName}. Tu contrato sigue activo.`
+        description: t.playerContracts.cancelRequest
       })
       setContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'active' } : c))
     } else {
-      toast.error('Error al cancelar la solicitud: ' + error.message, { id: 'contract-action' })
+      toast.error(t.playerContracts.cancelRequest + ': ' + error.message, { id: 'contract-action' })
     }
     setProcessingId(null)
   }
 
   if (loading) {
-    return <div className="p-8 text-center text-muted-foreground animate-pulse">Cargando contratos...</div>
+    return <div className="p-8 text-center text-muted-foreground animate-pulse">{t.playerContracts.loading}</div>
   }
 
   return (
@@ -188,15 +190,15 @@ export function PlayerContracts() {
       <div className="rounded-xl border border-border bg-surface p-6 sm:p-8">
         <h3 className="font-display text-2xl font-700 uppercase tracking-tight text-white mb-6 flex items-center gap-2">
           <ScrollText className="h-6 w-6 text-primary" />
-          Mis Contratos
+          {t.playerContracts.title}
         </h3>
 
         {contracts.length === 0 ? (
           <div className="text-center py-12 rounded-lg bg-background border border-dashed border-border">
             <ScrollText className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-            <h4 className="font-display text-xl font-600 text-white">Sin Contratos</h4>
+            <h4 className="font-display text-xl font-600 text-white">{t.playerContracts.noContracts}</h4>
             <p className="text-muted-foreground text-sm mt-2 max-w-sm mx-auto">
-              Aún no tienes un historial de contratos registrados en la plataforma.
+              {t.playerContracts.noContractsDesc}
             </p>
           </div>
         ) : (
@@ -229,10 +231,10 @@ export function PlayerContracts() {
                           <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
                           <div>
                             <p className="text-sm font-700 text-amber-300">
-                              El equipo ha solicitado la rescisión de tu contrato
+                              {t.playerContracts.teamRequestedRelease}
                             </p>
                             <p className="text-xs text-white/90 mt-0.5 leading-relaxed">
-                              El manager de <strong>{teamName}</strong> ha pedido darte de baja. Puedes aceptar para quedar como agente libre o rechazar la solicitud.
+                              {t.playerContracts.teamRequestedReleaseDesc.replace('{team}', teamName)}
                             </p>
                           </div>
                         </div>
@@ -242,7 +244,7 @@ export function PlayerContracts() {
                             disabled={isProcessing}
                             className="px-3 py-1.5 rounded bg-surface hover:bg-white/10 text-muted-foreground hover:text-white border border-border text-xs font-600 uppercase tracking-wider transition-colors disabled:opacity-50"
                           >
-                            Rechazar
+                            {t.playerContracts.reject}
                           </button>
                           <button
                             onClick={() => handleAcceptTermination(contract.id, teamName)}
@@ -250,7 +252,7 @@ export function PlayerContracts() {
                             className="px-4 py-1.5 rounded bg-red-600 hover:bg-red-700 text-white text-xs font-600 uppercase tracking-wider transition-colors flex items-center gap-1 shadow disabled:opacity-50"
                           >
                             <Check className="w-3.5 h-3.5" />
-                            Aceptar Baja
+                            {t.playerContracts.acceptRelease}
                           </button>
                         </div>
                       </div>
@@ -262,14 +264,14 @@ export function PlayerContracts() {
                     <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3.5 -mb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                       <div className="flex items-center gap-2 text-amber-200">
                         <Clock className="w-4 h-4 text-amber-400 shrink-0" />
-                        <span>Has solicitado la baja de este contrato. Esperando confirmación del manager.</span>
+                        <span>{t.playerContracts.youRequestedRelease}</span>
                       </div>
                       <button
                         onClick={() => handleCancelRelease(contract.id, teamName)}
                         disabled={isProcessing}
                         className="px-3 py-1 rounded bg-surface hover:bg-white/10 text-muted-foreground hover:text-white border border-border text-[11px] font-600 uppercase tracking-wider transition-colors self-end sm:self-center"
                       >
-                        Cancelar Solicitud
+                        {t.playerContracts.cancelRequest}
                       </button>
                     </div>
                   )}
@@ -290,12 +292,12 @@ export function PlayerContracts() {
                         isCancelled ? "bg-red-500/10 text-red-500 border-red-500/20" :
                         "bg-blue-500/10 text-blue-500 border-blue-500/20"
                       )}>
-                        {isPendingPlayerRelease ? 'Baja Solicitada' :
-                         isPendingManagerRelease ? 'Baja en Trámite' :
-                         isActive ? 'Activo' : 
-                         isPending ? 'Pendiente' : 
-                         isCancelled ? 'Cancelado' : 
-                         'Completado'}
+                        {isPendingPlayerRelease ? t.playerContracts.releaseRequested :
+                       isPendingManagerRelease ? t.playerContracts.releaseInProgress :
+                       isActive ? t.playerContracts.active : 
+                       isPending ? t.playerContracts.pending : 
+                       isCancelled ? t.playerContracts.cancelled : 
+                       t.playerContracts.completed}
                       </div>
                     </div>
 
@@ -310,11 +312,11 @@ export function PlayerContracts() {
                                 ? "bg-pink-500/10 text-pink-400 border-pink-500/20" 
                                 : "bg-blue-500/10 text-blue-400 border-blue-500/20"
                             )}>
-                              {contract.team_gender_category === 'female' ? 'División Femenil' : 'División Varonil / Mixta'}
+                              {contract.team_gender_category === 'female' ? t.playerContracts.femaleDivision : t.playerContracts.mixedDivision}
                             </span>
                           </div>
                           <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                            <span className="text-xs text-muted-foreground font-500">Roles asignados:</span>
+                            <span className="text-xs text-muted-foreground font-500">{t.playerContracts.assignedRoles}</span>
                             {Array.isArray(contract.roles) ? (
                               contract.roles.map((r: string, idx: number) => (
                                 <span 
@@ -338,7 +340,7 @@ export function PlayerContracts() {
                             className="px-3 py-1.5 rounded bg-red-500/10 hover:bg-red-500 hover:text-white text-red-400 border border-red-500/20 text-xs font-600 uppercase tracking-wider transition-colors flex items-center gap-1 self-start shrink-0"
                           >
                             <UserX className="w-3.5 h-3.5" />
-                            Solicitar Baja
+                            {t.playerContracts.requestRelease}
                           </button>
                         )}
                       </div>
@@ -346,22 +348,22 @@ export function PlayerContracts() {
                       <div className="grid sm:grid-cols-2 gap-4 pt-4 border-t border-border/50">
                         <div className="space-y-1">
                           <span className="text-[10px] font-600 uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
-                            <Calendar className="w-3 h-3" /> Inicio de Contrato
+                            <Calendar className="w-3 h-3" /> {t.playerContracts.contractStart}
                           </span>
-                          <p className="text-sm text-white font-500">{contract.start_date ? new Date(contract.start_date).toLocaleDateString() : 'Pendiente'}</p>
+                          <p className="text-sm text-white font-500">{contract.start_date ? new Date(contract.start_date).toLocaleDateString() : t.playerContracts.pending2}</p>
                         </div>
                         <div className="space-y-1">
                           <span className="text-[10px] font-600 uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
-                            <Clock className="w-3 h-3" /> Fin de Contrato
+                            <Clock className="w-3 h-3" /> {t.playerContracts.contractEnd}
                           </span>
                           <p className="text-sm text-white font-500">
-                            {contract.end_date ? new Date(contract.end_date).toLocaleDateString() : 'Indefinido'}
+                            {contract.end_date ? new Date(contract.end_date).toLocaleDateString() : t.playerContracts.contractEnd}
                           </p>
                         </div>
                         {contract.conclusion_date && (
                           <div className="space-y-1 sm:col-span-2">
                             <span className="text-[10px] font-600 uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
-                              <AlertCircle className="w-3 h-3" /> Fecha de Conclusión / Baja
+                              <AlertCircle className="w-3 h-3" /> {t.playerContracts.conclusionDate}
                             </span>
                             <p className="text-sm text-white font-500">{new Date(contract.conclusion_date).toLocaleDateString()}</p>
                           </div>
@@ -369,16 +371,16 @@ export function PlayerContracts() {
                         {contract.cancellation_date && (
                           <div className="space-y-1 sm:col-span-2">
                             <span className="text-[10px] font-600 uppercase tracking-widest text-red-400 flex items-center gap-1.5">
-                              <AlertCircle className="w-3 h-3" /> Fecha de Cancelación
+                              <AlertCircle className="w-3 h-3" /> {t.playerContracts.cancellationDate}
                             </span>
                             <p className="text-sm text-white font-500">{new Date(contract.cancellation_date).toLocaleDateString()}</p>
                           </div>
                         )}
                         {contract.bajaJustification && (
                           <div className="sm:col-span-2 rounded-lg bg-amber-500/10 border border-amber-500/20 p-3 text-xs text-amber-200">
-                            <div className="flex items-center justify-between font-semibold text-[11px] uppercase tracking-wider text-amber-400 mb-1">
-                              <span>Motivo de Baja Administrativa</span>
-                              {contract.bajaAdmin && <span>Por: {contract.bajaAdmin}</span>}
+                              <div className="flex items-center justify-between font-semibold text-[11px] uppercase tracking-wider text-amber-400 mb-1">
+                                <span>{t.playerContracts.adminReleaseReason}</span>
+                                {contract.bajaAdmin && <span>{t.playerContracts.by} {contract.bajaAdmin}</span>}
                             </div>
                             <p className="italic">"{contract.bajaJustification}"</p>
                           </div>
@@ -403,11 +405,11 @@ export function PlayerContracts() {
             </div>
             
             <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white text-center mb-2">
-              ¿Solicitar rescisión de contrato?
+              {t.playerContracts.releaseModalTitle}
             </h3>
             
             <p className="text-sm text-muted-foreground text-center mb-6">
-              Estás a punto de solicitar la baja de tu contrato con <strong className="text-white">{requestingReleaseContract.teams?.name}</strong>. Se notificará al manager para que acepte tu desvinculación. El contrato permanecerá activo hasta su confirmación.
+              {t.playerContracts.releaseModalDesc.replace('{team}', requestingReleaseContract.teams?.name)}
             </p>
 
             <div className="flex gap-3 justify-end">
@@ -415,14 +417,14 @@ export function PlayerContracts() {
                 onClick={() => setRequestingReleaseContract(null)}
                 className="flex-1 py-2.5 rounded-md border border-border text-sm font-600 text-white hover:bg-white/5 transition-colors"
               >
-                Cancelar
+                {t.playerContracts.cancel}
               </button>
               <button
                 onClick={handleRequestRelease}
                 disabled={processingId === requestingReleaseContract.id}
                 className="flex-1 py-2.5 rounded-md bg-red-600 hover:bg-red-700 text-sm font-600 text-white uppercase tracking-wider transition-colors disabled:opacity-50"
               >
-                Confirmar Solicitud
+                {t.playerContracts.confirmRequest}
               </button>
             </div>
           </div>

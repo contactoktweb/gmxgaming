@@ -8,6 +8,7 @@ import { GmxButton } from '@/components/gmx-button'
 import { createClient } from '@/utils/supabase/client'
 import { translateAuthError } from '@/lib/utils'
 import { toast } from 'sonner'
+import { useLanguage } from '@/lib/language-context'
 
 function ForgotPasswordContent() {
   const [step, setStep] = useState<1 | 2 | 3>(1)
@@ -25,6 +26,7 @@ function ForgotPasswordContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
+  const { t } = useLanguage()
 
   // Detectar si el usuario ya llegó con sesión activa (por enlace de correo) o con email en la URL
   useEffect(() => {
@@ -41,11 +43,11 @@ function ForgotPasswordContent() {
           setEmail(session.user.email)
         }
         setStep(2)
-        setInfoMessage('Sesión de recuperación validada. Ingresa tu nueva contraseña a continuación.')
+        setInfoMessage(t.forgotPassword.activeSessionNotice)
       }
     }
     checkExistingSession()
-  }, [searchParams, supabase])
+  }, [searchParams, supabase, t])
 
   // Paso 1: Solicitar correo de recuperación a Supabase
   const handleSendCode = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -56,7 +58,7 @@ function ForgotPasswordContent() {
 
     const cleanEmail = email.trim().toLowerCase()
     if (!cleanEmail) {
-      setError('Por favor ingresa tu correo electrónico.')
+      setError(t.forgotPassword.enterEmailError)
       setIsLoading(false)
       return
     }
@@ -74,11 +76,11 @@ function ForgotPasswordContent() {
       }
 
       setStep(2)
-      setInfoMessage(`Hemos enviado un enlace y código de recuperación a ${cleanEmail}. Revisa tu bandeja de entrada o spam.`)
-      toast.success('Correo de recuperación enviado exitosamente.')
+      setInfoMessage(t.forgotPassword.emailSentNotice.replace('{email}', cleanEmail))
+      toast.success(t.forgotPassword.passwordUpdated)
     } catch (err: any) {
       console.error('Error al enviar correo de recuperación:', err)
-      setError(translateAuthError(err) || 'No se pudo enviar el correo de recuperación. Verifica el correo e intenta de nuevo.')
+      setError(translateAuthError(err) || 'Error sending recovery email. Please check the address and try again.')
     } finally {
       setIsLoading(false)
     }
@@ -91,13 +93,13 @@ function ForgotPasswordContent() {
     setIsLoading(true)
 
     if (newPassword.length < 6) {
-      setError('La nueva contraseña debe tener al menos 6 caracteres.')
+      setError(t.forgotPassword.passwordTooShort)
       setIsLoading(false)
       return
     }
 
     if (newPassword !== confirmPassword) {
-      setError('Las contraseñas no coinciden. Por favor verifícalas.')
+      setError(t.forgotPassword.passwordMismatch)
       setIsLoading(false)
       return
     }
@@ -114,7 +116,7 @@ function ForgotPasswordContent() {
         })
 
         if (otpError) {
-          throw new Error('El código de verificación es inválido o ha expirado. Solicita uno nuevo.')
+          throw new Error(t.forgotPassword.codeInvalid)
         }
       }
 
@@ -128,10 +130,10 @@ function ForgotPasswordContent() {
       }
 
       setStep(3)
-      toast.success('¡Contraseña actualizada exitosamente!')
+      toast.success(t.forgotPassword.passwordUpdated)
     } catch (err: any) {
       console.error('Error al restablecer contraseña:', err)
-      setError(translateAuthError(err?.message || err) || 'Error al actualizar la contraseña. Por favor intenta de nuevo.')
+      setError(translateAuthError(err?.message || err) || 'Error updating password.')
     } finally {
       setIsLoading(false)
     }
@@ -145,13 +147,13 @@ function ForgotPasswordContent() {
           <CheckCircle2 className="h-10 w-10 text-emerald-500" />
         </div>
         <h2 className="font-display text-3xl font-700 uppercase tracking-tight text-white mb-2">
-          ¡CONTRASEÑA RESTABLECIDA!
+          {t.forgotPassword.successTitle}
         </h2>
         <p className="text-muted-foreground text-sm leading-relaxed mb-8">
-          Tu contraseña ha sido actualizada con éxito. Ya puedes acceder con tus nuevas credenciales.
+          {t.forgotPassword.successDesc}
         </p>
         <GmxButton href="/login" className="w-full">
-          IR A INICIAR SESIÓN
+          {t.forgotPassword.backToLogin}
         </GmxButton>
       </div>
     )
@@ -164,12 +166,12 @@ function ForgotPasswordContent() {
           <Link 
             href="/login" 
             className="absolute left-0 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white transition-colors p-1"
-            title="Volver al Login"
+            title="Volver"
           >
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <h2 className="font-display text-2xl font-700 uppercase tracking-tight text-white pl-6">
-            RECUPERAR CONTRASEÑA
+            {t.forgotPassword.title}
           </h2>
         </div>
 
@@ -194,12 +196,12 @@ function ForgotPasswordContent() {
         {step === 1 ? (
           <form onSubmit={handleSendCode} className="space-y-5 animate-in fade-in slide-in-from-left-4 duration-300">
             <p className="text-xs text-muted-foreground text-center leading-relaxed">
-              Ingresa el correo electrónico asociado a tu cuenta de GMX Gaming. Te enviaremos un enlace y código de verificación para restablecer tu contraseña.
+              {t.forgotPassword.step1Desc}
             </p>
 
             <div className="space-y-1.5">
               <label htmlFor="email" className="text-xs font-600 uppercase tracking-wider text-muted-foreground block">
-                Correo Electrónico <span className="text-primary">*</span>
+                {t.forgotPassword.emailLabel} <span className="text-primary">*</span>
               </label>
               <div className="relative">
                 <input
@@ -208,7 +210,7 @@ function ForgotPasswordContent() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  placeholder="ejemplo@correo.com"
+                  placeholder={t.forgotPassword.emailPlaceholder}
                   className="w-full rounded-lg border border-border bg-background py-3 pl-10 pr-4 text-sm text-white placeholder:text-muted-foreground/60 transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 />
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -224,10 +226,10 @@ function ForgotPasswordContent() {
                 {isLoading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>ENVIANDO...</span>
+                    <span>{t.forgotPassword.sending}</span>
                   </>
                 ) : (
-                  <span>ENVIAR CORREO DE RECUPERACIÓN</span>
+                  <span>{t.forgotPassword.submit}</span>
                 )}
               </button>
             </div>
@@ -236,16 +238,16 @@ function ForgotPasswordContent() {
           <form onSubmit={handleResetPassword} className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
             <p className="text-xs text-muted-foreground text-center leading-relaxed">
               {hasActiveSession ? (
-                <>Sesión de recuperación activa para <strong className="text-white">{email}</strong>. Define tu nueva contraseña.</>
+                t.forgotPassword.step2ActiveDesc.replace('{email}', email)
               ) : (
-                <>Si recibiste un código de 6 dígitos en tu correo <strong className="text-white">{email}</strong>, ingrésalo abajo junto a tu nueva contraseña. También puedes simplemente hacer clic en el enlace de tu correo.</>
+                t.forgotPassword.step2Desc.replace('{email}', email)
               )}
             </p>
 
             {!hasActiveSession && (
               <div className="space-y-1.5">
                 <label htmlFor="code" className="text-xs font-600 uppercase tracking-wider text-muted-foreground block">
-                  Código de 6 dígitos <span className="text-muted-foreground/60">(opcional si abres el enlace)</span>
+                  {t.forgotPassword.sixDigitCode} <span className="text-muted-foreground/60">{t.forgotPassword.codeOptional}</span>
                 </label>
                 <div className="relative">
                   <input
@@ -263,7 +265,7 @@ function ForgotPasswordContent() {
 
             <div className="space-y-1.5">
               <label htmlFor="newPassword" className="text-xs font-600 uppercase tracking-wider text-muted-foreground block">
-                Nueva Contraseña <span className="text-primary">*</span>
+                {t.forgotPassword.newPassword} <span className="text-primary">*</span>
               </label>
               <div className="relative">
                 <input
@@ -272,7 +274,7 @@ function ForgotPasswordContent() {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   required
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder={t.forgotPassword.passwordTooShort}
                   className="w-full rounded-lg border border-border bg-background py-3 pl-10 pr-10 text-sm text-white placeholder:text-muted-foreground/60 transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 />
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -288,7 +290,7 @@ function ForgotPasswordContent() {
 
             <div className="space-y-1.5">
               <label htmlFor="confirmPassword" className="text-xs font-600 uppercase tracking-wider text-muted-foreground block">
-                Confirmar Nueva Contraseña <span className="text-primary">*</span>
+                {t.forgotPassword.confirmPassword} <span className="text-primary">*</span>
               </label>
               <div className="relative">
                 <input
@@ -297,7 +299,7 @@ function ForgotPasswordContent() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
-                  placeholder="Repite la contraseña"
+                  placeholder={t.forgotPassword.confirmPassword}
                   className="w-full rounded-lg border border-border bg-background py-3 pl-10 pr-10 text-sm text-white placeholder:text-muted-foreground/60 transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 />
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -320,10 +322,10 @@ function ForgotPasswordContent() {
                 {isLoading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>GUARDANDO...</span>
+                    <span>{t.forgotPassword.resetting}</span>
                   </>
                 ) : (
-                  <span>ACTUALIZAR CONTRASEÑA</span>
+                  <span>{t.forgotPassword.resetSubmit}</span>
                 )}
               </button>
 
@@ -336,7 +338,7 @@ function ForgotPasswordContent() {
                 }}
                 className="text-xs text-muted-foreground hover:text-white transition-colors block mx-auto pt-1"
               >
-                ¿No te llegó el correo? Reintentar con otro email
+                {t.forgotPassword.retryOtherEmail}
               </button>
             </div>
           </form>
