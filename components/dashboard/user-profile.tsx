@@ -31,6 +31,7 @@ import {
   Loader2
 } from 'lucide-react'
 import { cn, formatRoleTitle, formatRolesList, formatNickname, formatPersonName, extractCountry } from '@/lib/utils'
+import { compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS } from '@/lib/image-compression'
 import { GmxButton } from '@/components/gmx-button'
 import { useAuth } from '@/lib/auth-context'
 import { createClient } from '@/utils/supabase/client'
@@ -375,9 +376,10 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
 
         if (fotoFile) {
           toast.loading('Subiendo imagen de perfil...', { id: 'user-avatar-upload' })
-          const fileExt = fotoFile.name.split('.').pop()
+          const compressed = await compressImage(fotoFile, IMAGE_PRESETS.AVATAR)
+          const fileExt = compressed.name.split('.').pop() || 'webp'
           const fileName = `avatar-${user.id}-${Date.now()}.${fileExt}`
-          const { error: uploadError, data } = await supabase.storage.from('avatars').upload(fileName, fotoFile)
+          const { error: uploadError, data } = await supabase.storage.from('avatars').upload(fileName, compressed, SUPABASE_STORAGE_CACHE_OPTIONS)
           toast.dismiss('user-avatar-upload')
 
           if (!uploadError && data) {
@@ -469,9 +471,10 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
       // Si subió un archivo nuevo, subirlo al storage bucket de Supabase
       if (playerFotoFile) {
         try {
-          const fileExt = playerFotoFile.name.split('.').pop()
+          const compressed = await compressImage(playerFotoFile, IMAGE_PRESETS.AVATAR)
+          const fileExt = compressed.name.split('.').pop() || 'webp'
           const fileName = `${Date.now()}_player_${user.id}.${fileExt}`
-          const { error: uploadError, data } = await supabase.storage.from('avatars').upload(fileName, playerFotoFile)
+          const { error: uploadError, data } = await supabase.storage.from('avatars').upload(fileName, compressed, SUPABASE_STORAGE_CACHE_OPTIONS)
           if (!uploadError && data) {
             const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(data.path)
             avatarUrl = publicUrlData.publicUrl

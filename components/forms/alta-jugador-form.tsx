@@ -7,6 +7,7 @@ import { GmxButton } from '@/components/gmx-button'
 import { PhoneInput } from '@/components/forms/phone-input'
 import { FileUpload } from '@/components/forms/file-upload'
 import { cn, formatNickname, formatPersonName } from '@/lib/utils'
+import { compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS } from '@/lib/image-compression'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
 import { useDebounce } from '@/hooks/use-debounce'
@@ -232,9 +233,10 @@ function FormContent() {
 
       try {
         if (fotoFile) {
-          const fileExt = fotoFile.name.split('.').pop()?.toLowerCase() || 'png'
+          const compressedFoto = await compressImage(fotoFile, IMAGE_PRESETS.AVATAR)
+          const fileExt = compressedFoto.name.split('.').pop()?.toLowerCase() || 'webp'
           const fileName = `${Date.now()}_foto_${safeNick}.${fileExt}`
-          const { error: uploadError, data } = await supabase.storage.from('avatars').upload(fileName, fotoFile)
+          const { error: uploadError, data } = await supabase.storage.from('avatars').upload(fileName, compressedFoto, SUPABASE_STORAGE_CACHE_OPTIONS)
           if (!uploadError && data) {
             const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(data.path)
             urlFoto = publicUrlData.publicUrl
@@ -244,9 +246,10 @@ function FormContent() {
         }
 
         if (identidadFile) {
-          const fileExt = identidadFile.name.split('.').pop()?.toLowerCase() || 'png'
+          const compressedId = await compressImage(identidadFile, IMAGE_PRESETS.DOCUMENT)
+          const fileExt = compressedId.name.split('.').pop()?.toLowerCase() || 'webp'
           const fileName = `${Date.now()}_ine_${safeNick}.${fileExt}`
-          const { error: uploadError, data } = await supabase.storage.from('documents').upload(fileName, identidadFile)
+          const { error: uploadError, data } = await supabase.storage.from('documents').upload(fileName, compressedId, SUPABASE_STORAGE_CACHE_OPTIONS)
           if (!uploadError && data) {
             const { data: publicUrlData } = supabase.storage.from('documents').getPublicUrl(data.path)
             urlIdentidad = publicUrlData.publicUrl
@@ -256,9 +259,10 @@ function FormContent() {
         }
 
         if (pasaporteFile) {
-          const fileExt = pasaporteFile.name.split('.').pop()?.toLowerCase() || 'png'
+          const compressedPassport = await compressImage(pasaporteFile, IMAGE_PRESETS.DOCUMENT)
+          const fileExt = compressedPassport.name.split('.').pop()?.toLowerCase() || 'webp'
           const fileName = `${Date.now()}_pasaporte_${safeNick}.${fileExt}`
-          const { error: uploadError, data } = await supabase.storage.from('documents').upload(fileName, pasaporteFile)
+          const { error: uploadError, data } = await supabase.storage.from('documents').upload(fileName, compressedPassport, SUPABASE_STORAGE_CACHE_OPTIONS)
           if (!uploadError && data) {
             const { data: publicUrlData } = supabase.storage.from('documents').getPublicUrl(data.path)
             urlPasaporte = publicUrlData.publicUrl

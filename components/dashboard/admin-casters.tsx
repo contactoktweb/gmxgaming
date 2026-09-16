@@ -6,6 +6,7 @@ import { createClient } from '@/utils/supabase/client'
 import { GmxButton } from '@/components/gmx-button'
 import { toast } from 'sonner'
 import { cn, formatNickname, formatPersonName } from '@/lib/utils'
+import { compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS } from '@/lib/image-compression'
 
 interface Caster {
   id: string
@@ -92,9 +93,10 @@ export function AdminCasters() {
 
       if (avatarFile) {
         toast.loading('Subiendo foto del caster...', { id: 'caster-upload' })
-        const fileExt = avatarFile.name.split('.').pop()
+        const compressed = await compressImage(avatarFile, IMAGE_PRESETS.AVATAR)
+        const fileExt = compressed.name.split('.').pop() || 'webp'
         const fileName = `caster-${Date.now()}.${fileExt}`
-        const { error: uploadError, data } = await supabase.storage.from('teams').upload(`casters/${fileName}`, avatarFile)
+        const { error: uploadError, data } = await supabase.storage.from('teams').upload(`casters/${fileName}`, compressed, SUPABASE_STORAGE_CACHE_OPTIONS)
         toast.dismiss('caster-upload')
         
         if (uploadError) {

@@ -5,6 +5,7 @@ import { Settings, Globe, Gamepad2, Loader2, Save, X, Plus, ChevronDown, Tag, Ca
 import { createClient } from '@/utils/supabase/client'
 import { GmxButton } from '@/components/gmx-button'
 import { FileUpload } from '@/components/forms/file-upload'
+import { compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS } from '@/lib/image-compression'
 import { toast } from 'sonner'
 
 interface AppSetting {
@@ -113,9 +114,10 @@ export function AdminSettings() {
     let imageUrl = ''
     if (newGameImage) {
       setSaving(true)
-      const fileExt = newGameImage.name.split('.').pop()
+      const compressed = await compressImage(newGameImage, IMAGE_PRESETS.GAME)
+      const fileExt = compressed.name.split('.').pop() || 'webp'
       const fileName = `game_${Date.now()}.${fileExt}`
-      const { data, error } = await supabase.storage.from('teams').upload(fileName, newGameImage)
+      const { data, error } = await supabase.storage.from('teams').upload(fileName, compressed, SUPABASE_STORAGE_CACHE_OPTIONS)
       if (data) {
         const { data: urlData } = supabase.storage.from('teams').getPublicUrl(data.path)
         imageUrl = urlData.publicUrl
@@ -176,9 +178,10 @@ export function AdminSettings() {
 
     let logoUrl = newTemplate.logo_url
     if (templateImage) {
-      const fileExt = templateImage.name.split('.').pop()
+      const compressed = await compressImage(templateImage, IMAGE_PRESETS.BANNER)
+      const fileExt = compressed.name.split('.').pop() || 'webp'
       const fileName = `tmpl_${Date.now()}.${fileExt}`
-      const { data: uploadData, error: uploadErr } = await supabase.storage.from('teams').upload(fileName, templateImage)
+      const { data: uploadData, error: uploadErr } = await supabase.storage.from('teams').upload(fileName, compressed, SUPABASE_STORAGE_CACHE_OPTIONS)
       if (uploadErr) {
         console.error('Error al subir imagen de plantilla:', uploadErr)
         toast.error('Error al subir la imagen de la plantilla: ' + uploadErr.message)
@@ -218,9 +221,10 @@ export function AdminSettings() {
     setUploadingTemplateId(templateId)
     
     try {
-      const fileExt = file.name.split('.').pop()
+      const compressed = await compressImage(file, IMAGE_PRESETS.BANNER)
+      const fileExt = compressed.name.split('.').pop() || 'webp'
       const fileName = `tmpl_${Date.now()}.${fileExt}`
-      const { data, error: uploadErr } = await supabase.storage.from('teams').upload(fileName, file)
+      const { data, error: uploadErr } = await supabase.storage.from('teams').upload(fileName, compressed, SUPABASE_STORAGE_CACHE_OPTIONS)
       
       if (uploadErr) {
         toast.error('Error al subir la imagen: ' + uploadErr.message)

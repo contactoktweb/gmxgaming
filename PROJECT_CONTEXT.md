@@ -128,6 +128,7 @@ gmx-gaming-website/
 │   ├── i18n/
 │   │   └── translations.ts              # Diccionarios exhaustivos Español (es) e Inglés (en)
 │   ├── auth-context.tsx                 # Contexto global de sesión y autenticación
+│   ├── image-compression.ts             # Compresión WebP en cliente y presets para Supabase Storage
 │   ├── language-context.tsx             # Contexto de internacionalización bilingüe
 │   ├── site-data.ts                     # Constantes de configuración, enlaces y redes
 │   └── utils.ts                         # Helpers de formato, slugs, errores de auth y clases

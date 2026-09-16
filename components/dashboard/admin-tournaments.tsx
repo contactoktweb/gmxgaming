@@ -5,6 +5,7 @@ import { Trophy, Calendar, Users, Edit, Plus, Trash2, CheckCircle2, Eye, X, Aler
 import { GmxButton } from '@/components/gmx-button'
 import { createClient } from '@/utils/supabase/client'
 import { cn } from '@/lib/utils'
+import { compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS } from '@/lib/image-compression'
 import { toast } from 'sonner'
 
 interface Tournament {
@@ -134,9 +135,10 @@ export function AdminTournaments() {
     if (!file || !selectedTournament) return
     setUploadingLogo(true)
     try {
-      const fileExt = file.name.split('.').pop()
+      const compressed = await compressImage(file, IMAGE_PRESETS.BANNER)
+      const fileExt = compressed.name.split('.').pop() || 'webp'
       const fileName = `tourney_${Date.now()}.${fileExt}`
-      const { data: uploadData, error: uploadErr } = await supabase.storage.from('teams').upload(fileName, file)
+      const { data: uploadData, error: uploadErr } = await supabase.storage.from('teams').upload(fileName, compressed, SUPABASE_STORAGE_CACHE_OPTIONS)
       if (uploadErr) throw uploadErr
 
       const { data: urlData } = supabase.storage.from('teams').getPublicUrl(uploadData.path)
@@ -311,9 +313,10 @@ export function AdminTournaments() {
     let logoToUse = tmpl?.logo_url || null
     if (createCustomImage) {
       try {
-        const fileExt = createCustomImage.name.split('.').pop()
+        const compressed = await compressImage(createCustomImage, IMAGE_PRESETS.BANNER)
+        const fileExt = compressed.name.split('.').pop() || 'webp'
         const fileName = `tourney_${Date.now()}.${fileExt}`
-        const { data: uploadData, error: uploadErr } = await supabase.storage.from('teams').upload(fileName, createCustomImage)
+        const { data: uploadData, error: uploadErr } = await supabase.storage.from('teams').upload(fileName, compressed, SUPABASE_STORAGE_CACHE_OPTIONS)
         if (uploadErr) {
           console.error('Error al subir imagen personalizada de torneo:', uploadErr)
           toast.error('Error al subir imagen: ' + uploadErr.message)

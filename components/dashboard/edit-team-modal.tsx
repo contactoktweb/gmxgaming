@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth-context'
 import { useLanguage } from '@/lib/language-context'
 import { toast } from 'sonner'
 import { cn, formatNickname, formatPersonName } from '@/lib/utils'
+import { compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS } from '@/lib/image-compression'
 import { useDebounce } from '@/hooks/use-debounce'
 
 function FieldTooltip({ text }: { text: string }) {
@@ -461,9 +462,10 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
 
       // Subir nuevo logo si se seleccionó archivo
       if (logoFile) {
-        const fileExt = logoFile.name.split('.').pop()
+        const compressedLogo = await compressImage(logoFile, IMAGE_PRESETS.LOGO)
+        const fileExt = compressedLogo.name.split('.').pop() || 'webp'
         const fileName = `${Date.now()}_logo_${name.trim().replace(/\s+/g, '_')}.${fileExt}`
-        const { data, error: uploadErr } = await supabase.storage.from('teams').upload(fileName, logoFile)
+        const { data, error: uploadErr } = await supabase.storage.from('teams').upload(fileName, compressedLogo, SUPABASE_STORAGE_CACHE_OPTIONS)
         if (!uploadErr && data) {
           const { data: pUrl } = supabase.storage.from('teams').getPublicUrl(data.path)
           finalLogoUrl = pUrl.publicUrl
@@ -472,9 +474,10 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
 
       // Subir nuevo jersey si se seleccionó archivo
       if (jerseyFile) {
-        const fileExt = jerseyFile.name.split('.').pop()
+        const compressedJersey = await compressImage(jerseyFile, IMAGE_PRESETS.JERSEY)
+        const fileExt = compressedJersey.name.split('.').pop() || 'webp'
         const fileName = `${Date.now()}_jersey_${name.trim().replace(/\s+/g, '_')}.${fileExt}`
-        const { data, error: uploadErr } = await supabase.storage.from('teams').upload(fileName, jerseyFile)
+        const { data, error: uploadErr } = await supabase.storage.from('teams').upload(fileName, compressedJersey, SUPABASE_STORAGE_CACHE_OPTIONS)
         if (!uploadErr && data) {
           const { data: pUrl } = supabase.storage.from('teams').getPublicUrl(data.path)
           finalJerseyUrl = pUrl.publicUrl

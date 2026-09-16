@@ -6,6 +6,7 @@ import { createClient } from '@/utils/supabase/client'
 import { GmxButton } from '@/components/gmx-button'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS } from '@/lib/image-compression'
 import { PARTNERS, PartnerSponsor } from '@/lib/site-data'
 
 export function AdminSponsors() {
@@ -111,12 +112,13 @@ export function AdminSponsors() {
     toast.loading('Subiendo imagen del sponsor...', { id: 'upload-sponsor-img' })
 
     try {
-      const fileExt = file.name.split('.').pop()
+      const compressed = await compressImage(file, IMAGE_PRESETS.SPONSOR)
+      const fileExt = compressed.name.split('.').pop() || 'webp'
       const fileName = `sponsor-${Date.now()}.${fileExt}`
       
       const { error: uploadError, data } = await supabase.storage
         .from('teams')
-        .upload(fileName, file, { upsert: true })
+        .upload(fileName, compressed, SUPABASE_STORAGE_CACHE_OPTIONS)
 
       if (uploadError) {
         throw uploadError

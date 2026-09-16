@@ -31,6 +31,7 @@ import {
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
 import { cn, formatLocation, extractCountry, formatRoleTitle, DEFAULT_COUNTRIES } from '@/lib/utils'
+import { compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS } from '@/lib/image-compression'
 import { GmxButton } from '@/components/gmx-button'
 import { toast } from 'sonner'
 import { AdminPagination } from '@/components/dashboard/admin-pagination'
@@ -316,9 +317,11 @@ export function AdminTeams() {
   const handleUploadTeamMedia = async (file: File, fieldKey: 'logo_url' | 'jersey_url') => {
     try {
       toast.loading('Subiendo imagen del equipo...', { id: 'upload-team-media' })
-      const fileExt = file.name.split('.').pop()
+      const preset = fieldKey === 'logo_url' ? IMAGE_PRESETS.LOGO : IMAGE_PRESETS.JERSEY
+      const compressed = await compressImage(file, preset)
+      const fileExt = compressed.name.split('.').pop() || 'webp'
       const fileName = `team_${fieldKey}_${Date.now()}.${fileExt}`
-      const { data, error } = await supabase.storage.from('teams').upload(fileName, file)
+      const { data, error } = await supabase.storage.from('teams').upload(fileName, compressed, SUPABASE_STORAGE_CACHE_OPTIONS)
       if (error) throw error
       const { data: pUrl } = supabase.storage.from('teams').getPublicUrl(data.path)
       const newUrl = pUrl.publicUrl

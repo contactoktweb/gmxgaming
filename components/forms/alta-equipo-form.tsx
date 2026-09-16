@@ -8,6 +8,7 @@ import { FileUpload } from '@/components/forms/file-upload'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
 import { cn, formatNickname, formatPersonName } from '@/lib/utils'
+import { compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS } from '@/lib/image-compression'
 import { toast } from 'sonner'
 import { useLanguage } from '@/lib/language-context'
 
@@ -371,9 +372,10 @@ export function AltaEquipoForm() {
 
       try {
         if (logoFile) {
-          const fileExt = logoFile.name.split('.').pop()?.toLowerCase() || 'png'
+          const compressedLogo = await compressImage(logoFile, IMAGE_PRESETS.LOGO)
+          const fileExt = compressedLogo.name.split('.').pop()?.toLowerCase() || 'webp'
           const fileName = `${Date.now()}_logo_${safePrefix}.${fileExt}`
-          const { error: uploadError, data } = await supabase.storage.from('teams').upload(fileName, logoFile)
+          const { error: uploadError, data } = await supabase.storage.from('teams').upload(fileName, compressedLogo, SUPABASE_STORAGE_CACHE_OPTIONS)
           if (!uploadError && data) {
             const { data: publicUrlData } = supabase.storage.from('teams').getPublicUrl(data.path)
             urlLogo = publicUrlData.publicUrl
@@ -383,9 +385,10 @@ export function AltaEquipoForm() {
         }
 
         if (jerseyFile) {
-          const fileExt = jerseyFile.name.split('.').pop()?.toLowerCase() || 'png'
+          const compressedJersey = await compressImage(jerseyFile, IMAGE_PRESETS.JERSEY)
+          const fileExt = compressedJersey.name.split('.').pop()?.toLowerCase() || 'webp'
           const fileName = `${Date.now()}_jersey_${safePrefix}.${fileExt}`
-          const { error: uploadError, data } = await supabase.storage.from('teams').upload(fileName, jerseyFile)
+          const { error: uploadError, data } = await supabase.storage.from('teams').upload(fileName, compressedJersey, SUPABASE_STORAGE_CACHE_OPTIONS)
           if (!uploadError && data) {
             const { data: publicUrlData } = supabase.storage.from('teams').getPublicUrl(data.path)
             urlJersey = publicUrlData.publicUrl

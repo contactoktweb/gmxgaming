@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth-context'
 import { GmxButton } from '@/components/gmx-button'
 import { toast } from 'sonner'
 import { cn, formatNickname, formatPersonName, formatRoleTitle, extractCountry, DEFAULT_COUNTRIES } from '@/lib/utils'
+import { compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS } from '@/lib/image-compression'
 import { AdminPagination } from '@/components/dashboard/admin-pagination'
 
 const FIELD_LABELS: Record<string, string> = {
@@ -447,10 +448,13 @@ export function AdminPlayers() {
   const handleUploadPlayerMedia = async (file: File, fieldKey: string) => {
     try {
       toast.loading('Subiendo imagen...', { id: 'upload-player-media' })
-      const fileExt = file.name.split('.').pop()
-      const bucket = (fieldKey === 'avatar_url' || fieldKey === 'cover_url') ? 'avatars' : 'documents'
+      const isAvatar = fieldKey === 'avatar_url' || fieldKey === 'cover_url'
+      const preset = isAvatar ? IMAGE_PRESETS.AVATAR : IMAGE_PRESETS.DOCUMENT
+      const compressed = await compressImage(file, preset)
+      const fileExt = compressed.name.split('.').pop() || 'webp'
+      const bucket = isAvatar ? 'avatars' : 'documents'
       const fileName = `player_${fieldKey}_${Date.now()}.${fileExt}`
-      const { data, error } = await supabase.storage.from(bucket).upload(fileName, file)
+      const { data, error } = await supabase.storage.from(bucket).upload(fileName, compressed, SUPABASE_STORAGE_CACHE_OPTIONS)
       if (error) throw error
       const { data: pUrl } = supabase.storage.from(bucket).getPublicUrl(data.path)
       setEditingDetails((prev: any) => ({ ...prev, [fieldKey]: pUrl.publicUrl }))
