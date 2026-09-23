@@ -397,3 +397,77 @@ export function isValidPersonName(value: string): boolean {
   if (!value || !value.trim()) return false
   return /^[A-ZÁÉÍÓÚÜÑ ]+$/i.test(value.trim())
 }
+
+/**
+ * Extrae la URL de foto de perfil / avatar desde el objeto de detalles (JSONB) de una validación.
+ * Maneja todas las variaciones de nombres de campo (avatar_url, urlFoto, item_meta[687], photo, foto, etc.),
+ * arrays, formatos de WordPress/Formidable Forms y URLs directas del bucket de Supabase,
+ * filtrando placeholders y documentos (INE, pasaporte, PDFs).
+ */
+export function extractAvatarFromDetails(details: any): string | null {
+  if (!details || typeof details !== 'object') return null
+
+  // 1. Claves directas y prioritarias para foto de perfil / jugador
+  const directKeys = [
+    'avatar_url',
+    'avatar',
+    'photo_url',
+    'photo',
+    'foto',
+    'foto_url',
+    'picture',
+    'image',
+    'image_url',
+    'profile_photo',
+    'urlFoto',
+    'item_meta[687]',
+    'item_meta[687][url]',
+    'item_meta[687][0]'
+  ]
+
+  for (const k of directKeys) {
+    const val = details[k]
+    if (typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://') || val.startsWith('data:image')) && !val.includes('placehold.co') && !val.toLowerCase().endsWith('.pdf')) {
+      return val
+    }
+    if (Array.isArray(val) && val.length > 0) {
+      const first = typeof val[0] === 'string' ? val[0] : val[0]?.url
+      if (typeof first === 'string' && (first.startsWith('http://') || first.startsWith('https://')) && !first.includes('placehold.co') && !first.toLowerCase().endsWith('.pdf')) {
+        return first
+      }
+    }
+  }
+
+  // 2. Búsqueda por coincidencia de nombre de clave (avatar, foto, photo, picture, 687), excluyendo documentos
+  for (const [k, v] of Object.entries(details)) {
+    const lk = k.toLowerCase()
+    const isDoc = lk.includes('id_photo') || lk.includes('ine') || lk.includes('passport') || lk.includes('pasaporte') || lk.includes('750')
+    if (isDoc) continue
+
+    if (lk.includes('avatar') || lk.includes('foto') || lk.includes('photo') || lk.includes('687') || lk.includes('picture')) {
+      if (typeof v === 'string' && (v.startsWith('http://') || v.startsWith('https://') || v.startsWith('data:image')) && !v.includes('placehold.co') && !v.toLowerCase().endsWith('.pdf')) {
+        return v
+      }
+      if (Array.isArray(v) && v.length > 0) {
+        const first = typeof v[0] === 'string' ? v[0] : v[0]?.url
+        if (typeof first === 'string' && (first.startsWith('http://') || first.startsWith('https://')) && !first.includes('placehold.co') && !first.toLowerCase().endsWith('.pdf')) {
+          return first
+        }
+      }
+    }
+  }
+
+  // 3. Fallback: cualquier valor que contenga la URL al bucket 'avatars' de Supabase
+  for (const [k, v] of Object.entries(details)) {
+    const lk = k.toLowerCase()
+    const isDoc = lk.includes('id_photo') || lk.includes('ine') || lk.includes('passport') || lk.includes('pasaporte') || lk.includes('750')
+    if (isDoc) continue
+
+    if (typeof v === 'string' && v.includes('/avatars/') && !v.includes('placehold.co') && !v.toLowerCase().endsWith('.pdf')) {
+      return v
+    }
+  }
+
+  return null
+}
+

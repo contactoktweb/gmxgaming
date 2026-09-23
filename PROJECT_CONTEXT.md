@@ -208,6 +208,12 @@ gmx-gaming-website/
    - Protección de rutas vía middleware (`middleware.ts`).
 4. **Sistema de Auditoría y Validaciones (`validations`):**
    - Todo cambio sensible (alta de jugador, alta de equipo, cambio de datos o contratos) genera una solicitud en la tabla `validations` que debe ser aprobada o rechazada por un administrador.
+   - En **Alta de Jugador**, al ser aprobada por el administrador:
+     - El ID del usuario se resuelve de manera robusta (`details.user_id`, `submitted_by` UUID, lookup por email, nickname o nombre en `profiles`), garantizando que jamás se intente actualizar usando el ID de la fila de `validations`.
+     - Se persisten y sincronizan en `profiles`: `is_player: true`, `player_status: 'active'`, `closest_airport`, `avatar_url` y `avatar` (con la foto real subida en la postulación, protegiendo contra URLs de placeholder), `nickname`, `name`, `discord_handle`, redes sociales e información de juego en `player_game_info`.
+     - En el perfil del usuario (`/micuenta`), el estado de jugador aprobado se detecta inmediatamente mediante `profileData` y/o validaciones aprobadas activas (`playerVal?.status === 'active' || playerVal?.status === 'approved'`), con autorreparación y sincronización automática.
+   - En caso de rechazo, el motivo indicado por el administrador se muestra de forma persistente en el panel "Mi Cuenta" dentro de la sección "Mis Registros" y en el banner superior hasta que el usuario envíe una nueva solicitud.
+   - En **Modificaciones de Perfil de Jugador**, el botón `EDITAR Y REENVIAR` abre `openEditPlayer` para jugadores, reseteando la solicitud en `validations` a `pending` y `rejection_reason: null`, y mostrándose tanto en la pestaña "Jugadores" como en "Modificaciones" del panel de administración.
 5. **Reglas de Contratos y Género:**
    - Un jugador puede tener como máximo **1 contrato activo en División Varonil/Mixta** y **1 contrato activo en División Femenil** simultáneamente.
    - Validación estricta que impide transformar un equipo a categoría **Femenil** si existen jugadores varoniles en su plantilla activa.

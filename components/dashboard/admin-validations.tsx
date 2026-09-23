@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth-context'
 import { GmxButton } from '@/components/gmx-button'
 import { createClient } from '@/utils/supabase/client'
 import { toast } from 'sonner'
-import { cn, formatNickname, formatPersonName } from '@/lib/utils'
+import { cn, formatNickname, formatPersonName, extractAvatarFromDetails } from '@/lib/utils'
 import { useDebounce } from '@/hooks/use-debounce'
 import { AdminPagination } from '@/components/dashboard/admin-pagination'
 
@@ -295,6 +295,8 @@ export function AdminValidations() {
       if (activeTab !== 'all') {
         if (activeTab === 'contrato' || activeTab === 'contratos') {
           query = query.in('type', ['contrato', 'contratos', 'baja_contrato'])
+        } else if (activeTab === 'jugador') {
+          query = query.in('type', ['jugador', 'modificacion'])
         } else {
           query = query.eq('type', activeTab)
         }
@@ -415,22 +417,120 @@ export function AdminValidations() {
 
       if (requestToUpdate) {
         if (requestToUpdate.type === 'jugador') {
-          const targetUserId = requestToUpdate.details?.user_id || requestToUpdate.details?.id || confirmAction.id
+          // Resolución robusta del ID de usuario en profiles
+          let targetUserId = requestToUpdate.details?.user_id || requestToUpdate.details?.id
           
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+          if (!targetUserId && requestToUpdate.submitted_by && isUuid.test(requestToUpdate.submitted_by)) {
+            targetUserId = requestToUpdate.submitted_by
+          }
+
+          if (!targetUserId && (requestToUpdate.details?.email || (requestToUpdate.submitted_by && requestToUpdate.submitted_by.includes('@')))) {
+            const searchEmail = (requestToUpdate.details?.email || requestToUpdate.submitted_by).trim()
+            const { data: pUser } = await supabase.from('profiles').select('id').ilike('email', searchEmail).limit(1)
+            if (pUser && pUser.length > 0) {
+              targetUserId = pUser[0].id
+            }
+          }
+
+          if (!targetUserId && (requestToUpdate.details?.nickname || requestToUpdate.target_name)) {
+            const searchNick = (requestToUpdate.details?.nickname || requestToUpdate.target_name).trim()
+            const { data: pUser } = await supabase.from('profiles').select('id').ilike('nickname', searchNick).limit(1)
+            if (pUser && pUser.length > 0) {
+              targetUserId = pUser[0].id
+            }
+          }
+
+          if (!targetUserId && (requestToUpdate.details?.name || requestToUpdate.submitted_by)) {
+            const searchName = (requestToUpdate.details?.name || requestToUpdate.submitted_by).trim()
+            const { data: pUser } = await supabase.from('profiles').select('id').ilike('name', searchName).limit(1)
+            if (pUser && pUser.length > 0) {
+              targetUserId = pUser[0].id
+            }
+          }
+
+          const candidateAvatar = extractAvatarFromDetails(requestToUpdate.details)
+
           if (isApproved) {
-            // Aprobación: activar el jugador y asegurar que su país quede persistido
+            // Aprobación: activar el jugador y asegurar que su país, foto y datos queden persistidos
             const countryVal = requestToUpdate.details?.country || requestToUpdate.details?.closest_airport || 'México'
-            await supabase.from('profiles').update({
+            const profileUpdates: any = {
               is_player: true,
               player_status: 'active',
               closest_airport: countryVal
-            }).eq('id', targetUserId)
+            }
+
+            // Sincronizar foto si la solicitud trae foto válida (con cualquier formato / nombre de clave)
+            if (candidateAvatar) {
+              profileUpdates.avatar_url = candidateAvatar
+              profileUpdates.avatar = candidateAvatar
+            }
+
+            if (requestToUpdate.details?.nickname) {
+              profileUpdates.nickname = requestToUpdate.details.nickname
+            }
+            if (requestToUpdate.details?.name) {
+              profileUpdates.name = requestToUpdate.details.name
+            }
+            if (requestToUpdate.details?.discord || requestToUpdate.details?.discord_handle) {
+              profileUpdates.discord_handle = requestToUpdate.details?.discord || requestToUpdate.details?.discord_handle
+            }
+            if (requestToUpdate.details?.id_photo_url && !requestToUpdate.details.id_photo_url.includes('placehold.co')) {
+              profileUpdates.id_photo_url = requestToUpdate.details.id_photo_url
+            }
+            if (requestToUpdate.details?.passport_photo_url) {
+              profileUpdates.passport_photo_url = requestToUpdate.details.passport_photo_url
+            }
+
+            const socialKeys = ['social_ig', 'social_tiktok', 'social_yt', 'social_twitch', 'social_kick', 'social_x', 'social_fb']
+            socialKeys.forEach(key => {
+              if (requestToUpdate.details?.[key]) profileUpdates[key] = requestToUpdate.details[key]
+            })
+
+            if (targetUserId) {
+              await supabase.from('profiles').update(profileUpdates).eq('id', targetUserId)
+
+              // Sincronizar en player_game_info
+              const gameVal = requestToUpdate.details?.game || 'Mobile Legends'
+              const gameIdVal = requestToUpdate.details?.game_id
+              const serverVal = requestToUpdate.details?.server
+              const gameNickVal = requestToUpdate.details?.nickname || requestToUpdate.target_name
+
+              if (gameIdVal || serverVal || gameNickVal) {
+                const { data: existingGInfo } = await supabase
+                  .from('player_game_info')
+                  .select('*')
+                  .eq('profile_id', targetUserId)
+                  .limit(1)
+
+                if (existingGInfo && existingGInfo.length > 0) {
+                  await supabase.from('player_game_info').update({
+                    game: gameVal,
+                    game_id: gameIdVal || existingGInfo[0].game_id,
+                    server: serverVal || existingGInfo[0].server,
+                    game_nickname: gameNickVal || existingGInfo[0].game_nickname,
+                    country_account: requestToUpdate.details?.country_account || countryVal
+                  }).eq('id', existingGInfo[0].id)
+                } else if (gameIdVal) {
+                  await supabase.from('player_game_info').insert({
+                    profile_id: targetUserId,
+                    game: gameVal,
+                    game_id: gameIdVal,
+                    server: serverVal,
+                    game_nickname: gameNickVal,
+                    country_account: requestToUpdate.details?.country_account || countryVal
+                  })
+                }
+              }
+            }
           } else {
             // Rechazo: desactivar el jugador completamente y registrar razón
-            await supabase.from('profiles').update({
-              is_player: false,
-              player_status: 'rejected'
-            }).eq('id', targetUserId)
+            if (targetUserId) {
+              await supabase.from('profiles').update({
+                is_player: false,
+                player_status: 'rejected'
+              }).eq('id', targetUserId)
+            }
           }
           
           // Actualizar en tabla validations si existe el registro con este ID
@@ -441,10 +541,12 @@ export function AdminValidations() {
               details: {
                 ...requestToUpdate.details,
                 rejection_reason: isApproved ? null : reason,
-                user_id: targetUserId
+                user_id: targetUserId,
+                status: newStatus,
+                ...(candidateAvatar ? { avatar_url: candidateAvatar, avatar: candidateAvatar } : {})
               }
             }).eq('id', confirmAction.id)
-          } else {
+          } else if (targetUserId) {
             // Verificar si hay alguna validación previa para este user_id
             const { data: userVal } = await supabase.from('validations').select('id').eq('details->>user_id', targetUserId).limit(1)
             if (userVal && userVal.length > 0) {
@@ -453,7 +555,9 @@ export function AdminValidations() {
                 details: {
                   ...requestToUpdate.details,
                   rejection_reason: isApproved ? null : reason,
-                  user_id: targetUserId
+                  user_id: targetUserId,
+                  status: newStatus,
+                  ...(candidateAvatar ? { avatar_url: candidateAvatar, avatar: candidateAvatar } : {})
                 }
               }).eq('id', userVal[0].id)
             } else {
@@ -465,7 +569,9 @@ export function AdminValidations() {
                 details: {
                   ...requestToUpdate.details,
                   rejection_reason: isApproved ? null : reason,
-                  user_id: targetUserId
+                  user_id: targetUserId,
+                  status: newStatus,
+                  ...(candidateAvatar ? { avatar_url: candidateAvatar, avatar: candidateAvatar } : {})
                 }
               })
             }
@@ -675,10 +781,34 @@ export function AdminValidations() {
               }).eq('type', 'modificacion').eq('status', 'pending').filter('details->>user_id', 'eq', userId)
             } else {
               // Revertir y registrar rechazo con motivo obligatorio
-              await supabase.from('profiles').update({ edit_requested: false }).eq('id', userId)
+              // Restaurar imagen antigua y cancelar edit_requested en profiles
+              const revertUpdates: any = { edit_requested: false }
+              const originalAvatar = details.original_avatar
+              if (originalAvatar) {
+                revertUpdates.avatar_url = originalAvatar
+                revertUpdates.avatar = originalAvatar
+              } else {
+                // Fallback: recuperar avatar de la postulación original de jugador aprobada
+                const { data: origVal } = await supabase
+                  .from('validations')
+                  .select('details')
+                  .eq('type', 'jugador')
+                  .or(`details->>user_id.eq.${userId},submitted_by.eq.${userId}`)
+                  .limit(1)
+                if (origVal && origVal.length > 0) {
+                  const fallbackPhoto = extractAvatarFromDetails(origVal[0].details)
+                  if (fallbackPhoto) {
+                    revertUpdates.avatar_url = fallbackPhoto
+                    revertUpdates.avatar = fallbackPhoto
+                  }
+                }
+              }
+
+              await supabase.from('profiles').update(revertUpdates).eq('id', userId)
 
               await supabase.from('validations').update({
                 status: 'rejected',
+                rejection_reason: reason,
                 details: {
                   ...details,
                   rejection_reason: reason,
@@ -689,6 +819,7 @@ export function AdminValidations() {
 
               await supabase.from('validations').update({
                 status: 'rejected',
+                rejection_reason: reason,
                 details: {
                   ...details,
                   rejection_reason: reason,
@@ -781,8 +912,43 @@ export function AdminValidations() {
     
     try {
       if (selectedRequest.type === 'jugador') {
-        const { error: err } = await supabase.from('profiles').update(cleanDetails).eq('id', selectedRequest.id)
-        error = err;
+        let targetUserId = selectedRequest.details?.user_id || selectedRequest.details?.id
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+        if (!targetUserId && selectedRequest.submitted_by && isUuid.test(selectedRequest.submitted_by)) {
+          targetUserId = selectedRequest.submitted_by
+        }
+        if (!targetUserId && (selectedRequest.details?.email || (selectedRequest.submitted_by && selectedRequest.submitted_by.includes('@')))) {
+          const sEmail = (selectedRequest.details?.email || selectedRequest.submitted_by).trim()
+          const { data: pUser } = await supabase.from('profiles').select('id').ilike('email', sEmail).limit(1)
+          if (pUser && pUser.length > 0) targetUserId = pUser[0].id
+        }
+
+        if (targetUserId) {
+          const profileAllowedFields = [
+            'name', 'nickname', 'discord_handle', 'closest_airport', 
+            'avatar_url', 'avatar', 'id_photo_url', 'passport_photo_url',
+            'social_ig', 'social_tiktok', 'social_yt', 'social_twitch',
+            'social_kick', 'social_x', 'social_fb', 'player_status', 'is_player'
+          ]
+          const profileDataToUpdate: any = {}
+          const candidateAvatar = extractAvatarFromDetails(editingDetails)
+          if (candidateAvatar) {
+            profileDataToUpdate.avatar_url = candidateAvatar
+            profileDataToUpdate.avatar = candidateAvatar
+          }
+
+          // Si la solicitud ya estaba aprobada, asegurar que no se degrade el player_status en profiles
+          if (selectedRequest.status === 'active' || selectedRequest.status === 'approved') {
+            profileDataToUpdate.is_player = true
+            profileDataToUpdate.player_status = 'active'
+          }
+
+          if (Object.keys(profileDataToUpdate).length > 0) {
+            const { error: err } = await supabase.from('profiles').update(profileDataToUpdate).eq('id', targetUserId)
+            error = err
+          }
+        }
+        await supabase.from('validations').update({ details: editingDetails }).eq('id', selectedRequest.id)
       } else if (selectedRequest.type === 'equipo') {
         const { error: err } = await supabase.from('teams').update(cleanDetails).eq('id', selectedRequest.id)
         error = err;
@@ -812,19 +978,32 @@ export function AdminValidations() {
             
             if (req.type === 'jugador' || req.type === 'modificacion') {
               targetName = editingDetails.nickname || editingDetails.name || req.target_name;
-              if (editingDetails.player_status) newStatus = editingDetails.player_status;
+              // NUNCA revertir una solicitud aprobada a pending al guardar detalles
+              if (req.status !== 'active' && req.status !== 'approved' && editingDetails.player_status) {
+                newStatus = editingDetails.player_status;
+              }
             } else if (req.type === 'equipo') {
               targetName = editingDetails.name;
-              if (editingDetails.status) newStatus = editingDetails.status;
+              if (req.status !== 'active' && req.status !== 'approved' && editingDetails.status) {
+                newStatus = editingDetails.status;
+              }
             } else if (req.type === 'contrato' || req.type === 'baja_contrato') {
-              if (editingDetails.status) newStatus = editingDetails.status;
+              if (req.status !== 'active' && req.status !== 'approved' && editingDetails.status) {
+                newStatus = editingDetails.status;
+              }
             }
             
             return { ...req, target_name: targetName, details: editingDetails, status: newStatus }
           }
           return req
         }))
-        setSelectedRequest({ ...selectedRequest, target_name: editingDetails.nickname || editingDetails.name || selectedRequest.target_name, details: editingDetails, status: editingDetails.status || editingDetails.player_status || selectedRequest.status })
+        const isAlreadyApproved = selectedRequest.status === 'active' || selectedRequest.status === 'approved'
+        setSelectedRequest({ 
+          ...selectedRequest, 
+          target_name: editingDetails.nickname || editingDetails.name || selectedRequest.target_name, 
+          details: editingDetails, 
+          status: isAlreadyApproved ? selectedRequest.status : (editingDetails.status || editingDetails.player_status || selectedRequest.status) 
+        })
         await fetchValidations()
         toast.success('Cambios guardados correctamente.')
       } else {

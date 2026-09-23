@@ -61,17 +61,29 @@ function FormContent() {
     async function init() {
       if (!user) return
 
-      const { data: profile } = await supabase.from('profiles')
-        .select('is_player, player_status')
-        .eq('id', user.id)
-        .single()
+      if (user) {
+        const { data: profile } = await supabase.from('profiles')
+          .select('is_player, player_status')
+          .eq('id', user.id)
+          .single()
 
-      if (profile) {
-        if (profile.is_player && (profile.player_status === 'active' || profile.player_status === 'approved')) {
+        const { data: userVal } = await supabase.from('validations')
+          .select('status')
+          .eq('type', 'jugador')
+          .or(`details->>user_id.eq.${user.id},submitted_by.eq.${user.id},submitted_by.eq.${user.email}`)
+          .order('created_at', { ascending: false })
+          .limit(1)
+
+        const valStatus = userVal?.[0]?.status
+
+        if ((profile?.is_player && (profile.player_status === 'active' || profile.player_status === 'approved')) || valStatus === 'active' || valStatus === 'approved') {
+          if (!profile?.is_player || profile?.player_status !== 'active') {
+            supabase.from('profiles').update({ is_player: true, player_status: 'active' }).eq('id', user.id)
+          }
           setFormStatus('already_registered')
           setLoadingConfig(false)
           return
-        } else if (profile.is_player && profile.player_status === 'pending') {
+        } else if ((profile?.is_player && profile.player_status === 'pending') || valStatus === 'pending') {
           setFormStatus('pending_review')
           setLoadingConfig(false)
           return
@@ -226,9 +238,9 @@ function FormContent() {
         }
       }
 
-      let urlFoto = 'https://placehold.co/400x400/png?text=FOTO+JUGADOR'
-      let urlIdentidad = 'https://placehold.co/600x400/png?text=INE'
-      let urlPasaporte = null
+      let urlFoto: string | null = (user?.avatar && !user.avatar.includes('placehold.co')) ? user.avatar : null
+      let urlIdentidad: string | null = null
+      let urlPasaporte: string | null = null
       const safeNick = cleanNick.replace(/[^a-zA-Z0-9_-]/g, '') || 'jugador'
 
       try {
@@ -301,8 +313,13 @@ function FormContent() {
         if (val) socialLinks[dbField] = val
       })
 
-      if (urlFoto) corePayload.avatar_url = urlFoto
-      if (urlIdentidad) corePayload.id_photo_url = urlIdentidad
+      if (urlFoto && !urlFoto.includes('placehold.co')) {
+        corePayload.avatar_url = urlFoto
+        corePayload.avatar = urlFoto
+      }
+      if (urlIdentidad && !urlIdentidad.includes('placehold.co')) {
+        corePayload.id_photo_url = urlIdentidad
+      }
       if (urlPasaporte) corePayload.passport_photo_url = urlPasaporte
 
       const fullPayload = { ...corePayload, ...socialLinks }
@@ -350,11 +367,15 @@ function FormContent() {
       try {
         const { data: existingVal } = await supabase
           .from('validations')
-          .select('id')
+          .select('id, status')
           .eq('type', 'jugador')
-          .filter('details->>user_id', 'eq', user?.id)
+          .or(`details->>user_id.eq.${user?.id},submitted_by.eq.${user?.id},submitted_by.eq.${user?.email}`)
+          .order('created_at', { ascending: false })
           .limit(1)
 
+        const isAlreadyApproved = existingVal?.[0]?.status === 'active' || existingVal?.[0]?.status === 'approved'
+
+        const finalAvatar = (urlFoto && !urlFoto.includes('placehold.co')) ? urlFoto : (user?.avatar || null)
         const validationDetails = {
           user_id: user?.id,
           name: fullName,
@@ -365,7 +386,8 @@ function FormContent() {
           country: (formData.get('item_meta[677]') as string) || null,
           discord: (formData.get('item_meta[684]') as string) || null,
           phone: (formData.get('item_meta[685]') as string) || null,
-          avatar_url: urlFoto,
+          avatar_url: finalAvatar,
+          avatar: finalAvatar,
           id_photo_url: urlIdentidad,
           passport_photo_url: urlPasaporte || null,
           game: (formData.get('selected_game') as string) || selectedGame || null,
@@ -375,7 +397,7 @@ function FormContent() {
 
         if (existingVal && existingVal.length > 0) {
           await supabase.from('validations').update({
-            status: 'pending',
+            status: isAlreadyApproved ? existingVal[0].status : 'pending',
             target_name: cleanNick,
             submitted_by: fullName,
             details: validationDetails,

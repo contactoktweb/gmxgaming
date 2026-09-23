@@ -6,7 +6,7 @@ import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
 import { GmxButton } from '@/components/gmx-button'
 import { toast } from 'sonner'
-import { cn, formatNickname, formatPersonName, formatRoleTitle, extractCountry, DEFAULT_COUNTRIES } from '@/lib/utils'
+import { cn, formatNickname, formatPersonName, formatRoleTitle, extractCountry, DEFAULT_COUNTRIES, extractAvatarFromDetails } from '@/lib/utils'
 import { compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS } from '@/lib/image-compression'
 import { AdminPagination } from '@/components/dashboard/admin-pagination'
 
@@ -194,7 +194,7 @@ export function AdminPlayers() {
             if (cId) valMap[cId] = v
           }
 
-          const uId = v.details?.user_id || v.details?.id || (v.type === 'jugador' ? v.id : null)
+          const uId = v.details?.user_id || v.details?.id
           const d = v.details || {}
 
           const emailVal = d.email || d['item_meta[676]'] || (v.submitted_by && v.submitted_by.includes('@') ? v.submitted_by : '')
@@ -314,6 +314,20 @@ export function AdminPlayers() {
           const playerBirthDate = extra.birthDate || ''
           const playerGender = extra.gender || 'Masculino'
 
+          const valAvatar = extractAvatarFromDetails(extra.details)
+          const resolvedAvatar = (p.avatar_url && !p.avatar_url.includes('placehold.co')) 
+            ? p.avatar_url 
+            : (p.avatar && !p.avatar.includes('placehold.co')) 
+            ? p.avatar 
+            : valAvatar 
+            ? valAvatar 
+            : 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
+
+          // Reparación automática en base de datos si la validación tenía foto pero profiles no
+          if (valAvatar && (!p.avatar_url || p.avatar_url.includes('placehold.co'))) {
+            supabase.from('profiles').update({ avatar_url: valAvatar, avatar: valAvatar }).eq('id', p.id).then(() => {})
+          }
+
           return {
             id: p.id,
             name: p.name,
@@ -324,7 +338,7 @@ export function AdminPlayers() {
             contractTimeLeft,
             team,
             status: p.player_status || 'inactive',
-            avatar: p.avatar_url,
+            avatar: resolvedAvatar,
             discord: p.discord_handle,
             country: playerCountry,
             created_at: p.created_at,
@@ -484,7 +498,8 @@ export function AdminPlayers() {
       player_status: editingDetails.player_status || 'active',
       is_featured: Boolean(editingDetails.is_featured),
       passport_number: editingDetails.passport_number?.trim() || null,
-      avatar_url: editingDetails.avatar_url?.trim() || null,
+      avatar_url: (editingDetails.avatar_url?.trim() && !editingDetails.avatar_url.includes('placehold.co')) ? editingDetails.avatar_url.trim() : null,
+      avatar: (editingDetails.avatar_url?.trim() && !editingDetails.avatar_url.includes('placehold.co')) ? editingDetails.avatar_url.trim() : null,
       cover_url: editingDetails.cover_url?.trim() || null,
       id_photo_url: editingDetails.id_photo_url?.trim() || null,
       passport_photo_url: editingDetails.passport_photo_url?.trim() || null,

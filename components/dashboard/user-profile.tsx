@@ -30,7 +30,7 @@ import {
   Check,
   Loader2
 } from 'lucide-react'
-import { cn, formatRoleTitle, formatRolesList, formatNickname, formatPersonName, extractCountry } from '@/lib/utils'
+import { cn, formatRoleTitle, formatRolesList, formatNickname, formatPersonName, extractCountry, extractAvatarFromDetails } from '@/lib/utils'
 import { compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS } from '@/lib/image-compression'
 import { GmxButton } from '@/components/gmx-button'
 import { useAuth } from '@/lib/auth-context'
@@ -45,7 +45,8 @@ interface UserProfileProps {
 export function UserProfile({ onNavigateTab }: UserProfileProps) {
   const { user } = useAuth()
   const { t } = useLanguage()
-  const [profilePhoto, setProfilePhoto] = useState<string | null>(user?.avatar || null)
+  const initialUserAvatar = (user?.avatar && !user.avatar.includes('placehold.co')) ? user.avatar : null
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(initialUserAvatar)
   const [name, setName] = useState(user?.name || 'Usuario')
   const [bio, setBio] = useState('')
 
@@ -101,30 +102,73 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
   const [profileData, setProfileData] = useState<any>(null)
   const [userTeam, setUserTeam] = useState<any>(null)
   const [activeContract, setActiveContract] = useState<any>(null)
+  const [userContracts, setUserContracts] = useState<any[]>([])
   const [latestValidation, setLatestValidation] = useState<any>(null)
+  const [userValidations, setUserValidations] = useState<any[]>([])
   const [loadingData, setLoadingData] = useState(true)
 
   // Computed states
   const canEdit = profileData?.can_edit_profile || user?.role === 'admin'
   const isRequested = profileData?.edit_requested === true
 
-  // Player verification states
-  const isPlayer = profileData?.is_player === true
-  const playerStatus = profileData?.player_status || 'none'
-  const isPlayerApproved = isPlayer && (playerStatus === 'active' || playerStatus === 'approved')
-  const isPlayerPending = isPlayer && (playerStatus === 'pending' || playerStatus === 'none' || !playerStatus)
-  const isPlayerRejected = isPlayer && playerStatus === 'rejected'
+  // Validaciones categorizadas por tipo
+  const playerVal = userValidations.find((v: any) => v.type === 'jugador')
+  const teamVal = userValidations.find((v: any) => v.type === 'equipo')
+  const contractVal = userValidations.find((v: any) => v.type === 'contrato' || v.type === 'baja_contrato')
+  const modVal = userValidations.find((v: any) => v.type === 'modificacion')
 
-  const hasRejectedModification = latestValidation?.type === 'modificacion' && latestValidation?.status === 'rejected' && !isRequested
-  const isPlayerModificationPending = latestValidation?.type === 'modificacion' && latestValidation?.status === 'pending' && isRequested
-  const rejectionReasonText = latestValidation?.details?.rejection_reason
+  // 1. ESTADO DE JUGADOR PROFESIONAL
+  const isPlayer = profileData?.is_player === true || user?.is_player === true
+  const playerStatus = (profileData?.player_status || user?.player_status || 'none').toLowerCase()
+  const isPlayerApproved = (isPlayer && (playerStatus === 'active' || playerStatus === 'approved')) || (playerVal?.status === 'active' || playerVal?.status === 'approved')
+  const isPlayerPending = !isPlayerApproved && (
+    playerStatus === 'pending' || 
+    playerVal?.status === 'pending' || 
+    (isPlayer && playerStatus !== 'rejected')
+  )
+  const isPlayerRejected = !isPlayerApproved && !isPlayerPending && (
+    playerStatus === 'rejected' || 
+    playerVal?.status === 'rejected'
+  )
+  const playerRejectionReason = playerVal?.details?.rejection_reason || playerVal?.rejection_reason || 'Tu registro como jugador profesional no cumplió con los requerimientos necesarios.'
+
+  // 2. ESTADO DE EQUIPO PROFESIONAL
+  const isTeamApproved = Boolean(userTeam && (userTeam.status === 'active' || userTeam.status === 'activo'))
+  const isTeamPending = !isTeamApproved && Boolean(
+    (userTeam && (userTeam.status === 'pending' || userTeam.status === 'pendiente')) || 
+    teamVal?.status === 'pending'
+  )
+  const isTeamRejected = !isTeamApproved && !isTeamPending && Boolean(
+    (userTeam && userTeam.status === 'rejected') || 
+    teamVal?.status === 'rejected'
+  )
+  const teamRejectionReason = teamVal?.details?.rejection_reason || teamVal?.rejection_reason || 'El registro del equipo fue rechazado por la administración.'
+
+  // 3. ESTADO DE CONTRATOS
+  const isContractApproved = Boolean(activeContract && (activeContract.status === 'active' || activeContract.status === 'activo'))
+  const isContractPending = !isContractApproved && Boolean(
+    (activeContract && (activeContract.status === 'pending' || activeContract.status === 'pendiente' || activeContract.status === 'pending_manager' || activeContract.status === 'pending_player_release' || activeContract.status === 'pending_manager_release')) || 
+    contractVal?.status === 'pending'
+  )
+  const isContractRejected = !isContractApproved && !isContractPending && Boolean(
+    contractVal?.status === 'rejected' ||
+    userContracts.some((c: any) => c.status === 'rejected')
+  )
+  const contractRejectionReason = contractVal?.details?.rejection_reason || contractVal?.rejection_reason || 'La solicitud de contrato fue rechazada por la administración.'
+
+  // 4. MODIFICACIÓN DE PERFIL
+  const hasRejectedModification = modVal?.status === 'rejected' && !isRequested && modVal?.status !== 'pending'
+  const isPlayerModificationPending = modVal?.status === 'pending' || (isRequested && modVal?.status !== 'approved' && modVal?.status !== 'rejected')
+  const modRejectionReason = modVal?.rejection_reason || modVal?.details?.rejection_reason
+  const rejectionReasonText = modRejectionReason || playerRejectionReason
   
   useEffect(() => {
     if (!user) return
     const currentUser = user
 
     setName(currentUser.name)
-    setProfilePhoto(currentUser.avatar || null)
+    const initialCurrentAvatar = (currentUser.avatar && !currentUser.avatar.includes('placehold.co')) ? currentUser.avatar : null
+    setProfilePhoto(initialCurrentAvatar)
 
     async function loadAllUserData() {
       setLoadingData(true)
@@ -139,19 +183,62 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
         if (profile) {
           setProfileData(profile)
           if (profile.name) setName(profile.name)
-          if (profile.avatar_url || profile.avatar) setProfilePhoto(profile.avatar_url || profile.avatar)
+          const validProfAvatar = (profile.avatar_url && !profile.avatar_url.includes('placehold.co'))
+            ? profile.avatar_url
+            : (profile.avatar && !profile.avatar.includes('placehold.co'))
+            ? profile.avatar
+            : null
+          if (validProfAvatar) setProfilePhoto(validProfAvatar)
         }
 
-        // 2. Fetch latest validation for user
+        // 2. Fetch all recent validations for user
         const { data: validations } = await supabase
           .from('validations')
           .select('*')
-          .or(`submitted_by.eq.${currentUser.email || 'none'},submitted_by.eq.${currentUser.name || 'none'},details->>user_id.eq.${currentUser.id}`)
+          .or(`submitted_by.eq.${currentUser.id},submitted_by.eq.${currentUser.email || 'none'},submitted_by.eq.${currentUser.name || 'none'},details->>user_id.eq.${currentUser.id},details->>player_id.eq.${currentUser.id},details->>manager_id.eq.${currentUser.id}`)
           .order('created_at', { ascending: false })
-          .limit(1)
+          .limit(30)
 
-        if (validations && validations.length > 0) {
-          setLatestValidation(validations[0])
+        if (validations) {
+          setUserValidations(validations)
+          if (validations.length > 0) {
+            setLatestValidation(validations[0])
+          } else {
+            setLatestValidation(null)
+          }
+
+          const pVal = validations.find((v: any) => v.type === 'jugador')
+          const modValRecent = validations.find((v: any) => v.type === 'modificacion')
+          const pValAvatar = pVal ? extractAvatarFromDetails(pVal.details) : null
+
+          if (pVal) {
+            // Si la validación de jugador está aprobada y el perfil local o en BD no está sincronizado
+            if ((pVal.status === 'active' || pVal.status === 'approved') && (!profile?.is_player || profile?.player_status !== 'active')) {
+              setProfileData((prev: any) => prev ? ({ ...prev, is_player: true, player_status: 'active' }) : prev)
+              supabase.from('profiles').update({ is_player: true, player_status: 'active' }).eq('id', currentUser.id)
+            }
+
+            // Si el perfil no tiene avatar válido pero la validación sí tenía foto subida
+            if (pValAvatar && (!profile?.avatar_url || profile.avatar_url.includes('placehold.co') || !profilePhoto || profilePhoto.includes('placehold.co'))) {
+              setProfilePhoto(pValAvatar)
+              supabase.from('profiles').update({ avatar_url: pValAvatar, avatar: pValAvatar }).eq('id', currentUser.id)
+            }
+          }
+
+          // Si hay una modificación que fue rechazada o está pendiente, DEBE mostrarse la imagen antigua
+          if (modValRecent) {
+            const proposedAvatar = modValRecent.details?.avatar_url
+            const originalOldAvatar = modValRecent.details?.original_avatar || pValAvatar
+
+            if ((modValRecent.status === 'rejected' || modValRecent.status === 'pending') && originalOldAvatar && proposedAvatar) {
+              // Si el perfil en BD o en estado local tiene la imagen que se mandó a modificar
+              if (profile?.avatar_url === proposedAvatar || profilePhoto === proposedAvatar || !profile?.avatar_url) {
+                setProfilePhoto(originalOldAvatar)
+                setProfileData((prev: any) => prev ? ({ ...prev, avatar_url: originalOldAvatar, avatar: originalOldAvatar }) : prev)
+                supabase.from('profiles').update({ avatar_url: originalOldAvatar, avatar: originalOldAvatar }).eq('id', currentUser.id)
+              }
+            }
+          }
         }
 
         // 3. Fetch Teams (Managed teams or Contracted teams)
@@ -171,6 +258,10 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
           `)
           .eq('player_id', currentUser.id)
           .order('created_at', { ascending: false })
+
+        if (contractsData) {
+          setUserContracts(contractsData)
+        }
 
         // Determine active team
         if (managedTeams && managedTeams.length > 0) {
@@ -290,7 +381,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
   }
 
   const openEditPlayer = () => {
-    const pendingDetails = (isRequested || hasRejectedModification) ? latestValidation?.details : null
+    const pendingDetails = (isRequested || hasRejectedModification) ? (modVal?.details || latestValidation?.details) : null
     const gameInfo = profileData?.player_game_info?.[0] || {}
 
     setPlayerEditForm({
@@ -390,9 +481,12 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
 
         const formattedName = formatPersonName(editForm.name).trim()
 
+        // Para jugadores profesionales verificados, el avatar oficial solo se modifica mediante solicitud de modificación con validación
+        const avatarToPersist = (isPlayerApproved && profileData?.avatar_url) ? profileData.avatar_url : finalAvatarUrl
+
         const { error } = await supabase.from('profiles').update({
           name: formattedName,
-          avatar_url: finalAvatarUrl,
+          avatar_url: avatarToPersist,
           discord_handle: editForm.discord_handle.trim() || null,
           closest_airport: editForm.country.trim() || null,
           social_ig: editForm.social_ig.trim() || null,
@@ -513,7 +607,9 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
         original_game_nickname: latestValidation?.details?.original_game_nickname || profileData?.game_nickname || profileData?.nickname || '',
         original_discord_handle: latestValidation?.details?.original_discord_handle || profileData?.discord_handle || '',
         original_bio: latestValidation?.details?.original_bio || profileData?.bio || bio || '',
-        original_avatar: latestValidation?.details?.original_avatar || profileData?.avatar_url || profilePhoto || '',
+        original_avatar: (latestValidation?.details?.original_avatar && latestValidation.details.original_avatar !== avatarUrl)
+          ? latestValidation.details.original_avatar
+          : (extractAvatarFromDetails(playerVal?.details) || profileData?.avatar_url || profilePhoto || ''),
         original_game: latestValidation?.details?.original_game || gameInfo.game || 'Mobile Legends',
         original_game_id: latestValidation?.details?.original_game_id || gameInfo.game_id || '',
         original_server: latestValidation?.details?.original_server || gameInfo.server || '',
@@ -529,32 +625,79 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
 
       let valError = null
 
-      if (latestValidation?.id && isRequested) {
-        // Actualizar solicitud pendiente existente
-        const { error } = await supabase.from('validations').update({
-          target_name: `${profileData.nickname || profileData.name || 'Jugador'} ➔ ${playerEditForm.nickname || playerEditForm.name} (Modificación de Jugador)`,
-          status: 'pending',
-          details: payloadDetails
-        }).eq('id', latestValidation.id)
-        valError = error
-      } else {
-        // Eliminar solicitudes anteriores procesadas
-        await supabase
+      // 1. Identificar validación de modificación previa (pendiente o rechazada)
+      let targetModId = modVal?.id
+      if (!targetModId) {
+        const { data: existingMods } = await supabase
           .from('validations')
-          .delete()
+          .select('id')
           .eq('type', 'modificacion')
-          .in('status', ['approved', 'rejected'])
-          .filter('details->>user_id', 'eq', user.id)
+          .or(`details->>user_id.eq.${user.id},submitted_by.eq.${user.id},submitted_by.eq.${user.email || 'none'}`)
+          .order('created_at', { ascending: false })
+          .limit(1)
 
-        // Insertar nueva solicitud
-        const { error } = await supabase.from('validations').insert({
+        if (existingMods && existingMods.length > 0) {
+          targetModId = existingMods[0].id
+        }
+      }
+
+      const targetTitle = `${profileData.nickname || profileData.name || 'Jugador'} ➔ ${playerEditForm.nickname || playerEditForm.name} (Modificación de Jugador)`
+      const submitter = user.email || user.name || profileData.nickname || user.id
+
+      let savedVal: any = null
+
+      if (targetModId) {
+        // Actualizar solicitud existente (reseteando rechazo a pendiente)
+        const { data: updatedVal, error } = await supabase
+          .from('validations')
+          .update({
+            target_name: targetTitle,
+            submitted_by: submitter,
+            status: 'pending',
+            rejection_reason: null,
+            details: {
+              ...payloadDetails,
+              status: 'pending',
+              rejection_reason: null
+            },
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', targetModId)
+          .select()
+          .maybeSingle()
+
+        valError = error
+        savedVal = updatedVal || {
+          id: targetModId,
           type: 'modificacion',
-          target_name: `${profileData.nickname || profileData.name || 'Jugador'} ➔ ${playerEditForm.nickname || playerEditForm.name} (Modificación de Jugador)`,
-          submitted_by: user.email || user.name || user.id,
+          target_name: targetTitle,
+          submitted_by: submitter,
+          status: 'pending',
+          rejection_reason: null,
+          details: payloadDetails
+        }
+      } else {
+        // Insertar nueva solicitud si no existía ninguna
+        const { data: insertedVal, error } = await supabase
+          .from('validations')
+          .insert({
+            type: 'modificacion',
+            target_name: targetTitle,
+            submitted_by: submitter,
+            status: 'pending',
+            details: payloadDetails
+          })
+          .select()
+          .maybeSingle()
+
+        valError = error
+        savedVal = insertedVal || {
+          type: 'modificacion',
+          target_name: targetTitle,
+          submitted_by: submitter,
           status: 'pending',
           details: payloadDetails
-        })
-        valError = error
+        }
       }
 
       const { error: profError } = await supabase.from('profiles').update({
@@ -563,12 +706,12 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
 
       if (valError || profError) throw (valError || profError)
 
+      // Actualizar estado reactivo local inmediatamente
       setProfileData((prev: any) => ({ ...prev, edit_requested: true }))
-      setLatestValidation({
-        id: latestValidation?.id,
-        type: 'modificacion',
-        status: 'pending',
-        details: payloadDetails
+      setLatestValidation(savedVal)
+      setUserValidations((prev: any[]) => {
+        const withoutOldMod = (prev || []).filter(v => v.id !== savedVal.id && v.type !== 'modificacion')
+        return [savedVal, ...withoutOldMod]
       })
 
       toast.success('Solicitud de Modificación Enviada', {
@@ -696,8 +839,10 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 sm:gap-6">
             {/* Avatar */}
             <div className="group relative h-24 w-24 sm:h-28 sm:w-28 shrink-0 overflow-hidden rounded-2xl border-2 border-border bg-background shadow-md">
-              {profilePhoto ? (
+              {profilePhoto && !profilePhoto.includes('placehold.co') ? (
                 <img src={profilePhoto} alt="Avatar" className="h-full w-full object-cover" />
+              ) : user?.avatar && !user.avatar.includes('placehold.co') ? (
+                <img src={user.avatar} alt="Avatar" className="h-full w-full object-cover" />
               ) : (
                 <div className="flex h-full w-full items-center justify-center bg-surface">
                   <User className="h-10 w-10 text-muted-foreground" />
@@ -705,7 +850,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               )}
               
               <button 
-                onClick={openEdit}
+                onClick={isPlayerApproved || isPlayer ? openEditPlayer : openEdit}
                 className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100 cursor-pointer"
                 title={t.userProfile.changeProfilePhoto}
               >
@@ -777,7 +922,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               {t.userProfile.password}
             </button>
             <button 
-              onClick={openEdit}
+              onClick={isPlayerApproved || isPlayer ? openEditPlayer : openEdit}
               className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-md px-5 py-3 text-sm font-600 uppercase tracking-wider transition-all clip-corner bg-white/5 hover:bg-primary border border-white/10 text-white hover:border-primary cursor-pointer"
             >
               <Edit3 className="h-4 w-4" />
@@ -788,7 +933,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
       </div>
 
       {/* Rejection Alert Banner with Mandatory Administrator Reason */}
-      {((hasRejectedModification || isPlayerRejected) && rejectionReasonText) && (
+      {(hasRejectedModification || isPlayerRejected || isTeamRejected || isContractRejected) && (
         <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300">
           <div className="flex items-start gap-3.5">
             <div className="p-2.5 rounded-xl bg-red-500/20 text-red-400 shrink-0 mt-0.5 border border-red-500/30">
@@ -798,24 +943,48 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               <h4 className="text-sm font-700 uppercase tracking-wider text-red-400">
                 {hasRejectedModification 
                   ? t.userProfile.modificationRejectionTitle
-                  : t.userProfile.rejectionNoticeTitle}
+                  : isPlayerRejected
+                  ? t.userProfile.rejectionNoticeTitle
+                  : isTeamRejected
+                  ? t.userProfile.teamRejectedTitle
+                  : t.userProfile.contractRejectedTitle}
               </h4>
               <p className="text-sm text-white/90 leading-relaxed">
                 <span className="font-700 text-red-300">{t.userProfile.adminReasonLabel} </span>
-                {rejectionReasonText}
+                {hasRejectedModification 
+                  ? modRejectionReason 
+                  : isPlayerRejected 
+                  ? playerRejectionReason 
+                  : isTeamRejected 
+                  ? teamRejectionReason 
+                  : contractRejectionReason}
               </p>
             </div>
           </div>
           {hasRejectedModification ? (
             <button 
-              onClick={openEdit}
-              className="shrink-0 px-4 py-2.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-200 text-xs font-700 uppercase tracking-wider transition-colors"
+              onClick={isPlayerApproved || isPlayer ? openEditPlayer : openEdit}
+              className="shrink-0 px-4 py-2.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-200 text-xs font-700 uppercase tracking-wider transition-colors cursor-pointer"
             >
               {t.userProfile.editAndResubmit}
             </button>
-          ) : (
+          ) : isPlayerRejected ? (
             <Link 
               href="/registro/alta-de-jugador" 
+              className="shrink-0 px-4 py-2.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-200 text-xs font-700 uppercase tracking-wider transition-colors"
+            >
+              {t.userProfile.resubmitRegistration}
+            </Link>
+          ) : isTeamRejected ? (
+            <Link 
+              href="/registro/alta-de-equipo" 
+              className="shrink-0 px-4 py-2.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-200 text-xs font-700 uppercase tracking-wider transition-colors"
+            >
+              {t.userProfile.resubmitRegistration}
+            </Link>
+          ) : (
+            <Link 
+              href="/registro/alta-de-contrato" 
               className="shrink-0 px-4 py-2.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-200 text-xs font-700 uppercase tracking-wider transition-colors"
             >
               {t.userProfile.resubmitRegistration}
@@ -840,7 +1009,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
             "flex flex-col justify-between rounded-xl border p-6 transition-all duration-300",
             isPlayerApproved ? "border-emerald-500/30 bg-emerald-500/[0.03] hover:border-emerald-500/50" :
             isPlayerPending ? "border-amber-500/30 bg-amber-500/[0.03] hover:border-amber-500/50" :
-            isPlayerRejected ? "border-red-500/30 bg-red-500/[0.03]" :
+            isPlayerRejected ? "border-red-500/30 bg-red-500/[0.03] hover:border-red-500/50" :
             "border-border bg-surface hover:border-white/20"
           )}>
             <div className="space-y-4">
@@ -884,6 +1053,11 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                     Postulado: {profileData?.nickname || profileData?.name}
                   </p>
                 )}
+                {isPlayerRejected && (
+                  <p className="text-xs font-600 text-red-400 uppercase tracking-wider mt-0.5">
+                    {profileData?.nickname ? `Postulación: ${profileData.nickname}` : 'Postulación Rechazada'}
+                  </p>
+                )}
                 <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
                   {isPlayerApproved 
                     ? t.userProfile.playerApprovedDesc
@@ -893,6 +1067,21 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                     ? t.userProfile.playerRejectedDescText
                     : t.userProfile.playerNotRegisteredDesc}
                 </p>
+
+                {/* Motivo de rechazo de Alta de Jugador */}
+                {isPlayerRejected && (
+                  <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 flex items-start gap-2.5 text-xs text-red-300">
+                    <AlertCircle className="h-4 w-4 shrink-0 text-red-400 mt-0.5" />
+                    <div>
+                      <span className="font-700 text-red-400 block uppercase tracking-wider text-[11px]">
+                        {t.userProfile.adminReasonLabel}
+                      </span>
+                      <span className="text-xs text-red-200/90 leading-snug font-500 mt-0.5 block">
+                        {playerRejectionReason}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Banner de Estado de Modificación Pendiente o Rechazada */}
                 {isPlayer && isPlayerModificationPending && (
@@ -944,7 +1133,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                   href="/registro/alta-de-jugador" 
                   className="flex items-center gap-2 text-sm font-600 text-red-400 hover:text-red-300 transition-colors"
                 >
-                  {t.userProfile.resubmitRequest} <ArrowRight className="h-4 w-4" />
+                  {t.userProfile.resubmitRequest || 'Reintentar Registro'} <ArrowRight className="h-4 w-4" />
                 </Link>
               ) : (
                 <Link 
@@ -960,18 +1149,28 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
           {/* 2. EQUIPO PROFESIONAL */}
           <div className={cn(
             "flex flex-col justify-between rounded-xl border p-6 transition-all duration-300",
-            userTeam ? "border-primary/30 bg-primary/[0.03] hover:border-primary/50" : "border-border bg-surface hover:border-white/20"
+            isTeamApproved ? "border-primary/30 bg-primary/[0.03] hover:border-primary/50" :
+            isTeamPending ? "border-amber-500/30 bg-amber-500/[0.03] hover:border-amber-500/50" :
+            isTeamRejected ? "border-red-500/30 bg-red-500/[0.03] hover:border-red-500/50" :
+            "border-border bg-surface hover:border-white/20"
           )}>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className={cn(
                   "flex h-12 w-12 items-center justify-center rounded-xl overflow-hidden",
-                  userTeam ? "bg-primary/10 text-primary border border-primary/20" : "bg-white/5 text-muted-foreground"
+                  isTeamApproved ? "bg-primary/10 text-primary border border-primary/20" :
+                  isTeamPending ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" :
+                  isTeamRejected ? "bg-red-500/10 text-red-400 border border-red-500/20" :
+                  "bg-white/5 text-muted-foreground"
                 )}>
                   {userTeam?.logo_url ? (
                     <img src={userTeam.logo_url} alt={userTeam.name} className="h-full w-full object-cover" />
-                  ) : userTeam ? (
+                  ) : isTeamApproved ? (
                     <ShieldCheck className="h-6 w-6 text-primary" />
+                  ) : isTeamPending ? (
+                    <Clock className="h-6 w-6 text-amber-400" />
+                  ) : isTeamRejected ? (
+                    <AlertCircle className="h-6 w-6 text-red-400" />
                   ) : (
                     <Shield className="h-6 w-6 text-muted-foreground" />
                   )}
@@ -985,40 +1184,80 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                   )}
                   <span className={cn(
                     "px-2.5 py-1 rounded-full text-[10px] font-700 uppercase tracking-wider border",
-                    userTeam?.status === 'active' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
-                    userTeam ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
+                    isTeamApproved ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                    isTeamPending ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
+                    isTeamRejected ? "bg-red-500/10 text-red-400 border-red-500/20" :
                     "bg-white/5 text-muted-foreground border-border"
                   )}>
-                    {userTeam ? (userTeam.status === 'active' ? t.userProfile.active : t.userProfile.pending) : t.userProfile.noTeam}
+                    {isTeamApproved ? t.userProfile.active :
+                     isTeamPending ? t.userProfile.pending :
+                     isTeamRejected ? t.userProfile.rejected :
+                     t.userProfile.noTeam}
                   </span>
                 </div>
               </div>
 
               <div>
                 <h4 className="font-display font-700 text-lg text-white">
-                  {userTeam ? userTeam.name : t.userProfile.proTeam}
+                  {userTeam ? userTeam.name : (teamVal?.target_name || t.userProfile.proTeam)}
                 </h4>
-                {userTeam && (
+                {userTeam && isTeamApproved && (
                   <p className="text-xs font-600 text-muted-foreground uppercase tracking-wider mt-0.5">
                     {userTeam.tag ? `#${userTeam.tag.toUpperCase()} • ` : ''}{userTeam.country || 'eSports'}
                   </p>
                 )}
+                {isTeamPending && (
+                  <p className="text-xs font-600 text-amber-400 uppercase tracking-wider mt-0.5">
+                    Postulado: {teamVal?.target_name || userTeam?.name}
+                  </p>
+                )}
+                {isTeamRejected && (
+                  <p className="text-xs font-600 text-red-400 uppercase tracking-wider mt-0.5">
+                    Postulación rechazada: {teamVal?.target_name || userTeam?.name}
+                  </p>
+                )}
                 <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-                  {userTeam 
+                  {isTeamApproved 
                     ? t.userProfile.teamMemberDesc.replace('{team}', userTeam.name).replace('{role}', userTeam.isManager ? t.userProfile.teamManagerRole : t.userProfile.teamPlayerRole)
+                    : isTeamPending
+                    ? 'Tu registro de equipo se encuentra en proceso de revisión por los administradores.'
+                    : isTeamRejected
+                    ? 'El registro de tu equipo fue rechazado. Revisa las observaciones e intenta registrarlo de nuevo.'
                     : t.userProfile.noTeamDesc}
                 </p>
+
+                {/* Motivo de rechazo de Alta de Equipo */}
+                {isTeamRejected && (
+                  <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 flex items-start gap-2.5 text-xs text-red-300">
+                    <AlertCircle className="h-4 w-4 shrink-0 text-red-400 mt-0.5" />
+                    <div>
+                      <span className="font-700 text-red-400 block uppercase tracking-wider text-[11px]">
+                        {t.userProfile.adminReasonLabel}
+                      </span>
+                      <span className="text-xs text-red-200/90 leading-snug font-500 mt-0.5 block">
+                        {teamRejectionReason}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="pt-6">
-              {userTeam ? (
+              {isTeamApproved ? (
                 <button 
                   onClick={() => onNavigateTab ? onNavigateTab(userTeam.isManager ? 'jugadores' : 'equipos') : null}
-                  className="flex items-center gap-2 text-sm font-600 text-primary hover:text-primary-dark transition-colors text-left"
+                  className="flex items-center gap-2 text-sm font-600 text-primary hover:text-primary-dark transition-colors text-left cursor-pointer"
                 >
                   {userTeam.isManager ? t.userProfile.managePlayersContracts : t.userProfile.viewMyTeam} <ArrowRight className="h-4 w-4" />
                 </button>
+              ) : isTeamRejected ? (
+                <Link 
+                  href="/registro/alta-de-equipo" 
+                  className="flex items-center gap-2 text-sm font-600 text-red-400 hover:text-red-300 transition-colors"
+                >
+                  {t.userProfile.resubmitRequest || 'Reintentar Registro'} <ArrowRight className="h-4 w-4" />
+                </Link>
               ) : (
                 <Link 
                   href="/registro/alta-de-equipo" 
@@ -1033,45 +1272,64 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
           {/* 3. CONTRATOS */}
           <div className={cn(
             "flex flex-col justify-between rounded-xl border p-6 transition-all duration-300",
-            activeContract ? "border-purple-500/30 bg-purple-500/[0.03] hover:border-purple-500/50" : "border-border bg-surface hover:border-white/20"
+            isContractApproved ? "border-purple-500/30 bg-purple-500/[0.03] hover:border-purple-500/50" :
+            isContractPending ? "border-amber-500/30 bg-amber-500/[0.03] hover:border-amber-500/50" :
+            isContractRejected ? "border-red-500/30 bg-red-500/[0.03] hover:border-red-500/50" :
+            "border-border bg-surface hover:border-white/20"
           )}>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className={cn(
                   "flex h-12 w-12 items-center justify-center rounded-xl",
-                  activeContract ? "bg-purple-500/10 text-purple-400 border border-purple-500/20" : "bg-white/5 text-muted-foreground"
+                  isContractApproved ? "bg-purple-500/10 text-purple-400 border border-purple-500/20" :
+                  isContractPending ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" :
+                  isContractRejected ? "bg-red-500/10 text-red-400 border border-red-500/20" :
+                  "bg-white/5 text-muted-foreground"
                 )}>
-                  <ScrollText className="h-6 w-6" />
+                  {isContractRejected ? <AlertCircle className="h-6 w-6 text-red-400" /> : <ScrollText className="h-6 w-6" />}
                 </div>
 
                 <span className={cn(
                   "px-2.5 py-1 rounded-full text-[10px] font-700 uppercase tracking-wider border",
-                  (activeContract?.status === 'active' || activeContract?.status === 'activo') ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                  isContractApproved ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
                   activeContract?.status === 'pending_player_release' ? "bg-red-500/10 text-red-400 border-red-500/20" :
                   activeContract?.status === 'pending_manager_release' ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
-                  activeContract ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
+                  isContractPending ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
+                  isContractRejected ? "bg-red-500/10 text-red-400 border-red-500/20" :
                   "bg-white/5 text-muted-foreground border-border"
                 )}>
-                  {activeContract ? (
-                    (activeContract.status === 'active' || activeContract.status === 'activo') ? t.userProfile.active :
-                    activeContract.status === 'pending_player_release' ? t.userProfile.releaseRequested :
-                    activeContract.status === 'pending_manager_release' ? t.userProfile.releaseInProgress :
-                    t.userProfile.pending
-                  ) : t.userProfile.noContracts}
+                  {isContractApproved ? t.userProfile.active :
+                   activeContract?.status === 'pending_player_release' ? t.userProfile.releaseRequested :
+                   activeContract?.status === 'pending_manager_release' ? t.userProfile.releaseInProgress :
+                   isContractPending ? t.userProfile.pending :
+                   isContractRejected ? t.userProfile.rejected :
+                   t.userProfile.noContracts}
                 </span>
               </div>
 
               <div>
                 <h4 className="font-display font-700 text-lg text-white">
-                  {activeContract?.teams?.name ? `${t.userProfile.contract}: ${activeContract.teams.name}` : t.userProfile.contracts}
+                  {activeContract?.teams?.name 
+                    ? `${t.userProfile.contract}: ${activeContract.teams.name}` 
+                    : (contractVal?.target_name ? `Contrato: ${contractVal.target_name}` : t.userProfile.contracts)}
                 </h4>
-                {activeContract && (
+                {activeContract && isContractApproved && (
                   <p className="text-xs font-600 text-purple-400 uppercase tracking-wider mt-0.5 flex items-center gap-1.5">
                     <Calendar className="h-3 w-3" />
                     {activeContract.end_date ? t.userProfile.expiresOn.replace('{date}', new Date(activeContract.end_date).toLocaleDateString()) : t.userProfile.contractActive}
                   </p>
                 )}
-                {activeContract ? (
+                {isContractPending && (
+                  <p className="text-xs font-600 text-amber-400 uppercase tracking-wider mt-0.5">
+                    En revisión con el equipo / administración
+                  </p>
+                )}
+                {isContractRejected && (
+                  <p className="text-xs font-600 text-red-400 uppercase tracking-wider mt-0.5">
+                    Solicitud de contrato rechazada
+                  </p>
+                )}
+                {isContractApproved ? (
                   <div className="mt-2 space-y-1.5">
                     <span className="text-xs text-muted-foreground block font-500">{t.userProfile.assignedRoles}</span>
                     <div className="flex flex-wrap gap-1.5">
@@ -1093,20 +1351,46 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                   </div>
                 ) : (
                   <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-                    {t.userProfile.noActiveContractDesc}
+                    {isContractRejected
+                      ? 'La vinculación del contrato fue rechazada por la administración o directiva.'
+                      : isContractPending
+                      ? 'El contrato está pendiente de confirmación por el manager o la administración de GMX Gaming.'
+                      : t.userProfile.noActiveContractDesc}
                   </p>
+                )}
+
+                {/* Motivo de rechazo del Contrato */}
+                {isContractRejected && (
+                  <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 flex items-start gap-2.5 text-xs text-red-300">
+                    <AlertCircle className="h-4 w-4 shrink-0 text-red-400 mt-0.5" />
+                    <div>
+                      <span className="font-700 text-red-400 block uppercase tracking-wider text-[11px]">
+                        {t.userProfile.adminReasonLabel}
+                      </span>
+                      <span className="text-xs text-red-200/90 leading-snug font-500 mt-0.5 block">
+                        {contractRejectionReason}
+                      </span>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
 
             <div className="pt-6">
-              {activeContract ? (
+              {isContractApproved ? (
                 <button 
                   onClick={() => onNavigateTab ? onNavigateTab('contratos') : null}
-                  className="flex items-center gap-2 text-sm font-600 text-purple-400 hover:text-purple-300 transition-colors text-left"
+                  className="flex items-center gap-2 text-sm font-600 text-purple-400 hover:text-purple-300 transition-colors text-left cursor-pointer"
                 >
                   {t.userProfile.viewMyContracts} <ArrowRight className="h-4 w-4" />
                 </button>
+              ) : isContractRejected ? (
+                <Link 
+                  href="/registro/alta-de-contrato" 
+                  className="flex items-center gap-2 text-sm font-600 text-red-400 hover:text-red-300 transition-colors"
+                >
+                  {t.userProfile.registerContract} <ArrowRight className="h-4 w-4" />
+                </Link>
               ) : (
                 <Link 
                   href="/registro/alta-de-contrato" 

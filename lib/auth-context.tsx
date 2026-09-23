@@ -104,11 +104,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const isAdmVisitante = dbRole === 'admin_visitante'
         const isAdm = isAdmPrincipal || isAdmSecundario || isAdmVisitante
 
+        const rawAvatar = activeProfile?.avatar_url || activeProfile?.avatar
+        const cleanAvatar = (rawAvatar && !rawAvatar.includes('placehold.co'))
+          ? rawAvatar
+          : (googleAvatar && !googleAvatar.includes('placehold.co'))
+          ? googleAvatar
+          : 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
+
+        let isPlayerVerified = Boolean(activeProfile?.is_player)
+        let playerStatusVal = activeProfile?.player_status || 'none'
+
+        if (!isPlayerVerified || playerStatusVal !== 'active') {
+          try {
+            const { data: approvedPlayerVal } = await supabase
+              .from('validations')
+              .select('status')
+              .eq('type', 'jugador')
+              .in('status', ['active', 'approved'])
+              .or(`details->>user_id.eq.${authUser.id},submitted_by.eq.${authUser.id},submitted_by.eq.${authUser.email}`)
+              .limit(1)
+
+            if (approvedPlayerVal && approvedPlayerVal.length > 0) {
+              isPlayerVerified = true
+              playerStatusVal = 'active'
+            }
+          } catch {
+            // Silencioso si no se puede consultar validations
+          }
+        }
+
         let userRole: Role = 'user'
         if (isAdmPrincipal) userRole = dbRole === 'admin' ? 'admin' : 'admin_principal'
         else if (isAdmSecundario) userRole = 'admin_secundario'
         else if (isAdmVisitante) userRole = 'admin_visitante'
-        else if (activeProfile?.is_player) userRole = 'jugador'
+        else if (isPlayerVerified) userRole = 'jugador'
         else userRole = (dbRole as Role) || 'user'
 
         if (mounted) {
@@ -118,9 +147,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             nickname: activeProfile?.nickname || activeProfile?.game_nickname || '',
             email: authUser.email || '',
             role: userRole,
-            avatar: activeProfile?.avatar_url || activeProfile?.avatar || googleAvatar || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg',
-            is_player: activeProfile?.is_player || false,
-            player_status: activeProfile?.player_status || 'none',
+            avatar: cleanAvatar,
+            is_player: isPlayerVerified,
+            player_status: playerStatusVal,
             isAdmin: isAdm,
             isAdminPrincipal: isAdmPrincipal,
             isAdminSecundario: isAdmSecundario,
