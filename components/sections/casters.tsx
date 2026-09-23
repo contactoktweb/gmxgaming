@@ -13,10 +13,93 @@ type Caster = {
   name: string
   nickname: string
   photo_url: string
-  social_ig?: string
   social_twitch?: string
+  social_ig?: string
   social_x?: string
+  social_fb?: string
+  social_tiktok?: string
+  social_kick?: string
+  social_yt?: string
+  twitch_url?: string
+  instagram_url?: string
+  twitter_url?: string
 }
+
+interface CasterSocialItem {
+  key: keyof Caster
+  altKey?: keyof Caster
+  title: string
+  hoverClass: string
+  icon: React.ReactNode
+}
+
+const CASTER_SOCIALS: CasterSocialItem[] = [
+  {
+    key: 'social_twitch',
+    altKey: 'twitch_url',
+    title: 'Twitch',
+    hoverClass: 'hover:text-purple-500 hover:border-purple-500/50',
+    icon: <Tv className="w-4 h-4" />,
+  },
+  {
+    key: 'social_ig',
+    altKey: 'instagram_url',
+    title: 'Instagram',
+    hoverClass: 'hover:text-pink-500 hover:border-pink-500/50',
+    icon: <Camera className="w-4 h-4" />,
+  },
+  {
+    key: 'social_x',
+    altKey: 'twitter_url',
+    title: 'Twitter / X',
+    hoverClass: 'hover:text-white hover:border-white/50',
+    icon: (
+      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+      </svg>
+    ),
+  },
+  {
+    key: 'social_fb',
+    title: 'Facebook',
+    hoverClass: 'hover:text-blue-500 hover:border-blue-500/50',
+    icon: (
+      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+      </svg>
+    ),
+  },
+  {
+    key: 'social_tiktok',
+    title: 'TikTok',
+    hoverClass: 'hover:text-cyan-400 hover:border-cyan-400/50',
+    icon: (
+      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1.04-.1z"/>
+      </svg>
+    ),
+  },
+  {
+    key: 'social_kick',
+    title: 'Kick',
+    hoverClass: 'hover:text-[#53FC18] hover:border-[#53FC18]/50',
+    icon: (
+      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M4 3h5v5.5l4-5.5h6l-6.5 8 7 10h-6L9 14.5V21H4V3z"/>
+      </svg>
+    ),
+  },
+  {
+    key: 'social_yt',
+    title: 'YouTube',
+    hoverClass: 'hover:text-red-500 hover:border-red-500/50',
+    icon: (
+      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+      </svg>
+    ),
+  },
+]
 
 export function Casters() {
   const ref = useRef<HTMLDivElement>(null)
@@ -104,9 +187,6 @@ export function Casters() {
           <Stagger className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {casters.map((caster) => {
               const photo = caster.photo_url || (caster as any).avatar_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
-              const instagram = caster.social_ig || (caster as any).instagram_url
-              const twitch = caster.social_twitch || (caster as any).twitch_url
-              const twitter = caster.social_x || (caster as any).twitter_url
 
               return (
                 <StaggerItem key={caster.id}>
@@ -139,25 +219,24 @@ export function Casters() {
                       )}
                       
                       {/* Socials - Reveal on hover */}
-                      <div className="mt-4 flex gap-3 overflow-hidden">
-                        <div className="flex gap-2.5 translate-y-8 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
-                          {instagram && (
-                            <a href={instagram} target="_blank" rel="noopener noreferrer" className="p-2 bg-surface border border-border rounded-full text-muted-foreground hover:text-pink-500 hover:border-pink-500/50 transition-colors" title="Instagram">
-                              <Camera className="w-4 h-4" />
-                            </a>
-                          )}
-                          {twitch && (
-                            <a href={twitch} target="_blank" rel="noopener noreferrer" className="p-2 bg-surface border border-border rounded-full text-muted-foreground hover:text-purple-500 hover:border-purple-500/50 transition-colors" title="Twitch">
-                              <Tv className="w-4 h-4" />
-                            </a>
-                          )}
-                          {twitter && (
-                            <a href={twitter} target="_blank" rel="noopener noreferrer" className="p-2 bg-surface border border-border rounded-full text-muted-foreground hover:text-white hover:border-white/50 transition-colors" title="X / Twitter">
-                              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                              </svg>
-                            </a>
-                          )}
+                      <div className="mt-4 flex justify-center overflow-hidden w-full px-2">
+                        <div className="flex flex-wrap justify-center gap-2 translate-y-8 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+                          {CASTER_SOCIALS.map((social) => {
+                            const url = (caster as any)[social.key] || (social.altKey ? (caster as any)[social.altKey] : undefined)
+                            if (!url) return null
+                            return (
+                              <a
+                                key={social.key}
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={`p-2 bg-surface/90 border border-border rounded-full text-muted-foreground transition-all duration-200 hover:scale-110 ${social.hoverClass}`}
+                                title={social.title}
+                              >
+                                {social.icon}
+                              </a>
+                            )
+                          })}
                         </div>
                       </div>
                     </div>

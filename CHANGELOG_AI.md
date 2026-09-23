@@ -68,3 +68,23 @@
   - Se agregó la propiedad `nickname` a la interfaz `Player`.
   - En la carga de jugadores, se resuelve el apodo/IGN priorizando `profiles.nickname`, `player_game_info.game_nickname`, metadatos de postulación (`ign`, `item_meta[674]`) o el nombre del perfil.
   - En las tarjetas de la pestaña **Jugadores** de administración (`/administracion`), se reemplazó el nombre real (`player.name`) por el **nickname del jugador** (`player.nickname || player.name`), tanto en el título principal de la tarjeta como en los modales de detalle y acciones.
+
+### Redes Sociales Oficiales para Casters (Twitch, Instagram, Twitter/X, Facebook, TikTok, Kick, YouTube)
+- **supabase_casters_socials.sql & supabase_production_schema.sql:**
+  - Agregadas las columnas a la tabla `public.casters`: `social_fb`, `social_tiktok`, `social_kick`, `social_yt` con scripts de migración idempotentes (`ADD COLUMN IF NOT EXISTS`).
+- **components/dashboard/admin-casters.tsx:**
+  - Configuración estricta de las 7 plataformas en el orden solicitado:
+    1. Twitch (`social_twitch`)
+    2. Instagram (`social_ig`)
+    3. Twitter / X (`social_x`)
+    4. Facebook (`social_fb`)
+    5. TikTok (`social_tiktok`)
+    6. Kick (`social_kick`)
+    7. YouTube (`social_yt`)
+  - Inputs ordenados y estilizados en el modal de creación y edición de casters.
+  - Renderizado de badges vectoriales dinámicos con hover de color de marca para cada red en las tarjetas del panel de administración.
+  - Mecanismo de guardado resiliente con fallback ante bases de datos sin migrar (captura código `42703`).
+- **components/sections/casters.tsx:**
+  - Actualizada la vista pública en la sección de casters:
+  - Renderizado de iconos en el orden exacto especificado con microinteracciones de escala y colores distintivos al pasar el mouse por la tarjeta.
+  - Soporte completo para las 7 plataformas en desktop, tablet y móvil.

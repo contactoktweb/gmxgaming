@@ -260,6 +260,10 @@ ALTER TABLE public.casters ADD COLUMN IF NOT EXISTS social_twitch text;
 ALTER TABLE public.casters ADD COLUMN IF NOT EXISTS instagram_url text;
 ALTER TABLE public.casters ADD COLUMN IF NOT EXISTS twitter_url text;
 ALTER TABLE public.casters ADD COLUMN IF NOT EXISTS twitch_url text;
+ALTER TABLE public.casters ADD COLUMN IF NOT EXISTS social_fb text;
+ALTER TABLE public.casters ADD COLUMN IF NOT EXISTS social_tiktok text;
+ALTER TABLE public.casters ADD COLUMN IF NOT EXISTS social_kick text;
+ALTER TABLE public.casters ADD COLUMN IF NOT EXISTS social_yt text;
 
 ALTER TABLE public.tournaments ADD COLUMN IF NOT EXISTS description text;
 ALTER TABLE public.tournaments ADD COLUMN IF NOT EXISTS logo_url text;

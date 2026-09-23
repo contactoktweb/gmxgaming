@@ -14,14 +14,30 @@ interface Caster {
   nickname?: string
   photo_url?: string
   avatar_url?: string
+  social_twitch?: string
   social_ig?: string
   social_x?: string
-  social_twitch?: string
+  social_fb?: string
+  social_tiktok?: string
+  social_kick?: string
+  social_yt?: string
   instagram_url?: string
   twitter_url?: string
   twitch_url?: string
   created_at: string
 }
+
+const SOCIAL_NETWORKS_CONFIG = [
+  { key: 'social_twitch', label: 'Twitch', placeholder: 'https://twitch.tv/usuario', color: '#9146FF' },
+  { key: 'social_ig', label: 'Instagram', placeholder: 'https://instagram.com/usuario', color: '#E1306C' },
+  { key: 'social_x', label: 'Twitter / X', placeholder: 'https://x.com/usuario', color: '#FFFFFF' },
+  { key: 'social_fb', label: 'Facebook', placeholder: 'https://facebook.com/usuario', color: '#1877F2' },
+  { key: 'social_tiktok', label: 'TikTok', placeholder: 'https://tiktok.com/@usuario', color: '#00F2FE' },
+  { key: 'social_kick', label: 'Kick', placeholder: 'https://kick.com/usuario', color: '#53FC18' },
+  { key: 'social_yt', label: 'YouTube', placeholder: 'https://youtube.com/@usuario', color: '#FF0000' },
+] as const
+
+type SocialKey = typeof SOCIAL_NETWORKS_CONFIG[number]['key']
 
 export function AdminCasters() {
   const [casters, setCasters] = useState<Caster[]>([])
@@ -33,9 +49,13 @@ export function AdminCasters() {
     name: '',
     nickname: '',
     photo_url: '',
+    social_twitch: '',
     social_ig: '',
     social_x: '',
-    social_twitch: ''
+    social_fb: '',
+    social_tiktok: '',
+    social_kick: '',
+    social_yt: ''
   })
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
@@ -59,7 +79,18 @@ export function AdminCasters() {
 
   const openNewCasterModal = () => {
     setEditingId(null)
-    setCasterForm({ name: '', nickname: '', photo_url: '', social_ig: '', social_x: '', social_twitch: '' })
+    setCasterForm({
+      name: '',
+      nickname: '',
+      photo_url: '',
+      social_twitch: '',
+      social_ig: '',
+      social_x: '',
+      social_fb: '',
+      social_tiktok: '',
+      social_kick: '',
+      social_yt: ''
+    })
     setAvatarFile(null)
     setAvatarPreview(null)
     setIsModalOpen(true)
@@ -71,9 +102,13 @@ export function AdminCasters() {
       name: caster.name || '',
       nickname: caster.nickname || caster.name || '',
       photo_url: caster.photo_url || caster.avatar_url || '',
+      social_twitch: caster.social_twitch || caster.twitch_url || '',
       social_ig: caster.social_ig || caster.instagram_url || '',
       social_x: caster.social_x || caster.twitter_url || '',
-      social_twitch: caster.social_twitch || caster.twitch_url || ''
+      social_fb: caster.social_fb || '',
+      social_tiktok: caster.social_tiktok || '',
+      social_kick: caster.social_kick || '',
+      social_yt: caster.social_yt || ''
     })
     setAvatarFile(null)
     setAvatarPreview(caster.photo_url || caster.avatar_url || null)
@@ -113,27 +148,70 @@ export function AdminCasters() {
       const cleanName = formatPersonName(casterForm.name).trim()
       const cleanNick = formatNickname(casterForm.nickname || casterForm.name).trim()
 
-      const payload = {
+      const fullPayload: any = {
         name: cleanName,
         nickname: cleanNick,
         photo_url: finalPhotoUrl || null,
+        social_twitch: casterForm.social_twitch?.trim() || null,
         social_ig: casterForm.social_ig?.trim() || null,
         social_x: casterForm.social_x?.trim() || null,
-        social_twitch: casterForm.social_twitch?.trim() || null
+        social_fb: casterForm.social_fb?.trim() || null,
+        social_tiktok: casterForm.social_tiktok?.trim() || null,
+        social_kick: casterForm.social_kick?.trim() || null,
+        social_yt: casterForm.social_yt?.trim() || null
       }
 
+      let saveError = null
+
       if (editingId) {
-        const { error } = await supabase.from('casters').update(payload).eq('id', editingId)
-        if (error) throw error
-        toast.success('Caster actualizado correctamente')
+        const { error } = await supabase.from('casters').update(fullPayload).eq('id', editingId)
+        saveError = error
       } else {
-        const { error } = await supabase.from('casters').insert([payload])
-        if (error) throw error
-        toast.success('Caster agregado correctamente')
+        const { error } = await supabase.from('casters').insert([fullPayload])
+        saveError = error
+      }
+
+      // Si las columnas nuevas aún no existen en la BD de Supabase (error 42703), fallback a columnas base
+      if (saveError && (saveError.code === '42703' || saveError.message?.includes('column'))) {
+        const basePayload = {
+          name: cleanName,
+          nickname: cleanNick,
+          photo_url: finalPhotoUrl || null,
+          social_twitch: casterForm.social_twitch?.trim() || null,
+          social_ig: casterForm.social_ig?.trim() || null,
+          social_x: casterForm.social_x?.trim() || null
+        }
+
+        if (editingId) {
+          const { error: fErr } = await supabase.from('casters').update(basePayload).eq('id', editingId)
+          if (fErr) throw fErr
+        } else {
+          const { error: fErr } = await supabase.from('casters').insert([basePayload])
+          if (fErr) throw fErr
+        }
+
+        toast.info('Caster guardado', {
+          description: 'Para habilitar Facebook, TikTok, Kick y YouTube, ejecuta la migración en Supabase.'
+        })
+      } else if (saveError) {
+        throw saveError
+      } else {
+        toast.success(editingId ? 'Caster actualizado correctamente' : 'Caster agregado correctamente')
       }
 
       setIsModalOpen(false)
-      setCasterForm({ name: '', nickname: '', photo_url: '', social_ig: '', social_x: '', social_twitch: '' })
+      setCasterForm({
+        name: '',
+        nickname: '',
+        photo_url: '',
+        social_twitch: '',
+        social_ig: '',
+        social_x: '',
+        social_fb: '',
+        social_tiktok: '',
+        social_kick: '',
+        social_yt: ''
+      })
       setAvatarFile(null)
       setAvatarPreview(null)
       setEditingId(null)
@@ -226,25 +304,64 @@ export function AdminCasters() {
                       <p className="text-xs text-muted-foreground font-500 mb-3">{caster.name}</p>
                     )}
                     
-                    <div className="flex items-center gap-2.5 mt-3">
-                      {twitch && (
-                        <a href={twitch} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg bg-surface border border-border text-muted-foreground hover:text-[#9146FF] hover:border-[#9146FF]/30 transition-colors" title="Twitch">
-                          <Tv className="w-4 h-4" />
-                        </a>
-                      )}
-                      {instagram && (
-                        <a href={instagram} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg bg-surface border border-border text-muted-foreground hover:text-[#E1306C] hover:border-[#E1306C]/30 transition-colors" title="Instagram">
-                          <Camera className="w-4 h-4" />
-                        </a>
-                      )}
-                      {twitter && (
-                        <a href={twitter} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg bg-surface border border-border text-muted-foreground hover:text-white hover:border-white/30 transition-colors" title="X / Twitter">
-                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                          </svg>
-                        </a>
-                      )}
-                      {!twitch && !instagram && !twitter && (
+                    <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
+                      {SOCIAL_NETWORKS_CONFIG.map(network => {
+                        const url = (caster as any)[network.key] || 
+                                    (network.key === 'social_twitch' ? caster.twitch_url :
+                                     network.key === 'social_ig' ? caster.instagram_url :
+                                     network.key === 'social_x' ? caster.twitter_url : undefined)
+                        if (!url) return null
+                        return (
+                          <a 
+                            key={network.key}
+                            href={url} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="p-2 rounded-lg bg-surface border border-border text-muted-foreground transition-all hover:scale-105"
+                            style={{ transition: 'all 0.2s ease' }}
+                            onMouseEnter={(e) => { 
+                              e.currentTarget.style.color = network.color; 
+                              e.currentTarget.style.borderColor = `${network.color}66`;
+                              e.currentTarget.style.backgroundColor = `${network.color}15`;
+                            }}
+                            onMouseLeave={(e) => { 
+                              e.currentTarget.style.color = ''; 
+                              e.currentTarget.style.borderColor = '';
+                              e.currentTarget.style.backgroundColor = '';
+                            }}
+                            title={network.label}
+                          >
+                            {network.key === 'social_twitch' && <Tv className="w-4 h-4" />}
+                            {network.key === 'social_ig' && <Camera className="w-4 h-4" />}
+                            {network.key === 'social_x' && (
+                              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                              </svg>
+                            )}
+                            {network.key === 'social_fb' && (
+                              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                              </svg>
+                            )}
+                            {network.key === 'social_tiktok' && (
+                              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1.04-.1z"/>
+                              </svg>
+                            )}
+                            {network.key === 'social_kick' && (
+                              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M4 3h5v5.5l4-5.5h6l-6.5 8 7 10h-6L9 14.5V21H4V3z"/>
+                              </svg>
+                            )}
+                            {network.key === 'social_yt' && (
+                              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                              </svg>
+                            )}
+                          </a>
+                        )
+                      })}
+                      {!caster.social_twitch && !caster.social_ig && !caster.social_x && !caster.social_fb && !caster.social_tiktok && !caster.social_kick && !caster.social_yt && !caster.twitch_url && !caster.instagram_url && !caster.twitter_url && (
                         <span className="text-[11px] text-muted-foreground/60 italic">Sin redes agregadas</span>
                       )}
                     </div>
@@ -343,37 +460,26 @@ export function AdminCasters() {
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-600 uppercase tracking-widest text-primary">Twitch (URL) - Opcional</label>
-                <input 
-                  type="text" 
-                  value={casterForm.social_twitch}
-                  onChange={e => setCasterForm({...casterForm, social_twitch: e.target.value})}
-                  className="w-full rounded-md border border-border bg-background px-4 py-2.5 text-sm text-white focus:border-primary focus:outline-none"
-                  placeholder="https://twitch.tv/usuario"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-600 uppercase tracking-widest text-primary">Instagram (URL) - Opcional</label>
-                <input 
-                  type="text" 
-                  value={casterForm.social_ig}
-                  onChange={e => setCasterForm({...casterForm, social_ig: e.target.value})}
-                  className="w-full rounded-md border border-border bg-background px-4 py-2.5 text-sm text-white focus:border-primary focus:outline-none"
-                  placeholder="https://instagram.com/usuario"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-600 uppercase tracking-widest text-primary">Twitter / X (URL) - Opcional</label>
-                <input 
-                  type="text" 
-                  value={casterForm.social_x}
-                  onChange={e => setCasterForm({...casterForm, social_x: e.target.value})}
-                  className="w-full rounded-md border border-border bg-background px-4 py-2.5 text-sm text-white focus:border-primary focus:outline-none"
-                  placeholder="https://x.com/usuario"
-                />
+              {/* Redes Casters */}
+              <div className="space-y-3 pt-3 border-t border-border/50">
+                <p className="text-xs font-700 uppercase tracking-widest text-primary">Redes Casters</p>
+                <div className="space-y-3">
+                  {SOCIAL_NETWORKS_CONFIG.map(({ key, label, placeholder }) => (
+                    <div key={key} className="space-y-1.5">
+                      <label className="text-xs font-600 uppercase tracking-widest text-muted-foreground flex items-center justify-between">
+                        <span>{label}</span>
+                        <span className="text-[10px] text-muted-foreground/60 font-normal lowercase">(opcional)</span>
+                      </label>
+                      <input 
+                        type="url" 
+                        value={casterForm[key]}
+                        onChange={e => setCasterForm({ ...casterForm, [key]: e.target.value })}
+                        className="w-full rounded-md border border-border bg-background px-4 py-2 text-xs text-white focus:border-primary focus:outline-none placeholder:text-muted-foreground/40 transition-colors"
+                        placeholder={placeholder}
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
