@@ -88,3 +88,11 @@
   - Actualizada la vista pública en la sección de casters:
   - Renderizado de iconos en el orden exacto especificado con microinteracciones de escala y colores distintivos al pasar el mouse por la tarjeta.
   - Soporte completo para las 7 plataformas en desktop, tablet y móvil.
+
+### Preservación de Imagen Previa en Panel de Administración (Cambios No Aprobados)
+- **components/dashboard/admin-players.tsx:**
+  - Se implementó la verificación exhaustiva de solicitudes de modificación para cada jugador (`type: 'modificacion'`).
+  - Si una modificación está **pendiente** (`status: 'pending'`) o fue **rechazada** (`status: 'rejected'`), el sistema **rechaza terminantemente mostrar la imagen cambiada propuesta** y garantiza que se muestre la **imagen anterior legítima** (`original_avatar` o foto de la postulación aprobada).
+  - Auto-reparación en segundo plano: si `profiles.avatar_url` contenía la imagen propuesta no aprobada, se restaura automáticamente en la base de datos a la foto previa oficial.
+  - Se garantiza que `rawDetails.avatar_url`, la tarjeta del jugador y el modal de detalles y edición muestren siempre la imagen previa legítima hasta que un administrador apruebe expresamente el cambio.
+  - Se perfeccionó la resolución del apodo gaming para priorizar el nickname real cuando difiere del nombre completo.

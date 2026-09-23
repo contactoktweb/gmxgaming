@@ -315,27 +315,91 @@ export function AdminPlayers() {
           const playerBirthDate = extra.birthDate || ''
           const playerGender = extra.gender || 'Masculino'
 
-          const valAvatar = extractAvatarFromDetails(extra.details)
-          const resolvedAvatar = (p.avatar_url && !p.avatar_url.includes('placehold.co')) 
-            ? p.avatar_url 
-            : (p.avatar && !p.avatar.includes('placehold.co')) 
-            ? p.avatar 
-            : valAvatar 
-            ? valAvatar 
-            : 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
+          // 1. Filtrar todas las validaciones asociadas a este jugador
+          const pValidations = (allValidations || []).filter((v: any) => {
+            const uId = v.details?.user_id || v.details?.id
+            const sub = (v.submitted_by || '').toLowerCase().trim()
+            const pId = p.id
+            const pEmail = (playerEmail || '').toLowerCase().trim()
+            const pNick = (p.nickname || '').toLowerCase().trim()
+            const pName = (p.name || '').toLowerCase().trim()
+            const tName = (v.target_name || '').toLowerCase().trim()
+            const vNick = (v.details?.nickname || v.details?.game_nickname || '').toLowerCase().trim()
+            const vName = (v.details?.name || '').toLowerCase().trim()
 
-          // Reparación automática en base de datos si la validación tenía foto pero profiles no
-          if (valAvatar && (!p.avatar_url || p.avatar_url.includes('placehold.co'))) {
-            supabase.from('profiles').update({ avatar_url: valAvatar, avatar: valAvatar }).eq('id', p.id).then(() => {})
+            if (uId && uId === pId) return true
+            if (sub && (sub === pId || (pEmail && sub === pEmail))) return true
+            if (pNick && (tName.includes(pNick) || sub === pNick || vNick === pNick)) return true
+            if (pName && (tName.includes(pName) || sub === pName || vName === pName)) return true
+            return false
+          })
+
+          // Identificar validaciones de modificación y de alta de jugador
+          const modVal = pValidations.find((v: any) => v.type === 'modificacion')
+          const jugadorVal = pValidations.find((v: any) => v.type === 'jugador' && (v.status === 'active' || v.status === 'approved')) ||
+                             pValidations.find((v: any) => v.type === 'jugador')
+
+          // Imagen que se mantenía anteriormente antes de solicitar la modificación / antes de aprobar
+          const originalApprovedAvatar = (modVal?.details?.original_avatar && !modVal.details.original_avatar.includes('placehold.co'))
+            ? modVal.details.original_avatar
+            : (jugadorVal ? extractAvatarFromDetails(jugadorVal.details) : null)
+
+          // Imagen que se mandó a modificar en la solicitud
+          const proposedModAvatar = modVal ? extractAvatarFromDetails(modVal.details) : null
+
+          // ¿El cambio de imagen NO fue aprobado? (la modificación está pendiente o fue rechazada)
+          const isModUnapproved = Boolean(modVal && (modVal.status === 'pending' || modVal.status === 'rejected'))
+          const isModApproved = Boolean(modVal && (modVal.status === 'approved' || modVal.status === 'active'))
+
+          let resolvedAvatar = 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
+
+          if (isModUnapproved) {
+            // SI EL CAMBIO NO FUE APROBADO: NO DEBE APARECER LA IMAGEN CAMBIADA SINO LA QUE SE MANTIENE ANTERIORMENTE ANTES DE APROBARLO
+            if (originalApprovedAvatar) {
+              resolvedAvatar = originalApprovedAvatar
+            } else if (p.avatar_url && p.avatar_url !== proposedModAvatar && !p.avatar_url.includes('placehold.co')) {
+              resolvedAvatar = p.avatar_url
+            } else if (p.avatar && p.avatar !== proposedModAvatar && !p.avatar.includes('placehold.co')) {
+              resolvedAvatar = p.avatar
+            }
+
+            // Si en BD la tabla profiles tenía la imagen modificada no aprobada, restaurar la imagen anterior legítima
+            if (originalApprovedAvatar && (p.avatar_url === proposedModAvatar || !p.avatar_url || p.avatar_url.includes('placehold.co'))) {
+              supabase.from('profiles').update({ avatar_url: originalApprovedAvatar, avatar: originalApprovedAvatar }).eq('id', p.id).then(() => {})
+            }
+          } else if (isModApproved) {
+            // Si la modificación fue aprobada por el administrador, la imagen cambiada es la oficial
+            const approvedAvatar = proposedModAvatar || p.avatar_url || originalApprovedAvatar
+            if (approvedAvatar && !approvedAvatar.includes('placehold.co')) {
+              resolvedAvatar = approvedAvatar
+            } else if (originalApprovedAvatar) {
+              resolvedAvatar = originalApprovedAvatar
+            }
+          } else {
+            // Sin solicitud de modificación: usar foto de profiles o la foto de la postulación de jugador aprobada
+            const defaultPlayerAvatar = jugadorVal ? extractAvatarFromDetails(jugadorVal.details) : null
+            if (p.avatar_url && !p.avatar_url.includes('placehold.co')) {
+              resolvedAvatar = p.avatar_url
+            } else if (p.avatar && !p.avatar.includes('placehold.co')) {
+              resolvedAvatar = p.avatar
+            } else if (defaultPlayerAvatar) {
+              resolvedAvatar = defaultPlayerAvatar
+              supabase.from('profiles').update({ avatar_url: defaultPlayerAvatar, avatar: defaultPlayerAvatar }).eq('id', p.id).then(() => {})
+            }
           }
 
-          const rawNick = p.nickname || 
-                          p.player_game_info?.[0]?.game_nickname || 
-                          extra.details?.nickname || 
-                          extra.details?.game_nickname || 
-                          extra.details?.ign || 
-                          extra.details?.['item_meta[674]'] || 
-                          ''
+          // Priorizar nickname gaming legítimo (evitar que se use el nombre real como nickname)
+          const nicknameCandidates = [
+            extra.details?.nickname,
+            extra.details?.game_nickname,
+            p.player_game_info?.[0]?.game_nickname,
+            p.nickname,
+            extra.details?.ign,
+            extra.details?.['item_meta[674]']
+          ].filter(Boolean) as string[]
+
+          const distinctNick = nicknameCandidates.find(c => c.toLowerCase().trim() !== (p.name || '').toLowerCase().trim())
+          const rawNick = distinctNick || nicknameCandidates[0] || p.nickname || ''
           const resolvedNickname = rawNick ? formatNickname(rawNick).trim() : p.name
 
           return {
@@ -357,6 +421,8 @@ export function AdminPlayers() {
             rawDetails: {
               ...p,
               ...extra.details,
+              avatar_url: resolvedAvatar,
+              avatar: resolvedAvatar,
               email: playerEmail,
               phone: playerPhone,
               birth_date: playerBirthDate,
