@@ -62,3 +62,9 @@
   - En `loadAllUserData`, si existe una modificación rechazada (`status: 'rejected'`) o pendiente (`status: 'pending'`), el sistema garantiza que en el perfil y en la tarjeta se muestre la **imagen antigua** legítima, y si `profiles` contenía la imagen propuesta no aprobada, la auto-repara restaurando el avatar original en la base de datos.
   - En `handleSavePlayer`, se garantiza que `original_avatar` guarde siempre la foto original aprobada y nunca se contamine con la nueva foto enviada.
   - En `handleSave`, se protegió el `avatar_url` de jugadores aprobados para que la edición básica de perfil no pueda saltarse la validación administrativa.
+
+### Visualización del Nickname del Jugador en Tarjetas Administrativas
+- **components/dashboard/admin-players.tsx:**
+  - Se agregó la propiedad `nickname` a la interfaz `Player`.
+  - En la carga de jugadores, se resuelve el apodo/IGN priorizando `profiles.nickname`, `player_game_info.game_nickname`, metadatos de postulación (`ign`, `item_meta[674]`) o el nombre del perfil.
+  - En las tarjetas de la pestaña **Jugadores** de administración (`/administracion`), se reemplazó el nombre real (`player.name`) por el **nickname del jugador** (`player.nickname || player.name`), tanto en el título principal de la tarjeta como en los modales de detalle y acciones.

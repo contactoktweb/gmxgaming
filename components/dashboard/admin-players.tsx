@@ -85,6 +85,7 @@ export interface PlayerContractItem {
 export interface Player {
   id: string
   name: string
+  nickname?: string
   email: string
   phone?: string
   birthDate?: string
@@ -328,9 +329,19 @@ export function AdminPlayers() {
             supabase.from('profiles').update({ avatar_url: valAvatar, avatar: valAvatar }).eq('id', p.id).then(() => {})
           }
 
+          const rawNick = p.nickname || 
+                          p.player_game_info?.[0]?.game_nickname || 
+                          extra.details?.nickname || 
+                          extra.details?.game_nickname || 
+                          extra.details?.ign || 
+                          extra.details?.['item_meta[674]'] || 
+                          ''
+          const resolvedNickname = rawNick ? formatNickname(rawNick).trim() : p.name
+
           return {
             id: p.id,
             name: p.name,
+            nickname: resolvedNickname,
             email: playerEmail || 'Sin correo',
             phone: playerPhone,
             birthDate: playerBirthDate,
@@ -944,7 +955,7 @@ export function AdminPlayers() {
                 <div className="flex items-start gap-4">
                   <img 
                     src={player.avatar || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
-                    alt={player.name} 
+                    alt={player.nickname || player.name} 
                     className={cn(
                       "h-12 w-12 rounded-full border border-border object-cover",
                       player.status === 'banned' ? 'grayscale opacity-50' : ''
@@ -952,7 +963,9 @@ export function AdminPlayers() {
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <h3 className={cn("font-600 truncate", player.status === 'banned' ? 'text-red-500 line-through' : 'text-white')}>{player.name}</h3>
+                      <h3 className={cn("font-600 truncate text-base", player.status === 'banned' ? 'text-red-500 line-through' : 'text-white')} title={player.nickname || player.name}>
+                        {player.nickname || player.name}
+                      </h3>
                       {player.status === 'active' && (
                         <span className="inline-flex h-2 w-2 rounded-full bg-emerald-500 shrink-0" title="Activo" />
                       )}
@@ -1019,7 +1032,7 @@ export function AdminPlayers() {
                         </button>
                         {player.status === 'inactive' ? (
                           <button
-                            onClick={() => handleReactivatePlayer(player.id, player.name)}
+                            onClick={() => handleReactivatePlayer(player.id, player.nickname || player.name)}
                             title="Reactivar Jugador"
                             className="flex h-8 w-8 items-center justify-center rounded border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
                           >
@@ -1027,7 +1040,7 @@ export function AdminPlayers() {
                           </button>
                         ) : (
                           <button
-                            onClick={() => handleDeactivatePlayer(player.id, player.name)}
+                            onClick={() => handleDeactivatePlayer(player.id, player.nickname || player.name)}
                             title="Desactivar Jugador (conserva su registro)"
                             className="flex h-8 w-8 items-center justify-center rounded border border-border bg-surface text-muted-foreground hover:text-amber-400 hover:border-amber-500/40 transition-colors"
                           >
@@ -1075,10 +1088,10 @@ export function AdminPlayers() {
               <div>
                 <h3 className="font-display text-xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
                   <User className="w-5 h-5 text-primary" />
-                  Jugador: {selectedPlayer.name}
+                  Jugador: {selectedPlayer.nickname || selectedPlayer.name}
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {selectedPlayer.email} {selectedPlayer.rawDetails?.nickname ? `• IGN: ${selectedPlayer.rawDetails.nickname}` : ''}
+                  {selectedPlayer.name && selectedPlayer.name !== selectedPlayer.nickname ? `(${selectedPlayer.name}) • ` : ''}{selectedPlayer.email} {selectedPlayer.nickname ? `• IGN: ${selectedPlayer.nickname}` : ''}
                 </p>
               </div>
               <button 
@@ -1656,7 +1669,7 @@ export function AdminPlayers() {
               {actionModal.type === 'status' ? 'Modificar Estado' : 'Asignar Equipo'}
             </h3>
             <p className="text-sm text-muted-foreground mb-6">
-              Modificando al jugador: <strong className="text-white">{actionModal.player.name}</strong>
+              Modificando al jugador: <strong className="text-white">{actionModal.player.nickname || actionModal.player.name}</strong>
             </p>
 
             {actionModal.type === 'status' ? (
