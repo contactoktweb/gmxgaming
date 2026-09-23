@@ -64,6 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .from('profiles')
             .upsert({
               id: authUser.id,
+              email: authUser.email || null,
               name: googleName,
               avatar_url: googleAvatar,
               role: 'user',
@@ -76,21 +77,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (newProfile) {
             activeProfile = newProfile
           }
-        } else if ((!profile.name && googleName) || (!profile.avatar_url && googleAvatar)) {
-          // Si existe pero le falta nombre o avatar, completamos con Google
+        } else {
+          // Si existe pero le falta nombre, avatar o email, completamos
           const updates: Record<string, any> = {}
           if (!profile.name && googleName) updates.name = googleName
           if (!profile.avatar_url && googleAvatar) updates.avatar_url = googleAvatar
+          if (!profile.email && authUser.email) updates.email = authUser.email
 
-          const { data: updatedProfile } = await supabase
-            .from('profiles')
-            .update(updates)
-            .eq('id', authUser.id)
-            .select('*')
-            .single()
+          if (Object.keys(updates).length > 0) {
+            const { data: updatedProfile } = await supabase
+              .from('profiles')
+              .update(updates)
+              .eq('id', authUser.id)
+              .select('*')
+              .single()
 
-          if (updatedProfile) {
-            activeProfile = updatedProfile
+            if (updatedProfile) {
+              activeProfile = updatedProfile
+            }
           }
         }
 

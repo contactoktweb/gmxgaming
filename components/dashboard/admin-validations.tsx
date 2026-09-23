@@ -912,7 +912,7 @@ export function AdminValidations() {
                 <tr>
                   <th className="px-4 py-3 font-600 text-muted-foreground">TIPO</th>
                   <th className="px-4 py-3 font-600 text-muted-foreground">NOMBRE / NICKNAME</th>
-                  <th className="px-4 py-3 font-600 text-muted-foreground">FECHA REGISTRO</th>
+                  <th className="px-4 py-3 font-600 text-muted-foreground">FECHA / HORA REGISTRO</th>
                   <th className="px-4 py-3 font-600 text-muted-foreground">ESTATUS</th>
                   <th className="px-4 py-3 font-600 text-muted-foreground text-right">ACCIONES</th>
                 </tr>
@@ -927,7 +927,28 @@ export function AdminValidations() {
                       </div>
                     </td>
                     <td className="px-4 py-4 font-500 text-white">{req.target_name}</td>
-                    <td className="px-4 py-4 text-muted-foreground">{new Date(req.created_at).toLocaleDateString()}</td>
+                    <td className="px-4 py-4 text-muted-foreground whitespace-nowrap">
+                      {req.created_at ? (
+                        <div className="flex flex-col">
+                          <span className="text-xs font-500 text-white">
+                            {new Date(req.created_at).toLocaleDateString('es-ES', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric'
+                            })}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground">
+                            {new Date(req.created_at).toLocaleTimeString('es-ES', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              hour12: true
+                            })}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-4">
                       {req.status === 'pending' ? (
                         <span className="inline-flex items-center rounded-full bg-yellow-400/10 px-2 py-1 text-xs font-500 text-yellow-400 ring-1 ring-inset ring-yellow-400/20">
@@ -1038,7 +1059,25 @@ export function AdminValidations() {
                   {getTypeIcon(selectedRequest.type)}
                   Detalles de la Solicitud
                 </h3>
-                <p className="text-sm text-muted-foreground mt-1">{selectedRequest.target_name}</p>
+                <div className="flex flex-wrap items-center gap-2 mt-1">
+                  <p className="text-sm text-muted-foreground font-500">{selectedRequest.target_name}</p>
+                  {selectedRequest.created_at && (
+                    <>
+                      <span className="text-xs text-muted-foreground/50">•</span>
+                      <span className="text-xs text-amber-400/90 font-mono">
+                        Registrado: {new Date(selectedRequest.created_at).toLocaleDateString('es-ES', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric'
+                        })} a las {new Date(selectedRequest.created_at).toLocaleTimeString('es-ES', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: true
+                        })}
+                      </span>
+                    </>
+                  )}
+                </div>
               </div>
               <button 
                 onClick={() => setSelectedRequest(null)}

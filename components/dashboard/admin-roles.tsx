@@ -413,6 +413,11 @@ export function AdminRoles() {
                               <p className="text-[11px] text-muted-foreground truncate">
                                 {profile.email || profile.id}
                               </p>
+                              {profile.created_at && (
+                                <p className="text-[10px] text-muted-foreground/70 truncate">
+                                  Registro: {new Date(profile.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })} • {new Date(profile.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                                </p>
+                              )}
                             </div>
                           </div>
                         </td>

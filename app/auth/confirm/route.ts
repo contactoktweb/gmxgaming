@@ -66,24 +66,28 @@ export async function handleAuthCallback(request: NextRequest) {
         try {
           const { data: existingProfile } = await supabase
             .from('profiles')
-            .select('id, name, avatar_url')
+            .select('id, name, avatar_url, email')
             .eq('id', user.id)
             .single()
 
           if (!existingProfile) {
             await supabase.from('profiles').upsert({
               id: user.id,
+              email: user.email || null,
               name: fullName,
               avatar_url: avatarUrl,
               role: 'user',
               is_player: false,
               player_status: 'none'
             })
-          } else if ((!existingProfile.name && fullName) || (!existingProfile.avatar_url && avatarUrl)) {
+          } else {
             const updates: Record<string, any> = {}
             if (!existingProfile.name && fullName) updates.name = fullName
             if (!existingProfile.avatar_url && avatarUrl) updates.avatar_url = avatarUrl
-            await supabase.from('profiles').update(updates).eq('id', user.id)
+            if (!existingProfile.email && user.email) updates.email = user.email
+            if (Object.keys(updates).length > 0) {
+              await supabase.from('profiles').update(updates).eq('id', user.id)
+            }
           }
         } catch (profileErr) {
           console.error('[auth] Error al sincronizar el perfil de Google en servidor:', profileErr)
@@ -224,6 +228,7 @@ export async function handleAuthCallback(request: NextRequest) {
           try {
             await client.from('profiles').upsert({
               id: user.id,
+              email: user.email || null,
               name: fullName,
               avatar_url: avatarUrl,
               role: 'user',
