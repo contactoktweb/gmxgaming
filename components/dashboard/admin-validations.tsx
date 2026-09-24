@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Check, X, UserCheck, ShieldCheck, ScrollText, Eye, FileText, Image as ImageIcon, AlertCircle, Maximize2, ZoomIn, Search, Trash2, Save, Edit3, UserCog, Trophy } from 'lucide-react'
+import { Check, X, UserCheck, ShieldCheck, ShieldAlert, ScrollText, Eye, FileText, Image as ImageIcon, AlertCircle, Maximize2, ZoomIn, Search, Trash2, Save, Edit3, UserCog, Trophy } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { GmxButton } from '@/components/gmx-button'
 import { createClient } from '@/utils/supabase/client'
@@ -81,6 +81,18 @@ const EXCLUDED_FIELDS = new Set([
   'is_player',
   'is_featured',
   'rejection_reason',
+  'approved_by',
+  'approved_by_id',
+  'approved_by_email',
+  'approved_at',
+  'rejected_by',
+  'rejected_by_id',
+  'rejected_by_email',
+  'rejected_at',
+  'reviewed_by',
+  'reviewed_by_id',
+  'reviewed_by_email',
+  'reviewed_at',
   'original_name',
   'original_tag',
   'original_country',
@@ -90,6 +102,21 @@ const EXCLUDED_FIELDS = new Set([
   'original_avatar',
   'original_bio'
 ])
+
+function getAdminDisplayName(user: any): string {
+  if (!user) return 'Admin Principal (Raúl)'
+  const name = user.nickname || user.name || user.email?.split('@')[0] || 'Admin'
+  if (user.isAdminPrincipal || user.role === 'admin_principal' || user.role === 'admin') {
+    return `Admin Principal (${name})`
+  }
+  if (user.isAdminSecundario || user.role === 'admin_secundario') {
+    return `Admin Secundario (${name})`
+  }
+  if (user.isAdminVisitante || user.role === 'admin_visitante') {
+    return `Admin Visitante (${name})`
+  }
+  return name
+}
 
 function getFieldLabel(key: string): string {
   const lower = key.toLowerCase()
@@ -415,6 +442,30 @@ export function AdminValidations() {
         return
       }
 
+      const currentAdminLabel = getAdminDisplayName(user)
+      const currentAdminId = user?.id || null
+      const currentAdminEmail = user?.email || null
+      const currentActionTime = new Date().toISOString()
+
+      const auditDetails = isApproved ? {
+        approved_by: currentAdminLabel,
+        approved_by_id: currentAdminId,
+        approved_by_email: currentAdminEmail,
+        approved_at: currentActionTime,
+        reviewed_by: currentAdminLabel,
+        reviewed_by_id: currentAdminId,
+        reviewed_at: currentActionTime
+      } : {
+        rejected_by: currentAdminLabel,
+        rejected_by_id: currentAdminId,
+        rejected_by_email: currentAdminEmail,
+        rejected_at: currentActionTime,
+        reviewed_by: currentAdminLabel,
+        reviewed_by_id: currentAdminId,
+        reviewed_at: currentActionTime,
+        rejection_reason: reason
+      }
+
       if (requestToUpdate) {
         if (requestToUpdate.type === 'jugador') {
           // Resolución robusta del ID de usuario en profiles
@@ -540,7 +591,7 @@ export function AdminValidations() {
               status: newStatus,
               details: {
                 ...requestToUpdate.details,
-                rejection_reason: isApproved ? null : reason,
+                ...auditDetails,
                 user_id: targetUserId,
                 status: newStatus,
                 ...(candidateAvatar ? { avatar_url: candidateAvatar, avatar: candidateAvatar } : {})
@@ -554,7 +605,7 @@ export function AdminValidations() {
                 status: newStatus,
                 details: {
                   ...requestToUpdate.details,
-                  rejection_reason: isApproved ? null : reason,
+                  ...auditDetails,
                   user_id: targetUserId,
                   status: newStatus,
                   ...(candidateAvatar ? { avatar_url: candidateAvatar, avatar: candidateAvatar } : {})
@@ -568,7 +619,7 @@ export function AdminValidations() {
                 status: newStatus,
                 details: {
                   ...requestToUpdate.details,
-                  rejection_reason: isApproved ? null : reason,
+                  ...auditDetails,
                   user_id: targetUserId,
                   status: newStatus,
                   ...(candidateAvatar ? { avatar_url: candidateAvatar, avatar: candidateAvatar } : {})
@@ -596,7 +647,7 @@ export function AdminValidations() {
               status: newStatus,
               details: {
                 ...requestToUpdate.details,
-                rejection_reason: isApproved ? null : reason,
+                ...auditDetails,
                 team_id: targetTeamId
               }
             }).eq('id', confirmAction.id)
@@ -607,7 +658,7 @@ export function AdminValidations() {
                 status: newStatus,
                 details: {
                   ...requestToUpdate.details,
-                  rejection_reason: isApproved ? null : reason,
+                  ...auditDetails,
                   team_id: targetTeamId
                 }
               }).eq('id', teamVal[0].id)
@@ -619,7 +670,7 @@ export function AdminValidations() {
                 status: newStatus,
                 details: {
                   ...requestToUpdate.details,
-                  rejection_reason: isApproved ? null : reason,
+                  ...auditDetails,
                   team_id: targetTeamId
                 }
               })
@@ -684,6 +735,7 @@ export function AdminValidations() {
                 status: 'approved',
                 details: {
                   ...details,
+                  ...auditDetails,
                   status: 'approved'
                 }
               }).eq('id', confirmAction.id)
@@ -692,7 +744,7 @@ export function AdminValidations() {
                 status: 'rejected',
                 details: {
                   ...details,
-                  rejection_reason: reason,
+                  ...auditDetails,
                   status: 'rejected'
                 }
               }).eq('id', confirmAction.id)
@@ -765,6 +817,7 @@ export function AdminValidations() {
                 status: 'approved',
                 details: {
                   ...details,
+                  ...auditDetails,
                   status: 'approved',
                   user_id: userId
                 }
@@ -775,6 +828,7 @@ export function AdminValidations() {
                 status: 'approved',
                 details: {
                   ...details,
+                  ...auditDetails,
                   status: 'approved',
                   user_id: userId
                 }
@@ -810,7 +864,7 @@ export function AdminValidations() {
                 status: 'rejected',
                 details: {
                   ...details,
-                  rejection_reason: reason,
+                  ...auditDetails,
                   status: 'rejected',
                   user_id: userId
                 }
@@ -820,7 +874,7 @@ export function AdminValidations() {
                 status: 'rejected',
                 details: {
                   ...details,
-                  rejection_reason: reason,
+                  ...auditDetails,
                   status: 'rejected',
                   user_id: userId
                 }
@@ -845,7 +899,7 @@ export function AdminValidations() {
             status: newStatus,
             details: {
               ...requestToUpdate.details,
-              rejection_reason: isApproved ? null : reason,
+              ...auditDetails,
               status: newStatus
             }
           }).eq('id', confirmAction.id)
@@ -854,7 +908,7 @@ export function AdminValidations() {
             status: newStatus,
             details: {
               ...requestToUpdate.details,
-              rejection_reason: isApproved ? null : reason,
+              ...auditDetails,
               status: newStatus
             }
           }).eq('id', confirmAction.id)
@@ -874,7 +928,7 @@ export function AdminValidations() {
             status: newStatus,
             details: {
               ...requestToUpdate.details,
-              rejection_reason: isApproved ? null : reason,
+              ...auditDetails,
               status: newStatus
             }
           }).eq('id', confirmAction.id)
@@ -1127,19 +1181,60 @@ export function AdminValidations() {
                       )}
                     </td>
                     <td className="px-4 py-4">
-                      {req.status === 'pending' ? (
-                        <span className="inline-flex items-center rounded-full bg-yellow-400/10 px-2 py-1 text-xs font-500 text-yellow-400 ring-1 ring-inset ring-yellow-400/20">
-                          Pendiente
-                        </span>
-                      ) : (req.status === 'active' || req.status === 'approved') ? (
-                        <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-2 py-1 text-xs font-500 text-emerald-400 ring-1 ring-inset ring-emerald-400/20">
-                          ACTIVO
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center rounded-full bg-red-400/10 px-2 py-1 text-xs font-500 text-red-400 ring-1 ring-inset ring-red-400/20">
-                          RECHAZADO
-                        </span>
-                      )}
+                      {(() => {
+                        const isApproved = req.status === 'active' || req.status === 'approved'
+                        const isRejected = req.status === 'rejected'
+                        const approvedBy = req.details?.approved_by || req.details?.reviewed_by || (isApproved ? 'Admin Principal (Raúl)' : null)
+                        const rejectedBy = req.details?.rejected_by || req.details?.reviewed_by || (isRejected ? 'Admin Principal (Raúl)' : null)
+                        const auditDate = req.details?.approved_at || req.details?.rejected_at || req.details?.reviewed_at
+
+                        if (req.status === 'pending') {
+                          return (
+                            <div className="flex flex-col items-start gap-0.5">
+                              <span className="inline-flex items-center rounded-full bg-yellow-400/10 px-2.5 py-1 text-xs font-600 text-yellow-400 ring-1 ring-inset ring-yellow-400/20">
+                                Pendiente
+                              </span>
+                              <span className="text-[10px] text-muted-foreground/70 font-mono">En espera</span>
+                            </div>
+                          )
+                        }
+
+                        if (isApproved) {
+                          return (
+                            <div className="flex flex-col items-start gap-1">
+                              <span className="inline-flex items-center rounded-full bg-emerald-400/10 px-2.5 py-1 text-xs font-600 text-emerald-400 ring-1 ring-inset ring-emerald-400/20">
+                                ACTIVO
+                              </span>
+                              {approvedBy && (
+                                <span 
+                                  className="inline-flex items-center gap-1 text-[11px] text-emerald-400/90 font-500 max-w-[200px]"
+                                  title={`Aprobada por: ${approvedBy}${auditDate ? ` el ${new Date(auditDate).toLocaleDateString('es-ES')} a las ${new Date(auditDate).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: true })}` : ''}`}
+                                >
+                                  <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                                  <span className="truncate">Por: <strong className="text-white font-600">{approvedBy}</strong></span>
+                                </span>
+                              )}
+                            </div>
+                          )
+                        }
+
+                        return (
+                          <div className="flex flex-col items-start gap-1">
+                            <span className="inline-flex items-center rounded-full bg-red-400/10 px-2.5 py-1 text-xs font-600 text-red-400 ring-1 ring-inset ring-red-400/20">
+                              RECHAZADO
+                            </span>
+                            {rejectedBy && (
+                              <span 
+                                className="inline-flex items-center gap-1 text-[11px] text-red-400/90 font-500 max-w-[200px]"
+                                title={`Rechazada por: ${rejectedBy}${auditDate ? ` el ${new Date(auditDate).toLocaleDateString('es-ES')} a las ${new Date(auditDate).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: true })}` : ''}`}
+                              >
+                                <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-red-400" />
+                                <span className="truncate">Por: <strong className="text-white font-600">{rejectedBy}</strong></span>
+                              </span>
+                            )}
+                          </div>
+                        )
+                      })()}
                     </td>
                     <td className="px-4 py-4 text-right">
                       <div className="flex justify-end gap-2">
@@ -1157,6 +1252,8 @@ export function AdminValidations() {
                         {(() => {
                           const isApproved = req.status === 'active' || req.status === 'approved'
                           const isRejected = req.status === 'rejected'
+                          const approvedBy = req.details?.approved_by || req.details?.reviewed_by || (isApproved ? 'Admin Principal (Raúl)' : null)
+                          const rejectedBy = req.details?.rejected_by || req.details?.reviewed_by || (isRejected ? 'Admin Principal (Raúl)' : null)
 
                           return (
                             <>
@@ -1166,7 +1263,7 @@ export function AdminValidations() {
                                   if (isApproved) return
                                   setConfirmAction({ id: req.id, action: 'approved', name: req.target_name })
                                 }}
-                                title={isApproved ? "Esta solicitud ya fue aprobada y se encuentra activa" : "Aprobar / Activar"}
+                                title={isApproved ? `Esta solicitud ya fue aprobada por ${approvedBy || 'el Administrador'} y se encuentra activa` : "Aprobar / Activar"}
                                 className={cn(
                                   "flex h-8 w-8 items-center justify-center rounded border transition-colors",
                                   isApproved
@@ -1182,7 +1279,7 @@ export function AdminValidations() {
                                   if (isRejected) return
                                   setConfirmAction({ id: req.id, action: 'rejected', name: req.target_name })
                                 }}
-                                title={isRejected ? "Esta solicitud ya fue rechazada" : "Rechazar"}
+                                title={isRejected ? `Esta solicitud fue rechazada por ${rejectedBy || 'el Administrador'}` : "Rechazar"}
                                 className={cn(
                                   "flex h-8 w-8 items-center justify-center rounded border transition-colors",
                                   isRejected
@@ -1266,6 +1363,81 @@ export function AdminValidations() {
 
             {/* Body con Scroll (Solo Visualización) */}
             <div data-lenis-prevent data-modal-scrollbody className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6">
+              {/* Auditoría de Revisión / Aprobación / Rechazo */}
+              {(() => {
+                const isApproved = selectedRequest.status === 'active' || selectedRequest.status === 'approved'
+                const isRejected = selectedRequest.status === 'rejected'
+                const approvedBy = selectedRequest.details?.approved_by || selectedRequest.details?.reviewed_by || (isApproved ? 'Admin Principal (Raúl)' : null)
+                const rejectedBy = selectedRequest.details?.rejected_by || selectedRequest.details?.reviewed_by || (isRejected ? 'Admin Principal (Raúl)' : null)
+                const auditDate = selectedRequest.details?.approved_at || selectedRequest.details?.rejected_at || selectedRequest.details?.reviewed_at
+
+                if (isApproved && approvedBy) {
+                  return (
+                    <div className="mb-6 p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                          <ShieldCheck className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <span className="text-[11px] font-700 uppercase tracking-wider text-emerald-400 block">
+                            Solicitud Aprobada y Activa
+                          </span>
+                          <p className="text-sm text-white font-medium">
+                            Aprobada por: <strong className="text-emerald-300 font-bold">{approvedBy}</strong>
+                          </p>
+                        </div>
+                      </div>
+                      {auditDate && (
+                        <div className="text-left sm:text-right text-xs text-muted-foreground pl-13 sm:pl-0 shrink-0">
+                          <span className="block text-[10px] uppercase tracking-wider text-muted-foreground/80">Fecha de Aprobación</span>
+                          <span className="text-white font-mono text-xs">
+                            {new Date(auditDate).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                            {' a las '}
+                            {new Date(auditDate).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )
+                }
+
+                if (isRejected && rejectedBy) {
+                  return (
+                    <div className="mb-6 p-4 rounded-xl border border-red-500/30 bg-red-500/10 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 shadow-sm">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 mt-0.5">
+                          <ShieldAlert className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <span className="text-[11px] font-700 uppercase tracking-wider text-red-400 block">
+                            Solicitud Rechazada
+                          </span>
+                          <p className="text-sm text-white font-medium">
+                            Rechazada por: <strong className="text-red-300 font-bold">{rejectedBy}</strong>
+                          </p>
+                          {selectedRequest.details?.rejection_reason && (
+                            <p className="text-xs text-red-200 mt-1.5 leading-snug">
+                              <strong>Motivo:</strong> &quot;{selectedRequest.details.rejection_reason}&quot;
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      {auditDate && (
+                        <div className="text-left sm:text-right text-xs text-muted-foreground pl-13 sm:pl-0 shrink-0">
+                          <span className="block text-[10px] uppercase tracking-wider text-muted-foreground/80">Fecha de Rechazo</span>
+                          <span className="text-white font-mono text-xs">
+                            {new Date(auditDate).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                            {' a las '}
+                            {new Date(auditDate).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )
+                }
+
+                return null
+              })()}
               {selectedRequest.type === 'inscripcion_torneo' ? (
                 <div className="space-y-6">
                   {/* Card con datos del torneo y equipo */}

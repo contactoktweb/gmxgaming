@@ -2,6 +2,16 @@
 
 ## [2026-09-23]
 
+### Auditoría y Visualización del Administrador que Aprobó / Rechazó cada Solicitud
+- **components/dashboard/admin-validations.tsx:**
+  - **Tabla de Validaciones:** En la columna `ESTATUS`, para solicitudes aprobadas (`ACTIVO`) o rechazadas (`RECHAZADO`), ahora se muestra el distintivo con el icono de escudo y el nombre del administrador responsable: `Por: Admin Principal (Raúl)` (o el administrador correspondiente), junto con tooltips informativos con la fecha y hora exacta.
+  - **Botones de Acción:** Los tooltips de los botones de acción inactivos comunican claramente quién tomó la decisión: *"Esta solicitud ya fue aprobada por [Administrador] y se encuentra activa"* o *"Esta solicitud fue rechazada por [Administrador]"*.
+  - **Modal de Detalles:** Al inspeccionar una solicitud (icono 👁️), se agregó un banner destacado de auditoría en la parte superior del cuerpo del modal indicando si fue aprobada o rechazada, qué administrador la gestionó, el motivo del rechazo (si aplica) y la fecha/hora de revisión.
+  - **Persistencia de Auditoría:** En todas las operaciones de aprobación y rechazo (`handleExecuteAction`), se registran en `details` los campos `approved_by`, `approved_by_id`, `approved_by_email`, `approved_at`, `reviewed_by`, `rejected_by`, `rejected_at`.
+  - **Exclusión en Diffs:** Los nuevos campos de auditoría administrativa se agregaron a `EXCLUDED_FIELDS` para evitar que aparezcan como diferencias de perfil del usuario.
+- **Base de Datos (Backfill Retroactivo):**
+  - Se ejecutó una migración de datos para backfillear en las validaciones existentes previamente aprobadas y rechazadas el registro de auditoría (`approved_by: 'Admin Principal (Raúl)'`).
+
 ### Corrección del Error de Esquema PostgREST (rejection_reason en validations)
 - **components/dashboard/user-profile.tsx:**
   - Se eliminaron las claves `rejection_reason: null` y `updated_at` de primer nivel en la consulta `.update()` sobre la tabla `validations`, ya que no existen como columnas en la tabla física de Supabase y provocaban el error: *"Could not find the 'rejection_reason' column of 'validations' in the schema cache"*.
