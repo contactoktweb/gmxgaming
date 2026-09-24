@@ -2,6 +2,15 @@
 
 ## [2026-09-23]
 
+### Corrección del Error de Esquema PostgREST (rejection_reason en validations)
+- **components/dashboard/user-profile.tsx:**
+  - Se eliminaron las claves `rejection_reason: null` y `updated_at` de primer nivel en la consulta `.update()` sobre la tabla `validations`, ya que no existen como columnas en la tabla física de Supabase y provocaban el error: *"Could not find the 'rejection_reason' column of 'validations' in the schema cache"*.
+  - El motivo de rechazo (`rejection_reason: null`) se mantiene correctamente gestionado dentro del objeto JSONB `details`, alineado con la arquitectura del resto de la plataforma.
+- **components/dashboard/admin-validations.tsx:**
+  - Se removió `rejection_reason: reason` a nivel de raíz en las operaciones de rechazo de modificación de jugador, conservándolo únicamente dentro de `details` JSONB.
+- **supabase_production_schema.sql:**
+  - Se documentó la columna opcional `rejection_reason` mediante `ALTER TABLE public.validations ADD COLUMN IF NOT EXISTS rejection_reason text;` para garantizar retrocompatibilidad si se llegase a aplicar la migración en la base de datos en el futuro.
+
 ### Sincronización de Email con Google OAuth y Visualización de Fechas/Horas de Registro
 - **app/auth/confirm/route.ts:**
   - Se agregó el campo `email` en la creación de nuevos perfiles vía `.upsert()` en el callback de servidor y en el fallback del cliente.

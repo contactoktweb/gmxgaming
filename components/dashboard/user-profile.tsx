@@ -654,13 +654,11 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
             target_name: targetTitle,
             submitted_by: submitter,
             status: 'pending',
-            rejection_reason: null,
             details: {
               ...payloadDetails,
               status: 'pending',
               rejection_reason: null
-            },
-            updated_at: new Date().toISOString()
+            }
           })
           .eq('id', targetModId)
           .select()
@@ -673,8 +671,11 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
           target_name: targetTitle,
           submitted_by: submitter,
           status: 'pending',
-          rejection_reason: null,
-          details: payloadDetails
+          details: {
+            ...payloadDetails,
+            status: 'pending',
+            rejection_reason: null
+          }
         }
       } else {
         // Insertar nueva solicitud si no existía ninguna

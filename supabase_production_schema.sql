@@ -163,8 +163,10 @@ CREATE TABLE IF NOT EXISTS public.validations (
   submitted_by text,
   status text DEFAULT 'pending', -- 'pending', 'approved', 'rejected'
   details jsonb DEFAULT '{}'::jsonb,
+  rejection_reason text,
   created_at timestamptz DEFAULT now()
 );
+ALTER TABLE public.validations ADD COLUMN IF NOT EXISTS rejection_reason text;
 
 -- 7. TABLA TOURNAMENT_TEMPLATES (Plantillas de Torneos)
 CREATE TABLE IF NOT EXISTS public.tournament_templates (

@@ -808,7 +808,6 @@ export function AdminValidations() {
 
               await supabase.from('validations').update({
                 status: 'rejected',
-                rejection_reason: reason,
                 details: {
                   ...details,
                   rejection_reason: reason,
@@ -819,7 +818,6 @@ export function AdminValidations() {
 
               await supabase.from('validations').update({
                 status: 'rejected',
-                rejection_reason: reason,
                 details: {
                   ...details,
                   rejection_reason: reason,
