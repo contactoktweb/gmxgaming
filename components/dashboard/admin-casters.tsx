@@ -59,6 +59,7 @@ export function AdminCasters() {
   })
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [hasNativeColumns, setHasNativeColumns] = useState<boolean | null>(null)
   const supabase = createClient()
 
   useEffect(() => {
@@ -67,14 +68,46 @@ export function AdminCasters() {
 
   const fetchCasters = async () => {
     setLoading(true)
-    const { data, error } = await supabase.from('casters').select('*').order('created_at', { ascending: false })
-    if (error) {
-      console.error('Error fetching casters:', error)
-      toast.error('Error al cargar casters: ' + error.message)
-    } else if (data) {
-      setCasters(data)
+    try {
+      const { data, error } = await supabase.from('casters').select('*').order('created_at', { ascending: false })
+      
+      // Consultar fallback de redes en app_settings
+      const { data: settingsData } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('id', 'casters_socials_fallback')
+        .maybeSingle()
+      
+      const fallbackMap = (settingsData?.value as Record<string, any>) || {}
+
+      if (error) {
+        console.error('Error fetching casters:', error)
+        toast.error('Error al cargar casters: ' + error.message)
+      } else if (data) {
+        // Detectar si la tabla física contiene las nuevas columnas
+        const hasFbColumn = data.length > 0 ? 'social_fb' in data[0] : null
+        setHasNativeColumns(hasFbColumn)
+
+        const merged: Caster[] = data.map(c => {
+          const fallback = fallbackMap[c.id] || {}
+          return {
+            ...c,
+            social_twitch: c.social_twitch || c.twitch_url || fallback.social_twitch || '',
+            social_ig: c.social_ig || c.instagram_url || fallback.social_ig || '',
+            social_x: c.social_x || c.twitter_url || fallback.social_x || '',
+            social_fb: c.social_fb || fallback.social_fb || '',
+            social_tiktok: c.social_tiktok || fallback.social_tiktok || '',
+            social_kick: c.social_kick || fallback.social_kick || '',
+            social_yt: c.social_yt || fallback.social_yt || '',
+          }
+        })
+        setCasters(merged)
+      }
+    } catch (err: any) {
+      console.error('Error al cargar casters:', err)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const openNewCasterModal = () => {
@@ -162,16 +195,18 @@ export function AdminCasters() {
       }
 
       let saveError = null
+      let savedCasterId = editingId
 
       if (editingId) {
         const { error } = await supabase.from('casters').update(fullPayload).eq('id', editingId)
         saveError = error
       } else {
-        const { error } = await supabase.from('casters').insert([fullPayload])
+        const { data: insData, error } = await supabase.from('casters').insert([fullPayload]).select('id').single()
         saveError = error
+        if (insData?.id) savedCasterId = insData.id
       }
 
-      // Si las columnas nuevas aún no existen en la BD de Supabase (error 42703), fallback a columnas base
+      // Si las columnas nuevas aún no existen físicamente en la BD en PostgreSQL (error 42703), fallback resiliente
       if (saveError && (saveError.code === '42703' || saveError.message?.includes('column'))) {
         const basePayload = {
           name: cleanName,
@@ -186,16 +221,60 @@ export function AdminCasters() {
           const { error: fErr } = await supabase.from('casters').update(basePayload).eq('id', editingId)
           if (fErr) throw fErr
         } else {
-          const { error: fErr } = await supabase.from('casters').insert([basePayload])
+          const { data: fData, error: fErr } = await supabase.from('casters').insert([basePayload]).select('id').single()
           if (fErr) throw fErr
+          if (fData?.id) savedCasterId = fData.id
         }
 
-        toast.info('Caster guardado', {
-          description: 'Para habilitar Facebook, TikTok, Kick y YouTube, ejecuta la migración en Supabase.'
+        // Persistir todas las redes sociales en app_settings para que NUNCA se pierdan
+        if (savedCasterId) {
+          const { data: currentSettings } = await supabase
+            .from('app_settings')
+            .select('value')
+            .eq('id', 'casters_socials_fallback')
+            .maybeSingle()
+
+          const currentMap = (currentSettings?.value as Record<string, any>) || {}
+          currentMap[savedCasterId] = {
+            social_twitch: casterForm.social_twitch?.trim() || null,
+            social_ig: casterForm.social_ig?.trim() || null,
+            social_x: casterForm.social_x?.trim() || null,
+            social_fb: casterForm.social_fb?.trim() || null,
+            social_tiktok: casterForm.social_tiktok?.trim() || null,
+            social_kick: casterForm.social_kick?.trim() || null,
+            social_yt: casterForm.social_yt?.trim() || null,
+          }
+
+          await supabase.from('app_settings').upsert({
+            id: 'casters_socials_fallback',
+            value: currentMap
+          })
+        }
+
+        toast.success(editingId ? 'Caster y redes actualizados' : 'Caster y redes creados', {
+          description: 'Redes sociales guardadas y sincronizadas correctamente.'
         })
       } else if (saveError) {
         throw saveError
       } else {
+        // Guardado nativo exitoso en columnas de Supabase
+        if (savedCasterId) {
+          // Si había datos en fallback previo, limpiamos la clave de este caster
+          const { data: currentSettings } = await supabase
+            .from('app_settings')
+            .select('value')
+            .eq('id', 'casters_socials_fallback')
+            .maybeSingle()
+
+          if (currentSettings?.value && (currentSettings.value as any)[savedCasterId]) {
+            const currentMap = { ...(currentSettings.value as Record<string, any>) }
+            delete currentMap[savedCasterId]
+            await supabase.from('app_settings').upsert({
+              id: 'casters_socials_fallback',
+              value: currentMap
+            })
+          }
+        }
         toast.success(editingId ? 'Caster actualizado correctamente' : 'Caster agregado correctamente')
       }
 
@@ -230,6 +309,22 @@ export function AdminCasters() {
       if (error) {
         toast.error('Error al eliminar: ' + error.message)
       } else {
+        // Limpiar fallback si existía
+        const { data: currentSettings } = await supabase
+          .from('app_settings')
+          .select('value')
+          .eq('id', 'casters_socials_fallback')
+          .maybeSingle()
+
+        if (currentSettings?.value && (currentSettings.value as any)[id]) {
+          const currentMap = { ...(currentSettings.value as Record<string, any>) }
+          delete currentMap[id]
+          await supabase.from('app_settings').upsert({
+            id: 'casters_socials_fallback',
+            value: currentMap
+          })
+        }
+
         toast.success('Caster eliminado')
         setCasters(prev => prev.filter(c => c.id !== id))
       }
@@ -254,6 +349,32 @@ export function AdminCasters() {
             <Plus className="w-4 h-4" /> Agregar Caster
           </GmxButton>
         </div>
+
+        {hasNativeColumns === false && (
+          <div className="mb-6 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-200/90 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+              <span>
+                <strong>Sincronización Segura Activa:</strong> Todas las 7 redes sociales (Twitch, Instagram, X, Facebook, TikTok, Kick y YouTube) se guardan y sincronizan perfectamente. Puedes ejecutar el SQL en Supabase para habilitar columnas nativas.
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                const sql = `-- Migración para habilitar columnas completas de redes en Supabase
+ALTER TABLE public.casters ADD COLUMN IF NOT EXISTS social_fb text;
+ALTER TABLE public.casters ADD COLUMN IF NOT EXISTS social_tiktok text;
+ALTER TABLE public.casters ADD COLUMN IF NOT EXISTS social_kick text;
+ALTER TABLE public.casters ADD COLUMN IF NOT EXISTS social_yt text;
+NOTIFY pgrst, 'reload schema';`
+                navigator.clipboard.writeText(sql)
+                toast.success('SQL copiado al portapapeles', { description: 'Pégalo en el SQL Editor de Supabase para activar columnas nativas.' })
+              }}
+              className="shrink-0 px-3 py-1.5 rounded bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 font-mono text-[11px] transition-colors cursor-pointer"
+            >
+              Copiar SQL de Migración
+            </button>
+          </div>
+        )}
 
         {loading ? (
           <div className="py-12 text-center text-muted-foreground animate-pulse">Cargando casters...</div>

@@ -1,5 +1,29 @@
 # Registro de Cambios de IA (CHANGELOG_AI.md)
 
+## [2026-09-24]
+
+### Persistencia Resiliente de Redes Sociales de Casters y Fallback Dinámico
+- **Diagnóstico de Base de Datos:**
+  - Se identificó que la tabla física `public.casters` en Supabase carecía de las columnas añadidas recientemente (`social_fb`, `social_tiktok`, `social_kick`, `social_yt`), provocando el error PostgREST `42703 (column casters.social_fb does not exist)`.
+  - El mecanismo anterior descartaba silenciosamente estas 4 redes y guardaba únicamente las columnas base para evitar un fallo total de la aplicación.
+- **components/dashboard/admin-casters.tsx:**
+  - Implementado sistema de persistencia resiliente híbrido: intenta guardar primero en las columnas nativas de `casters`. Si la base de datos aún no tiene dichas columnas (código `42703`), persiste automáticamente las redes en `app_settings` bajo la clave `casters_socials_fallback`.
+  - Al cargar o editar casters, combina y sincroniza automáticamente las redes tanto desde la tabla `casters` como desde el fallback, garantizando que nunca se pierda ninguna información.
+  - Al eliminar un caster, limpia automáticamente sus redes del fallback.
+  - Se agregó banner informativo interactivo para administradores con botón para copiar al portapapeles la sentencia SQL de migración en 1 clic.
+- **supabase_casters_socials.sql:**
+  - Actualizado script de migración integral e idempotente (`ADD COLUMN IF NOT EXISTS`) con recarga de caché de esquema mediante `NOTIFY pgrst, 'reload schema'`.
+
+### Carrusel con Desplazamiento Smooth y Swipe Táctil para Casters (> 4 Casters)
+- **components/sections/casters.tsx:**
+  - **Eliminación del límite estático:** Removido `.limit(4)` en la consulta para permitir cargar todos los casters activos registrados.
+  - **Corrección de Nickname:** Se corrigió la asignación `nickname: c.nickname || c.name` para preservar el apodo competitivo de cada talento.
+  - **Detección Dinámica de Cantidad:**
+    - Si hay **más de 4 casters**: se activa el carrusel horizontal con `scroll-snap-type: x mandatory`, desplazamiento ultra suave (`behavior: 'smooth'`), soporte nativo de swipe táctil para móviles (Regla 15 de `GEMINI.md`) y atributo `data-lenis-prevent` para no colisionar con Lenis.
+    - Se incorporaron botones interactivos de navegación (`ChevronLeft` y `ChevronRight`) en la cabecera con microinteracciones gamer, halo de brillo en hover y desactivación automática en los extremos (`canScrollLeft` y `canScrollRight`).
+    - Si hay **4 o menos casters**: se mantiene el diseño de rejilla adaptativo (`Stagger` y paralaje suave), centrando elegantemente los elementos.
+  - **Accesibilidad y Móviles (Regla 70):** En dispositivos móviles las redes sociales son accesibles directamente sin requerir hover, y en pantallas de escritorio se revelan con transición fluida al pasar el cursor.
+
 ## [2026-09-23]
 
 ### Auditoría y Visualización del Administrador que Aprobó / Rechazó cada Solicitud

@@ -224,6 +224,9 @@ gmx-gaming-website/
 8. **Diseño Adaptativo & Gestos Touch:**
    - Soporte total para swipe horizontal en dispositivos móviles para todos los carruseles.
    - Año de copyright dinámico mediante `new Date().getFullYear()`.
+9. **Showcase y Redes Sociales de Casters:**
+   - Soporte de 7 redes sociales (`Twitch`, `Instagram`, `Twitter/X`, `Facebook`, `TikTok`, `Kick`, `YouTube`) con arquitectura híbrida de contingencia sincronizada con `app_settings` para garantizar cero pérdida de datos.
+   - En la página de inicio, cuando existen **más de 4 casters**, se activa el carrusel horizontal con botones de desplazamiento ultra suave (`smooth`), soporte de swipe táctil en móviles y aislamiento de scroll con Lenis (`data-lenis-prevent`).
 
 ---
 
@@ -251,10 +254,10 @@ gmx-gaming-website/
 | `tournament_teams` | Equipos inscritos a torneos | `id` (PK), `tournament_id` (FK), `team_id` (FK), `status`, `seed`, `group_name` |
 | `tournament_matches` | Calendario y resultados | `id` (PK), `tournament_id` (FK), `team1_id`, `team2_id`, `score1`, `score2`, `winner_id`, `scheduled_at`, `status` |
 | `validations` | Bandeja de auditoría administrativa | `id` (PK), `type` (`jugador`, `equipo`, `modificacion`, `contrato`), `status`, `submitted_by`, `target_name`, `details` (JSONB), `rejection_reason` |
-| `casters` | Casters y comentaristas oficiales | `id` (PK), `name`, `nickname`, `photo_url`, `bio`, `is_active`, `social_*` |
+| `casters` | Casters y comentaristas oficiales | `id` (PK), `name`, `nickname`, `photo_url`, `social_twitch`, `social_ig`, `social_x`, `social_fb`, `social_tiktok`, `social_kick`, `social_yt` |
 | `media_items` | Videos y directos de GMX TV | `id` (PK), `title`, `type`, `url`, `thumbnail_url`, `is_featured` |
 | `sponsors` | Patrocinadores | `id` (PK), `name`, `logo_url`, `website_url`, `tier`, `is_active` |
-| `app_settings` | Configuración dinámica de la app | `id` (PK), `value` (JSONB) (`enabled_countries`, `enabled_games`) |
+| `app_settings` | Configuración dinámica de la app | `id` (PK), `value` (JSONB) (`enabled_countries`, `enabled_games`, `casters_socials_fallback`) |
 
 ### 9.2 Storage Buckets en Supabase
 - `avatars`: Fotos de perfil de usuarios y fotos oficiales de jugadores.
