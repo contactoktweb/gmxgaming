@@ -2,30 +2,23 @@
 
 ## [2026-09-26]
 
-### Corrección del Carrusel de Casters en Inicio (Interacción Táctil Móvil y Arrastre en PC)
+### Sincronización Dinámica de Puntos de Navegación con el Movimiento del Carrusel de Casters
 - **Diagnóstico del Fallo:**
-  - En la página de inicio, los casters oficiales no se podían desplazar ni mover, tanto en computadoras de escritorio (PC) como en dispositivos móviles.
-  - **Causa Raíz:** El componente `components/sections/casters.tsx` condicionaba la activación del carrusel y de los botones de navegación a `casters.length > 4`. Como en la base de datos de producción actualmente existen 2 casters (`Cupcake` y `MILITA`), la condición evaluaba a `false`, renderizando un `<Stagger className="grid ...">` completamente estático:
-    - En **móviles**, los casters se mostraban en una cuadrícula vertical de 1 columna sin soporte de deslizamiento táctil horizontal (*swipe*).
-    - En **PC**, se mostraban en 2 columnas fijas y centradas sin botones de desplazamiento ni posibilidad de arrastre con el ratón.
+  - Los puntos/indicadores de paginación inferiores permanecían bloqueados en el primer punto (`[ === ] [ • ] [ • ] [ • ]`) o no respondían adecuadamente al desplazarse por el carrusel de casters.
+  - **Causa Raíz:**
+    1. En pantallas de escritorio (PC/Tablet), al mostrarse múltiples tarjetas simultáneamente, el recorrido horizontal total (`maxScroll = scrollWidth - clientWidth`) es significativamente menor al ancho acumulado de las tarjetas. Al usar una división estricta por ancho de tarjeta (`Math.round(scrollLeft / cardWidth)`), el cociente en escritorio jamás alcanzaba los índices superiores (2 o 3), dejando los últimos puntos inalcanzables.
+    2. Al hacer clic en un punto superior (`scrollToCasterIndex`), el cálculo `targetIndex * cardWidth` excedía el scroll máximo permitido por el navegador, provocando que el scroll se truncara y el detector recalculaba el índice regresando al punto inicial o intermedio.
 - **Solución Implementada:**
-  1. **Activación Universal y Renderizado Estricto 1:1 (Sin Duplicados):**
-     - Eliminada la restricción de `casters.length > 4`. El carrusel interactivo y sus controles se activan siempre que haya más de 1 caster (`casters.length > 1`).
-     - Se eliminó cualquier buffer o multiplicación artificial de tarjetas: cada caster registrado en la base de datos se renderiza estrictamente **una sola vez** (`casters.map(...)`), garantizando que aparezcan todos los casters subidos a Supabase sin repeticiones de ningún perfil.
-  2. **Interacción en PC (Mouse Drag-to-Scroll & Grab Cursor):**
-     - Añadido soporte nativo de arrastre con el puntero del ratón (`handlePointerDown`, `handlePointerMove`, `handlePointerUp`), con cursor reactivo `cursor-grab` y `active:cursor-grabbing`.
-     - Implementado umbral de arrastre (> 4px) para evitar clics accidentales en los enlaces de redes sociales al arrastrar.
-     - Marcadas las imágenes como `draggable={false}` y `select-none` para evitar que el navegador inicie el arrastre fantasma HTML5 al interactuar con las tarjetas.
-  3. **Interacción en Móviles (Swipe Nativo & Touch Momentum):**
-     - Contenedor configurado con `overflow-x-auto snap-x snap-mandatory`, `WebkitOverflowScrolling: 'touch'` y aislamiento de scroll con Lenis (`data-lenis-prevent`).
-     - Las interacciones táctiles móviles se delegan al motor nativo acelerado por hardware del navegador del teléfono, garantizando un swipe ultrasuave sin interferir con el scroll vertical de la página.
-  4. **Navegación por Flechas con Ciclo Continuo (Wrap-Around):**
-     - Los botones `<` y `>` ahora siempre están activos y permiten avanzar y retroceder sin bloquearse; al llegar al final se regresa fluidamente al inicio y viceversa.
-  5. **Indicadores de Paginación Interactivos (Dots):**
-     - Se incorporaron píldoras/puntos interactivos sincronizados con el caster activo visible, permitiendo saltar con un toque a cualquiera de ellos.
-  6. **Cumplimiento de Reglas del Proyecto:**
-     - Reemplazado el enlace deprecado a WordPress por el recurso seguro `/placeholder-user.jpg` con `onError` defensivo.
-     - Limpieza de dependencias y estados no utilizados (`motion`, `useScroll`, `useTransform`, `Stagger`).
+  1. **Detección Adaptativa por Densidad de Vista (`isOneCardVisible`):**
+     - En dispositivos móviles / pantallas estrechas (`clientWidth < cardWidth * 1.5`), el índice se calcula y sincroniza por el avance de tarjeta individual (`Math.round(scrollLeft / cardWidth)`), garantizando un snap y seguimiento 1:1 con el dedo.
+     - En pantallas de escritorio / monitores anchos con múltiples tarjetas en pantalla, el índice se calcula proporcionalmente sobre el progreso real del recorrido (`progress = scrollLeft / maxScroll`), permitiendo que el 100% de los puntos se activen de forma secuencial y suave.
+  2. **Navegación Interactiva por Puntos y Flechas:**
+     - `scrollToCasterIndex`: Ahora calcula el desplazamiento exacto según la visibilidad del dispositivo (`targetIndex === 0 -> 0`, `targetIndex === last -> maxScroll`, intermedios proporcionales).
+     - Se añadió protección contra parpadeo durante el scroll suave (`isProgrammaticScrollRef`) para evitar saltos temporales durante la animación.
+     - Los botones `<` y `>` navegan de forma cíclica y fluida entre casters, iluminando en tiempo real el punto correspondiente.
+     - En arrastre con ratón (`pointermove`), se dispara la sincronización inmediata del indicador activo para una respuesta a 60/120 fps.
+
+
 
 
 ### Corrección de Avatar Roster de Bambino (Remnant) y Eliminación de Placeholder Roto WordPress

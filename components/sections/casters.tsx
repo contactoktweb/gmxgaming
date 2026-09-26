@@ -115,18 +115,52 @@ export function Casters() {
   const hasMovedRef = useRef(false)
   const startXRef = useRef(0)
   const scrollLeftStartRef = useRef(0)
+  const isProgrammaticScrollRef = useRef(false)
+  const programmaticScrollTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const checkScroll = useCallback(() => {
-    if (scrollContainerRef.current && casters.length > 0) {
-      const el = scrollContainerRef.current
-      const card = el.querySelector<HTMLElement>('[data-caster-card]')
-      if (card) {
-        const cardWidth = card.offsetWidth + 24
-        const calculatedIndex = Math.round(el.scrollLeft / cardWidth)
-        setActiveIndex(calculatedIndex % casters.length)
-      }
+    if (isProgrammaticScrollRef.current) return
+    if (!scrollContainerRef.current || casters.length <= 1) return
+    const el = scrollContainerRef.current
+    const maxScroll = el.scrollWidth - el.clientWidth
+    if (maxScroll <= 0) {
+      setActiveIndex(0)
+      return
+    }
+
+    const scrollLeft = el.scrollLeft
+
+    if (scrollLeft <= 10) {
+      setActiveIndex(0)
+      return
+    }
+
+    if (scrollLeft >= maxScroll - 15) {
+      setActiveIndex(casters.length - 1)
+      return
+    }
+
+    const card = el.querySelector<HTMLElement>('[data-caster-card]')
+    const cardWidth = card ? card.offsetWidth + 24 : 340
+    const isOneCardVisible = el.clientWidth < cardWidth * 1.5
+
+    if (isOneCardVisible) {
+      const calculatedIndex = Math.round(scrollLeft / cardWidth)
+      setActiveIndex(Math.max(0, Math.min(casters.length - 1, calculatedIndex)))
+    } else {
+      const progress = Math.max(0, Math.min(1, scrollLeft / maxScroll))
+      const calculatedIndex = Math.round(progress * (casters.length - 1))
+      setActiveIndex(Math.max(0, Math.min(casters.length - 1, calculatedIndex)))
     }
   }, [casters.length])
+
+  useEffect(() => {
+    return () => {
+      if (programmaticScrollTimerRef.current) {
+        clearTimeout(programmaticScrollTimerRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     async function loadCasters() {
@@ -188,43 +222,59 @@ export function Casters() {
     }
   }, [casters, checkScroll])
 
-  const scroll = (direction: 'left' | 'right') => {
-    if (!scrollContainerRef.current) return
+  const scrollToCasterIndex = (targetIndex: number) => {
+    if (!scrollContainerRef.current || casters.length <= 1) return
     const el = scrollContainerRef.current
-    const card = el.querySelector<HTMLElement>('[data-caster-card]')
-    const scrollAmount = card ? card.offsetWidth + 24 : 340
+    const maxScroll = el.scrollWidth - el.clientWidth
+    if (maxScroll <= 0) return
 
-    if (direction === 'right') {
-      if (el.scrollLeft + el.clientWidth >= el.scrollWidth - 20) {
-        el.scrollTo({ left: 0, behavior: 'smooth' })
-      } else {
-        el.scrollBy({ left: scrollAmount, behavior: 'smooth' })
-      }
+    const clampedIndex = Math.max(0, Math.min(casters.length - 1, targetIndex))
+    setActiveIndex(clampedIndex)
+
+    isProgrammaticScrollRef.current = true
+    if (programmaticScrollTimerRef.current) {
+      clearTimeout(programmaticScrollTimerRef.current)
+    }
+    programmaticScrollTimerRef.current = setTimeout(() => {
+      isProgrammaticScrollRef.current = false
+    }, 450)
+
+    let targetScroll = 0
+    if (clampedIndex === 0) {
+      targetScroll = 0
+    } else if (clampedIndex >= casters.length - 1) {
+      targetScroll = maxScroll
     } else {
-      if (el.scrollLeft <= 20) {
-        el.scrollTo({ left: el.scrollWidth - el.clientWidth, behavior: 'smooth' })
+      const card = el.querySelector<HTMLElement>('[data-caster-card]')
+      const cardWidth = card ? card.offsetWidth + 24 : 340
+      const isOneCardVisible = el.clientWidth < cardWidth * 1.5
+
+      if (isOneCardVisible) {
+        targetScroll = Math.min(clampedIndex * cardWidth, maxScroll)
       } else {
-        el.scrollBy({ left: -scrollAmount, behavior: 'smooth' })
+        targetScroll = (clampedIndex / (casters.length - 1)) * maxScroll
       }
     }
-  }
 
-  const scrollToCasterIndex = (targetIndex: number) => {
-    if (!scrollContainerRef.current) return
-    const el = scrollContainerRef.current
-    const card = el.querySelector<HTMLElement>('[data-caster-card]')
-    if (!card) return
-    const cardWidth = card.offsetWidth + 24
     el.scrollTo({
-      left: targetIndex * cardWidth,
+      left: targetScroll,
       behavior: 'smooth'
     })
+  }
+
+  const scroll = (direction: 'left' | 'right') => {
+    if (!scrollContainerRef.current || casters.length <= 1) return
+    const nextIndex = direction === 'right'
+      ? (activeIndex + 1) % casters.length
+      : (activeIndex - 1 + casters.length) % casters.length
+    scrollToCasterIndex(nextIndex)
   }
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.pointerType !== 'mouse' || e.button !== 0) return
     if (!scrollContainerRef.current) return
 
+    isProgrammaticScrollRef.current = false
     isPointerDownRef.current = true
     hasMovedRef.current = false
     startXRef.current = e.clientX
@@ -239,13 +289,16 @@ export function Casters() {
     if (Math.abs(deltaX) > 4) {
       hasMovedRef.current = true
       if (!isDragging) setIsDragging(true)
+      isProgrammaticScrollRef.current = false
       scrollContainerRef.current.scrollLeft = scrollLeftStartRef.current - deltaX
+      checkScroll()
     }
   }
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.pointerType !== 'mouse') return
     isPointerDownRef.current = false
+    checkScroll()
     setTimeout(() => {
       setIsDragging(false)
       hasMovedRef.current = false

@@ -226,7 +226,7 @@ gmx-gaming-website/
    - Año de copyright dinámico mediante `new Date().getFullYear()`.
 9. **Showcase y Redes Sociales de Casters:**
    - Soporte de 7 redes sociales (`Twitch`, `Instagram`, `Twitter/X`, `Facebook`, `TikTok`, `Kick`, `YouTube`) con arquitectura híbrida de contingencia sincronizada con `app_settings` para garantizar cero pérdida de datos.
-   - En la página de inicio, cuando existen **2 o más casters**, se activa el carrusel horizontal con arrastre fluido mediante ratón en PC (`mouse drag-to-scroll` con cursor `grab`/`grabbing`), soporte nativo de swipe táctil en móviles, botones de navegación con ciclo envolvente (`wrap-around`), renderizado estricto 1:1 de todos los casters subidos a la BD (sin duplicados ni repeticiones artificiales), indicadores de paginación interactivos y aislamiento de scroll con Lenis (`data-lenis-prevent`).
+   - En la página de inicio, cuando existen **2 o más casters**, se activa el carrusel horizontal con arrastre fluido mediante ratón en PC (`mouse drag-to-scroll` con cursor `grab`/`grabbing`), soporte nativo de swipe táctil en móviles, botones de navegación con ciclo envolvente (`wrap-around`), renderizado estricto 1:1 de todos los casters subidos a la BD (sin duplicados ni repeticiones artificiales), indicadores de paginación interactivos sincronizados con el progreso de scroll (`progress / density-aware`), y aislamiento de scroll con Lenis (`data-lenis-prevent`).
 
 ---
 
