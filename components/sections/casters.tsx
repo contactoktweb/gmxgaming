@@ -254,11 +254,6 @@ export function Casters() {
 
   if (!loading && casters.length === 0) return <section ref={ref} className="hidden" />
 
-  const multiplier = casters.length > 1 && casters.length < 5
-    ? Math.max(1, Math.ceil(6 / casters.length))
-    : 1
-  const displayCasters = Array.from({ length: multiplier }, () => casters).flat()
-
   const renderCasterCard = (caster: Caster) => {
     const photo = caster.photo_url || (caster as any).avatar_url || '/placeholder-user.jpg'
 
@@ -423,9 +418,9 @@ export function Casters() {
                   WebkitOverflowScrolling: 'touch',
                 }}
               >
-                {displayCasters.map((caster, index) => (
+                {casters.map((caster) => (
                   <div
-                    key={`${caster.id}-${index}`}
+                    key={caster.id}
                     data-caster-card
                     className="snap-start shrink-0 w-[280px] sm:w-[300px] lg:w-[320px]"
                   >

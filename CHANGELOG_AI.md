@@ -9,9 +9,9 @@
     - En **móviles**, los casters se mostraban en una cuadrícula vertical de 1 columna sin soporte de deslizamiento táctil horizontal (*swipe*).
     - En **PC**, se mostraban en 2 columnas fijas y centradas sin botones de desplazamiento ni posibilidad de arrastre con el ratón.
 - **Solución Implementada:**
-  1. **Activación Universal del Carrusel:**
+  1. **Activación Universal y Renderizado Estricto 1:1 (Sin Duplicados):**
      - Eliminada la restricción de `casters.length > 4`. El carrusel interactivo y sus controles se activan siempre que haya más de 1 caster (`casters.length > 1`).
-     - Para garantizar que en pantallas ultra-anchas o monitores de escritorio el carrusel siempre cuente con suficiente desborde y fluidez de navegación cuando hay menos de 5 casters, se implementó un buffer de ciclo continuo que multiplica el listado (`Math.ceil(6 / casters.length)`), manteniendo las tarjetas ordenadas y con claves React únicas.
+     - Se eliminó cualquier buffer o multiplicación artificial de tarjetas: cada caster registrado en la base de datos se renderiza estrictamente **una sola vez** (`casters.map(...)`), garantizando que aparezcan todos los casters subidos a Supabase sin repeticiones de ningún perfil.
   2. **Interacción en PC (Mouse Drag-to-Scroll & Grab Cursor):**
      - Añadido soporte nativo de arrastre con el puntero del ratón (`handlePointerDown`, `handlePointerMove`, `handlePointerUp`), con cursor reactivo `cursor-grab` y `active:cursor-grabbing`.
      - Implementado umbral de arrastre (> 4px) para evitar clics accidentales en los enlaces de redes sociales al arrastrar.
