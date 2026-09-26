@@ -2,6 +2,32 @@
 
 ## [2026-09-26]
 
+### Corrección del Carrusel de Casters en Inicio (Interacción Táctil Móvil y Arrastre en PC)
+- **Diagnóstico del Fallo:**
+  - En la página de inicio, los casters oficiales no se podían desplazar ni mover, tanto en computadoras de escritorio (PC) como en dispositivos móviles.
+  - **Causa Raíz:** El componente `components/sections/casters.tsx` condicionaba la activación del carrusel y de los botones de navegación a `casters.length > 4`. Como en la base de datos de producción actualmente existen 2 casters (`Cupcake` y `MILITA`), la condición evaluaba a `false`, renderizando un `<Stagger className="grid ...">` completamente estático:
+    - En **móviles**, los casters se mostraban en una cuadrícula vertical de 1 columna sin soporte de deslizamiento táctil horizontal (*swipe*).
+    - En **PC**, se mostraban en 2 columnas fijas y centradas sin botones de desplazamiento ni posibilidad de arrastre con el ratón.
+- **Solución Implementada:**
+  1. **Activación Universal del Carrusel:**
+     - Eliminada la restricción de `casters.length > 4`. El carrusel interactivo y sus controles se activan siempre que haya más de 1 caster (`casters.length > 1`).
+     - Para garantizar que en pantallas ultra-anchas o monitores de escritorio el carrusel siempre cuente con suficiente desborde y fluidez de navegación cuando hay menos de 5 casters, se implementó un buffer de ciclo continuo que multiplica el listado (`Math.ceil(6 / casters.length)`), manteniendo las tarjetas ordenadas y con claves React únicas.
+  2. **Interacción en PC (Mouse Drag-to-Scroll & Grab Cursor):**
+     - Añadido soporte nativo de arrastre con el puntero del ratón (`handlePointerDown`, `handlePointerMove`, `handlePointerUp`), con cursor reactivo `cursor-grab` y `active:cursor-grabbing`.
+     - Implementado umbral de arrastre (> 4px) para evitar clics accidentales en los enlaces de redes sociales al arrastrar.
+     - Marcadas las imágenes como `draggable={false}` y `select-none` para evitar que el navegador inicie el arrastre fantasma HTML5 al interactuar con las tarjetas.
+  3. **Interacción en Móviles (Swipe Nativo & Touch Momentum):**
+     - Contenedor configurado con `overflow-x-auto snap-x snap-mandatory`, `WebkitOverflowScrolling: 'touch'` y aislamiento de scroll con Lenis (`data-lenis-prevent`).
+     - Las interacciones táctiles móviles se delegan al motor nativo acelerado por hardware del navegador del teléfono, garantizando un swipe ultrasuave sin interferir con el scroll vertical de la página.
+  4. **Navegación por Flechas con Ciclo Continuo (Wrap-Around):**
+     - Los botones `<` y `>` ahora siempre están activos y permiten avanzar y retroceder sin bloquearse; al llegar al final se regresa fluidamente al inicio y viceversa.
+  5. **Indicadores de Paginación Interactivos (Dots):**
+     - Se incorporaron píldoras/puntos interactivos sincronizados con el caster activo visible, permitiendo saltar con un toque a cualquiera de ellos.
+  6. **Cumplimiento de Reglas del Proyecto:**
+     - Reemplazado el enlace deprecado a WordPress por el recurso seguro `/placeholder-user.jpg` con `onError` defensivo.
+     - Limpieza de dependencias y estados no utilizados (`motion`, `useScroll`, `useTransform`, `Stagger`).
+
+
 ### Corrección de Avatar Roster de Bambino (Remnant) y Eliminación de Placeholder Roto WordPress
 - **Diagnóstico del Fallo:**
   - En la vista de detalle de equipo (`/equipos/remnant`), la tarjeta de **BAMBINO** en la sección "Roster Actual" mostraba un recuadro de imagen rota con signo de interrogación `[ ? ]`, a diferencia del resto de los jugadores.

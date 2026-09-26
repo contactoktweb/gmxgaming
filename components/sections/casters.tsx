@@ -1,10 +1,9 @@
 'use client'
 
 import { useRef, useState, useEffect, useCallback } from 'react'
-import { motion, useScroll, useTransform } from 'motion/react'
 import { Camera, Tv, Mic, Loader2, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react'
 import { SplitText } from '@/components/split-text'
-import { Reveal, Stagger, StaggerItem } from '@/components/anim'
+import { Reveal } from '@/components/anim'
 import { createClient } from '@/utils/supabase/client'
 import { useLanguage } from '@/lib/language-context'
 import { cn } from '@/lib/utils'
@@ -106,24 +105,28 @@ export function Casters() {
   const ref = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const { d } = useLanguage()
-  const { scrollYProgress } = useScroll({
-    target: ref,
-    offset: ['start end', 'end start'],
-  })
 
-  const y = useTransform(scrollYProgress, [0, 1], [40, -40])
   const [casters, setCasters] = useState<Caster[]>([])
   const [loading, setLoading] = useState(true)
-  const [canScrollLeft, setCanScrollLeft] = useState(false)
-  const [canScrollRight, setCanScrollRight] = useState(true)
+  const [activeIndex, setActiveIndex] = useState(0)
+  const [isDragging, setIsDragging] = useState(false)
+
+  const isPointerDownRef = useRef(false)
+  const hasMovedRef = useRef(false)
+  const startXRef = useRef(0)
+  const scrollLeftStartRef = useRef(0)
 
   const checkScroll = useCallback(() => {
-    if (scrollContainerRef.current) {
-      const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current
-      setCanScrollLeft(scrollLeft > 10)
-      setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 10)
+    if (scrollContainerRef.current && casters.length > 0) {
+      const el = scrollContainerRef.current
+      const card = el.querySelector<HTMLElement>('[data-caster-card]')
+      if (card) {
+        const cardWidth = card.offsetWidth + 24
+        const calculatedIndex = Math.round(el.scrollLeft / cardWidth)
+        setActiveIndex(calculatedIndex % casters.length)
+      }
     }
-  }, [])
+  }, [casters.length])
 
   useEffect(() => {
     async function loadCasters() {
@@ -171,7 +174,7 @@ export function Casters() {
   }, [])
 
   useEffect(() => {
-    if (casters.length > 4) {
+    if (casters.length > 1) {
       checkScroll()
       const el = scrollContainerRef.current
       if (el) {
@@ -186,32 +189,94 @@ export function Casters() {
   }, [casters, checkScroll])
 
   const scroll = (direction: 'left' | 'right') => {
-    if (scrollContainerRef.current) {
-      const card = scrollContainerRef.current.querySelector<HTMLElement>('[data-caster-card]')
-      const scrollAmount = card ? card.offsetWidth + 24 : 340
-      scrollContainerRef.current.scrollBy({
-        left: direction === 'left' ? -scrollAmount : scrollAmount,
-        behavior: 'smooth'
-      })
+    if (!scrollContainerRef.current) return
+    const el = scrollContainerRef.current
+    const card = el.querySelector<HTMLElement>('[data-caster-card]')
+    const scrollAmount = card ? card.offsetWidth + 24 : 340
+
+    if (direction === 'right') {
+      if (el.scrollLeft + el.clientWidth >= el.scrollWidth - 20) {
+        el.scrollTo({ left: 0, behavior: 'smooth' })
+      } else {
+        el.scrollBy({ left: scrollAmount, behavior: 'smooth' })
+      }
+    } else {
+      if (el.scrollLeft <= 20) {
+        el.scrollTo({ left: el.scrollWidth - el.clientWidth, behavior: 'smooth' })
+      } else {
+        el.scrollBy({ left: -scrollAmount, behavior: 'smooth' })
+      }
     }
+  }
+
+  const scrollToCasterIndex = (targetIndex: number) => {
+    if (!scrollContainerRef.current) return
+    const el = scrollContainerRef.current
+    const card = el.querySelector<HTMLElement>('[data-caster-card]')
+    if (!card) return
+    const cardWidth = card.offsetWidth + 24
+    el.scrollTo({
+      left: targetIndex * cardWidth,
+      behavior: 'smooth'
+    })
+  }
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return
+    if (!scrollContainerRef.current) return
+
+    isPointerDownRef.current = true
+    hasMovedRef.current = false
+    startXRef.current = e.clientX
+    scrollLeftStartRef.current = scrollContainerRef.current.scrollLeft
+  }
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isPointerDownRef.current || !scrollContainerRef.current) return
+    if (e.pointerType !== 'mouse') return
+
+    const deltaX = e.clientX - startXRef.current
+    if (Math.abs(deltaX) > 4) {
+      hasMovedRef.current = true
+      if (!isDragging) setIsDragging(true)
+      scrollContainerRef.current.scrollLeft = scrollLeftStartRef.current - deltaX
+    }
+  }
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== 'mouse') return
+    isPointerDownRef.current = false
+    setTimeout(() => {
+      setIsDragging(false)
+      hasMovedRef.current = false
+    }, 60)
   }
 
   if (!loading && casters.length === 0) return <section ref={ref} className="hidden" />
 
-  const renderCasterCard = (caster: Caster, useParallax: boolean) => {
-    const photo = caster.photo_url || (caster as any).avatar_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
+  const multiplier = casters.length > 1 && casters.length < 5
+    ? Math.max(1, Math.ceil(6 / casters.length))
+    : 1
+  const displayCasters = Array.from({ length: multiplier }, () => casters).flat()
 
-    const cardInner = (
-      <div className="group relative h-full w-full overflow-hidden bg-surface clip-corner aspect-[3/4] border border-border/80 hover:border-primary/50 transition-colors shadow-lg">
+  const renderCasterCard = (caster: Caster) => {
+    const photo = caster.photo_url || (caster as any).avatar_url || '/placeholder-user.jpg'
+
+    return (
+      <div className="group relative h-full w-full overflow-hidden bg-surface clip-corner aspect-[3/4] border border-border/80 hover:border-primary/50 transition-colors shadow-lg select-none">
         <img
           src={photo}
           alt={caster.nickname || caster.name}
-          className="h-full w-full object-cover opacity-85 transition-transform duration-700 group-hover:scale-105 group-hover:opacity-100"
+          draggable={false}
+          onError={(e) => {
+            e.currentTarget.src = '/placeholder-user.jpg'
+          }}
+          className="h-full w-full object-cover opacity-85 transition-transform duration-700 group-hover:scale-105 group-hover:opacity-100 select-none pointer-events-none"
           loading="lazy"
         />
         
         {/* Overlay gradient */}
-        <div className="absolute inset-0 bg-gradient-to-t from-deep/95 via-deep/45 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-deep/95 via-deep/45 to-transparent pointer-events-none" />
         
         {/* Content */}
         <div className="absolute inset-x-0 bottom-0 p-6 flex flex-col items-center text-center">
@@ -240,6 +305,12 @@ export function Casters() {
                     href={url}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={(e) => {
+                      if (hasMovedRef.current || isDragging) {
+                        e.preventDefault()
+                        e.stopPropagation()
+                      }
+                    }}
                     className={`p-2 bg-surface/90 border border-border rounded-full text-muted-foreground transition-all duration-200 hover:scale-110 ${social.hoverClass}`}
                     title={social.title}
                   >
@@ -252,16 +323,6 @@ export function Casters() {
         </div>
       </div>
     )
-
-    if (useParallax) {
-      return (
-        <motion.div style={{ y }} className="h-full">
-          {cardInner}
-        </motion.div>
-      )
-    }
-
-    return cardInner
   }
 
   return (
@@ -292,23 +353,21 @@ export function Casters() {
           </div>
           
           <div className="flex flex-wrap items-center gap-4">
-            {casters.length > 4 && (
+            {casters.length > 1 && (
               <div className="flex items-center gap-2.5">
                 <button
                   type="button"
                   onClick={() => scroll('left')}
-                  disabled={!canScrollLeft}
                   aria-label="Desplazar casters hacia la izquierda"
-                  className="flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-full border border-border bg-surface text-white hover:border-primary hover:text-primary transition-all duration-300 disabled:opacity-30 disabled:pointer-events-none cursor-pointer shadow-md hover:shadow-primary/20 hover:scale-105 active:scale-95"
+                  className="flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-full border border-border bg-surface text-white hover:border-primary hover:text-primary transition-all duration-300 cursor-pointer shadow-md hover:shadow-primary/20 hover:scale-105 active:scale-95"
                 >
                   <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
                 </button>
                 <button
                   type="button"
                   onClick={() => scroll('right')}
-                  disabled={!canScrollRight}
                   aria-label="Desplazar casters hacia la derecha"
-                  className="flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-full border border-border bg-surface text-white hover:border-primary hover:text-primary transition-all duration-300 disabled:opacity-30 disabled:pointer-events-none cursor-pointer shadow-md hover:shadow-primary/20 hover:scale-105 active:scale-95"
+                  className="flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-full border border-border bg-surface text-white hover:border-primary hover:text-primary transition-all duration-300 cursor-pointer shadow-md hover:shadow-primary/20 hover:scale-105 active:scale-95"
                 >
                   <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
                 </button>
@@ -338,39 +397,64 @@ export function Casters() {
           <div className="flex justify-center py-20">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
-        ) : casters.length > 4 ? (
-          <div className="relative -mx-5 px-5 lg:-mx-10 lg:px-10">
-            <div
-              ref={scrollContainerRef}
-              data-lenis-prevent
-              className="flex gap-6 overflow-x-auto snap-x snap-mandatory scrollbar-hide pb-6 pt-2 scroll-smooth"
-              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-            >
-              {casters.map((caster) => (
-                <div
-                  key={caster.id}
-                  data-caster-card
-                  className="snap-start shrink-0 w-[280px] sm:w-[300px] lg:w-[320px]"
-                >
-                  {renderCasterCard(caster, false)}
-                </div>
-              ))}
+        ) : casters.length === 1 ? (
+          <div className="max-w-sm mx-auto">
+            <div data-caster-card>
+              {renderCasterCard(casters[0])}
             </div>
           </div>
         ) : (
-          <Stagger className={cn(
-            "grid gap-6",
-            casters.length === 1 ? "grid-cols-1 max-w-sm mx-auto" :
-            casters.length === 2 ? "grid-cols-1 sm:grid-cols-2 max-w-2xl mx-auto" :
-            casters.length === 3 ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl mx-auto" :
-            "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
-          )}>
-            {casters.map((caster) => (
-              <StaggerItem key={caster.id}>
-                {renderCasterCard(caster, true)}
-              </StaggerItem>
-            ))}
-          </Stagger>
+          <div className="relative">
+            <div className="relative -mx-5 px-5 lg:-mx-10 lg:px-10">
+              <div
+                ref={scrollContainerRef}
+                data-lenis-prevent
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerUp}
+                className={cn(
+                  "flex gap-6 overflow-x-auto snap-x snap-mandatory scrollbar-hide pb-6 pt-2 select-none",
+                  isDragging ? "cursor-grabbing" : "cursor-grab"
+                )}
+                style={{
+                  scrollbarWidth: 'none',
+                  msOverflowStyle: 'none',
+                  WebkitOverflowScrolling: 'touch',
+                }}
+              >
+                {displayCasters.map((caster, index) => (
+                  <div
+                    key={`${caster.id}-${index}`}
+                    data-caster-card
+                    className="snap-start shrink-0 w-[280px] sm:w-[300px] lg:w-[320px]"
+                  >
+                    {renderCasterCard(caster)}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Indicadores de paginación interactivos para casters reales */}
+            {casters.length > 1 && (
+              <div className="mt-4 flex items-center justify-center gap-2">
+                {casters.map((c, i) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => scrollToCasterIndex(i)}
+                    aria-label={`Ver caster ${c.nickname || c.name}`}
+                    className={cn(
+                      "h-2 rounded-full transition-all duration-300 cursor-pointer",
+                      activeIndex === i
+                        ? "w-8 bg-primary shadow-sm shadow-primary/50"
+                        : "w-2 bg-border hover:bg-muted-foreground/50"
+                    )}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </section>
