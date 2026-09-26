@@ -365,7 +365,7 @@ export function AdminPlayers() {
 
             // Si en BD la tabla profiles tenía la imagen modificada no aprobada, restaurar la imagen anterior legítima
             if (originalApprovedAvatar && (p.avatar_url === proposedModAvatar || !p.avatar_url || p.avatar_url.includes('placehold.co'))) {
-              supabase.from('profiles').update({ avatar_url: originalApprovedAvatar, avatar: originalApprovedAvatar }).eq('id', p.id).then(() => {})
+              supabase.from('profiles').update({ avatar_url: originalApprovedAvatar }).eq('id', p.id).then(() => {})
             }
           } else if (isModApproved) {
             // Si la modificación fue aprobada por el administrador, la imagen cambiada es la oficial
@@ -384,7 +384,7 @@ export function AdminPlayers() {
               resolvedAvatar = p.avatar
             } else if (defaultPlayerAvatar) {
               resolvedAvatar = defaultPlayerAvatar
-              supabase.from('profiles').update({ avatar_url: defaultPlayerAvatar, avatar: defaultPlayerAvatar }).eq('id', p.id).then(() => {})
+              supabase.from('profiles').update({ avatar_url: defaultPlayerAvatar }).eq('id', p.id).then(() => {})
             }
           }
 
@@ -576,7 +576,6 @@ export function AdminPlayers() {
       is_featured: Boolean(editingDetails.is_featured),
       passport_number: editingDetails.passport_number?.trim() || null,
       avatar_url: (editingDetails.avatar_url?.trim() && !editingDetails.avatar_url.includes('placehold.co')) ? editingDetails.avatar_url.trim() : null,
-      avatar: (editingDetails.avatar_url?.trim() && !editingDetails.avatar_url.includes('placehold.co')) ? editingDetails.avatar_url.trim() : null,
       cover_url: editingDetails.cover_url?.trim() || null,
       id_photo_url: editingDetails.id_photo_url?.trim() || null,
       passport_photo_url: editingDetails.passport_photo_url?.trim() || null,

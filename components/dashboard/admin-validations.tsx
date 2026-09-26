@@ -514,7 +514,6 @@ export function AdminValidations() {
             // Sincronizar foto si la solicitud trae foto válida (con cualquier formato / nombre de clave)
             if (candidateAvatar) {
               profileUpdates.avatar_url = candidateAvatar
-              profileUpdates.avatar = candidateAvatar
             }
 
             if (requestToUpdate.details?.nickname) {
@@ -840,7 +839,6 @@ export function AdminValidations() {
               const originalAvatar = details.original_avatar
               if (originalAvatar) {
                 revertUpdates.avatar_url = originalAvatar
-                revertUpdates.avatar = originalAvatar
               } else {
                 // Fallback: recuperar avatar de la postulación original de jugador aprobada
                 const { data: origVal } = await supabase
@@ -853,7 +851,6 @@ export function AdminValidations() {
                   const fallbackPhoto = extractAvatarFromDetails(origVal[0].details)
                   if (fallbackPhoto) {
                     revertUpdates.avatar_url = fallbackPhoto
-                    revertUpdates.avatar = fallbackPhoto
                   }
                 }
               }
@@ -978,7 +975,7 @@ export function AdminValidations() {
         if (targetUserId) {
           const profileAllowedFields = [
             'name', 'nickname', 'discord_handle', 'closest_airport', 
-            'avatar_url', 'avatar', 'id_photo_url', 'passport_photo_url',
+            'avatar_url', 'id_photo_url', 'passport_photo_url',
             'social_ig', 'social_tiktok', 'social_yt', 'social_twitch',
             'social_kick', 'social_x', 'social_fb', 'player_status', 'is_player'
           ]
@@ -986,7 +983,6 @@ export function AdminValidations() {
           const candidateAvatar = extractAvatarFromDetails(editingDetails)
           if (candidateAvatar) {
             profileDataToUpdate.avatar_url = candidateAvatar
-            profileDataToUpdate.avatar = candidateAvatar
           }
 
           // Si la solicitud ya estaba aprobada, asegurar que no se degrade el player_status en profiles

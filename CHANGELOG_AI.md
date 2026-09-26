@@ -1,5 +1,24 @@
 # Registro de Cambios de IA (CHANGELOG_AI.md)
 
+## [2026-09-25]
+
+### Corrección del Error de Esquema PostgREST (Columna 'avatar' en tabla 'profiles')
+- **Diagnóstico del Fallo:**
+  - Al enviar el formulario de "Alta de Jugador" (`/registro/alta-de-jugador`), la aplicación arrojaba el toast de error: *"Error saving profile: Could not find the 'avatar' column of 'profiles' in the schema cache"*.
+  - La tabla física `public.profiles` en la base de datos de Supabase utiliza la columna estándar `avatar_url` para almacenar la foto de perfil.
+  - En `components/forms/alta-jugador-form.tsx`, el objeto de actualización `corePayload` incluía `corePayload.avatar = urlFoto`, intentando escribir en una columna inexistente a nivel de tabla SQL. Además, el bloque de recuperación ante fallos de columnas volvía a intentar enviar `corePayload` con el campo `avatar`, provocando el fallo persistente.
+- **components/forms/alta-jugador-form.tsx:**
+  - Se eliminó la asignación `corePayload.avatar = urlFoto`, manteniendo únicamente `corePayload.avatar_url = urlFoto`.
+  - Se reforzó el bloque de rescate (fallback ante errores de código `42703` o de columnas de PostgREST) para utilizar `safeBasicPayload` con los campos estrictamente esenciales y existentes (`name`, `nickname`, `closest_airport`, `avatar_url`, `discord_handle`, `is_player`, `player_status`), garantizando que el alta del jugador nunca se bloquee.
+- **components/dashboard/user-profile.tsx:**
+  - En la sincronización en segundo plano de foto (`loadAllUserData`), se corrigieron las actualizaciones directas a la tabla `profiles` para utilizar únicamente `avatar_url` en lugar de enviar `{ avatar_url, avatar }`.
+- **components/dashboard/admin-validations.tsx:**
+  - En la aprobación y rechazo de validaciones de jugador y modificaciones de perfil, se removieron las asignaciones redundantes a la columna inexistente `profiles.avatar`, preservando la columna oficial `avatar_url` para la tabla y manteniendo ambos nombres dentro del objeto JSONB `validations.details` para máxima compatibilidad.
+- **components/dashboard/admin-players.tsx:**
+  - Corregidas las actualizaciones de auto-reparación y guardado de edición de jugadores en el panel administrativo para omitir el campo `avatar` en la tabla `profiles`, persistiendo exclusivamente en `avatar_url`.
+- **supabase_production_schema.sql:**
+  - En la función trigger `public.handle_new_user()`, se retiró el intento de inserción y actualización sobre `avatar`, estandarizándolo sobre `avatar_url`.
+
 ## [2026-09-24]
 
 ### Persistencia Resiliente de Redes Sociales de Casters y Fallback Dinámico

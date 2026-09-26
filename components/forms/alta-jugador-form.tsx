@@ -315,7 +315,6 @@ function FormContent() {
 
       if (urlFoto && !urlFoto.includes('placehold.co')) {
         corePayload.avatar_url = urlFoto
-        corePayload.avatar = urlFoto
       }
       if (urlIdentidad && !urlIdentidad.includes('placehold.co')) {
         corePayload.id_photo_url = urlIdentidad
@@ -332,9 +331,19 @@ function FormContent() {
       if (profileError) {
         console.error('Error updating profile:', profileError)
         if (profileError.code === '42703' || profileError.message?.includes('column')) {
+          const safeBasicPayload: Record<string, any> = {
+            name: fullName,
+            nickname: cleanNick,
+            closest_airport: countryValue,
+            is_player: true,
+            player_status: 'pending',
+          }
+          if (corePayload.avatar_url) safeBasicPayload.avatar_url = corePayload.avatar_url
+          if (corePayload.discord_handle) safeBasicPayload.discord_handle = corePayload.discord_handle
+
           const { error: coreErr } = await supabase
             .from('profiles')
-            .update(corePayload)
+            .update(safeBasicPayload)
             .eq('id', user?.id)
           if (coreErr) {
             setFormStatus('idle')

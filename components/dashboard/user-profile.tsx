@@ -221,7 +221,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
             // Si el perfil no tiene avatar válido pero la validación sí tenía foto subida
             if (pValAvatar && (!profile?.avatar_url || profile.avatar_url.includes('placehold.co') || !profilePhoto || profilePhoto.includes('placehold.co'))) {
               setProfilePhoto(pValAvatar)
-              supabase.from('profiles').update({ avatar_url: pValAvatar, avatar: pValAvatar }).eq('id', currentUser.id)
+              supabase.from('profiles').update({ avatar_url: pValAvatar }).eq('id', currentUser.id)
             }
           }
 
@@ -234,8 +234,8 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               // Si el perfil en BD o en estado local tiene la imagen que se mandó a modificar
               if (profile?.avatar_url === proposedAvatar || profilePhoto === proposedAvatar || !profile?.avatar_url) {
                 setProfilePhoto(originalOldAvatar)
-                setProfileData((prev: any) => prev ? ({ ...prev, avatar_url: originalOldAvatar, avatar: originalOldAvatar }) : prev)
-                supabase.from('profiles').update({ avatar_url: originalOldAvatar, avatar: originalOldAvatar }).eq('id', currentUser.id)
+                setProfileData((prev: any) => prev ? ({ ...prev, avatar_url: originalOldAvatar }) : prev)
+                supabase.from('profiles').update({ avatar_url: originalOldAvatar }).eq('id', currentUser.id)
               }
             }
           }

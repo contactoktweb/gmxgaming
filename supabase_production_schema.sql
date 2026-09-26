@@ -56,12 +56,11 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS photo_url text;
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, name, avatar_url, avatar, role, is_player, player_status)
+  INSERT INTO public.profiles (id, email, name, avatar_url, role, is_player, player_status)
   VALUES (
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1), 'Usuario'),
-    COALESCE(NEW.raw_user_meta_data->>'avatar_url', NEW.raw_user_meta_data->>'picture', NULL),
     COALESCE(NEW.raw_user_meta_data->>'avatar_url', NEW.raw_user_meta_data->>'picture', NULL),
     'user',
     false,
@@ -70,8 +69,7 @@ BEGIN
   ON CONFLICT (id) DO UPDATE SET
     email = EXCLUDED.email,
     name = COALESCE(public.profiles.name, EXCLUDED.name),
-    avatar_url = COALESCE(public.profiles.avatar_url, EXCLUDED.avatar_url),
-    avatar = COALESCE(public.profiles.avatar, EXCLUDED.avatar);
+    avatar_url = COALESCE(public.profiles.avatar_url, EXCLUDED.avatar_url);
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
