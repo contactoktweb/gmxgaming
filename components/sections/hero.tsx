@@ -112,14 +112,14 @@ export function Hero({ ready }: { ready: boolean }) {
 
         <div className="mt-auto max-w-[700px] lg:max-w-[850px] xl:max-w-[1000px]">
           
-          <motion.div variants={fadeUpVariants} className="mb-6 flex items-center gap-4 lg:mb-8">
-            <span className="h-px w-10 bg-primary lg:w-16" />
-            <span className="font-display text-xs font-700 uppercase tracking-[0.3em] text-primary sm:text-sm">
+          <motion.div variants={fadeUpVariants} className="mb-4 flex items-center gap-3 sm:gap-4 lg:mb-8">
+            <span className="h-px w-8 sm:w-10 bg-primary lg:w-16" />
+            <span className="font-display text-sm font-700 uppercase tracking-[0.25em] text-primary sm:text-base">
               {d.hero.welcomeBadge}
             </span>
           </motion.div>
 
-          <h1 className="font-display text-[14vw] font-black uppercase leading-[0.85] tracking-tight text-white md:text-[8rem] lg:text-[9.5rem] xl:text-[11rem]">
+          <h1 className="font-display text-[16vw] xs:text-[15.5vw] font-black uppercase leading-[0.88] tracking-tight text-white sm:text-[14vw] md:text-[8rem] lg:text-[9.5rem] xl:text-[11rem]">
             {/* Title Line 1 */}
             <div className="overflow-hidden pb-1">
               <motion.div variants={titleLineVariants} className="origin-left">
@@ -155,25 +155,25 @@ export function Hero({ ready }: { ready: boolean }) {
             </div>
           </h1>
 
-          <motion.h2 variants={fadeUpVariants} className="mt-8 max-w-2xl font-display text-sm font-600 uppercase tracking-[0.2em] text-white sm:text-base lg:text-xl">
+          <motion.h2 variants={fadeUpVariants} className="mt-6 max-w-2xl font-display text-base font-700 uppercase tracking-[0.12em] text-white sm:text-lg sm:tracking-[0.16em] lg:text-xl lg:mt-8">
             {d.hero.subtitle}
           </motion.h2>
 
-          <motion.p variants={fadeUpVariants} className="mt-5 max-w-[480px] text-sm font-400 leading-relaxed text-muted-foreground sm:text-base lg:mt-6">
+          <motion.p variants={fadeUpVariants} className="mt-4 max-w-[520px] text-[15px] font-400 leading-relaxed text-zinc-300 sm:text-base sm:leading-relaxed lg:mt-6 lg:text-lg">
             {d.hero.description}
           </motion.p>
 
-          <motion.div variants={fadeUpVariants} className="mt-10 flex flex-col items-start gap-4 sm:flex-row sm:items-center lg:mt-12">
+          <motion.div variants={fadeUpVariants} className="mt-8 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:gap-4 lg:mt-12">
             {user ? (
-              <GmxButton href="/micuenta" className="w-full sm:w-auto">
+              <GmxButton href="/micuenta" className="w-full sm:w-auto text-sm sm:text-base py-4 sm:py-4.5">
                 {d.hero.goToProfile}
               </GmxButton>
             ) : (
-              <GmxButton href="/crear-cuenta" className="w-full sm:w-auto">
+              <GmxButton href="/crear-cuenta" className="w-full sm:w-auto text-sm sm:text-base py-4 sm:py-4.5">
                 {d.hero.createUserBtn}
               </GmxButton>
             )}
-            <GmxButton href="#torneos" variant="secondary" className="w-full sm:w-auto border-white/20 hover:border-white">
+            <GmxButton href="#torneos" variant="secondary" className="w-full sm:w-auto text-sm sm:text-base py-4 sm:py-4.5 border-white/20 hover:border-white">
               {d.hero.exploreTournaments}
             </GmxButton>
           </motion.div>
@@ -193,7 +193,7 @@ export function Hero({ ready }: { ready: boolean }) {
             <div key={i} className="flex shrink-0 items-center">
               {tickerItems.map((item, j) => (
                 <div key={j} className="flex items-center">
-                  <span className="mx-6 font-display text-xs font-600 uppercase tracking-[0.2em] text-faint hover:text-white transition-colors cursor-default">
+                  <span className="mx-6 font-display text-xs sm:text-sm font-600 uppercase tracking-[0.2em] text-faint hover:text-white transition-colors cursor-default">
                     {item}
                   </span>
                   <span className="text-[10px] text-primary/50">×</span>

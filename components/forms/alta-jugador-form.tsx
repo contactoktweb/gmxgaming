@@ -323,14 +323,23 @@ function FormContent() {
 
       const fullPayload = { ...corePayload, ...socialLinks }
 
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update(fullPayload)
-        .eq('id', user?.id)
+      try {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update(fullPayload)
+          .eq('id', user?.id)
 
-      if (profileError) {
-        console.error('Error updating profile:', profileError)
-        if (profileError.code === '42703' || profileError.message?.includes('column')) {
+        if (profileError) {
+          console.error('Error updating profile in alta-jugador:', profileError)
+
+          // If nickname duplicate error, notify user and stop
+          if (profileError.code === '23505' || profileError.message?.includes('profiles_nickname_key')) {
+            setFormStatus('idle')
+            toast.error(t.altaJugador.nicknameInUse)
+            return
+          }
+
+          // Fallback to essential safe columns only (all guaranteed to exist in schema)
           const safeBasicPayload: Record<string, any> = {
             name: fullName,
             nickname: cleanNick,
@@ -345,16 +354,22 @@ function FormContent() {
             .from('profiles')
             .update(safeBasicPayload)
             .eq('id', user?.id)
+
           if (coreErr) {
-            setFormStatus('idle')
-            toast.error('Error saving profile: ' + coreErr.message)
-            return
+            console.warn('Warning syncing basic profile (non-blocking for registration):', coreErr)
+            // Attempt minimal update
+            try {
+              await supabase
+                .from('profiles')
+                .update({ is_player: true, player_status: 'pending' })
+                .eq('id', user?.id)
+            } catch {
+              // Non-blocking
+            }
           }
-        } else {
-          setFormStatus('idle')
-          toast.error('Error submitting request: ' + profileError.message)
-          return
         }
+      } catch (profErr) {
+        console.warn('Non-blocking profile update exception:', profErr)
       }
 
       if (formData.get('item_meta[697]')) {

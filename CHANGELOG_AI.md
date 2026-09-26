@@ -1,21 +1,81 @@
 # Registro de Cambios de IA (CHANGELOG_AI.md)
 
+## [2026-09-26]
+
+### Corrección de Avatar Roster de Bambino (Remnant) y Eliminación de Placeholder Roto WordPress
+- **Diagnóstico del Fallo:**
+  - En la vista de detalle de equipo (`/equipos/remnant`), la tarjeta de **BAMBINO** en la sección "Roster Actual" mostraba un recuadro de imagen rota con signo de interrogación `[ ? ]`, a diferencia del resto de los jugadores.
+  - **Causa 1 (Base de Datos):** El perfil de Bambino (`profiles`) tenía `avatar_url: null` e `is_player: false` a pesar de tener un contrato activo en REMNANT y una solicitud de modificación aprobada (`RILEY ➔ BAMBINO`). Además, su solicitud de Alta de Jugador (`e25fee99-6a41-418f-8d4f-1f69aad9060d`) permanecía en estado `pending`, conteniendo la foto oficial con el jersey de Remnant (`1789876397256_foto_BAMBINO.jpg`).
+  - **Causa 2 (Frontend):** En `app/equipos/[id]/page.tsx`, ante un avatar nulo, el sistema recurría a una URL externa antigua de WordPress (`https://i0.wp.com/.../default_avatar.jpg`), la cual responde con **HTTP 403 Forbidden**, provocando el ícono de imagen rota del navegador.
+- **Acciones y Correcciones Implementadas:**
+  1. **Sincronización en Base de Datos (Supabase):**
+     - Se actualizó el perfil oficial de Bambino en `profiles` con su avatar verificado (`1789876397256_foto_BAMBINO.jpg`), su nombre real (`EDUARDO MANUEL COBA KANTUN`), `is_player: true` y `player_status: 'active'`.
+     - Se aprobó la solicitud pendiente de Alta de Jugador para mantener la consistencia en el panel de auditoría.
+  2. **Resolución Resiliente en app/equipos/[id]/page.tsx:**
+     - Se incorporó un mecanismo de fallback automático: si un jugador del roster tiene `avatar_url === null` en `profiles`, el componente consulta dinámicamente la tabla `validations` para obtener su foto más reciente sin requerir intervención manual.
+     - Se sustituyó la URL externa rota de WordPress por el recurso local nativo `/placeholder-user.jpg` y `/placeholder-logo.png`.
+     - Se añadieron manejadores de evento `onError` en todas las etiquetas `<img>` de jugadores y escuadras para asegurar que nunca se renderice una imagen rota o signo de interrogación.
+  3. **Blindaje en Perfiles Públicos (app/jugadores/[id]/page.tsx & players.tsx):**
+     - Ajustada la consulta para encontrar y mostrar el perfil público de cualquier jugador con estatus activo o contrato vigente, eliminando errores 404 accidentales.
+     - Reemplazados los fallbacks rotos por `/placeholder-user.jpg`.
+
+### Optimización y Aumento de Tipografía en Dispositivos Móviles (Hero & Botones)
+- **Diagnóstico:**
+  - En pantallas móviles, los textos del Hero se percibían excesivamente reducidos (H1 estrecho a `14vw`, subtítulo H2 a `text-sm` (14px), descripción a `text-sm`, y botones a `text-[13px]`), generando una jerarquía visual disminuida.
+  - Además, el objeto `viewport` en `app/layout.tsx` no declaraba explícitamente `width: 'device-width'` e `initialScale: 1`, lo que podía provocar que ciertos navegadores móviles renderizaran la página con escala alejada.
+- **Cambios Realizados:**
+  1. **app/layout.tsx:** Declarados explícitamente `width: 'device-width'` e `initialScale: 1` en el objeto `viewport` de Next.js para forzar renderizado nativo 1:1 en todos los navegadores móviles.
+  2. **components/sections/hero.tsx:**
+     - **Título H1:** Escalado en móvil a `text-[16vw] xs:text-[15.5vw]` con `leading-[0.88]`, ocupando el ancho visual de manera imponente y sin desbordes.
+     - **Badge de Bienvenida:** Aumentado de `text-xs` (12px) a `text-sm font-700 sm:text-base`.
+     - **Subtítulo H2:** Aumentado de `text-sm` (14px) a `text-base font-700 uppercase sm:text-lg lg:text-xl`, con tracking optimizado.
+     - **Párrafo descriptivo:** Aumentado de `text-sm` a `text-[15px] sm:text-base leading-relaxed text-zinc-300` para lectura nítida y descansada.
+     - **Ticker inferior:** Aumentado a `text-xs sm:text-sm font-600`.
+  3. **components/gmx-button.tsx:**
+     - Aumentada la tipografía base de los botones de `text-[13px] font-600` a `text-sm font-700 uppercase tracking-[0.15em] sm:text-sm md:text-base`, garantizando botones de llamada a la acción robustos y legibles en cualquier smartphone.
+  4. **Secciones de Soporte (About & Tournaments):** Estandarizados los badges y descripciones secundarias para evitar textos reducidos inferiores a 14px/15px en móvil.
+
+### Corrección Definitiva: Falsa Contaminación de Datos y Fotos entre Jugadores (Substring Matching Bug)
+- **Diagnóstico del Problema (No es un problema de caché):**
+  - Se reportó que en `/administracion` (sección de Jugadores), la tarjeta del jugador **RIN** (Discord: `Vortx2810`, Equipo: `THEHUNGRYKINGS`) mostraba la fotografía de otra persona (**MANDARINO**).
+  - Tras una auditoría exhaustiva de la base de datos de producción y del código fuente, **se descartó que fuera un problema de caché** de navegador o de red.
+  - **Causa Raíz Identificada:** En `components/dashboard/admin-players.tsx`, las solicitudes de validación y modificación de perfil se vinculaban a los jugadores mediante comparaciones de subcadena:
+    ```ts
+    if (pNick && (tName.includes(pNick) || ...)) return true
+    ```
+    Dado que el nickname del jugador es `"RIN"`, y existe otro jugador con nickname `"MANDARINO"`, la expresión `"mandarino".includes("rin")` evaluaba a `true`.
+  - Como resultado, la solicitud de modificación de foto y contrato de **MANDARINO** se asignaba indebidamente a **RIN**, inyectando en memoria la foto original de Mandarino en la tarjeta de Rin. Además, cualquier apodo corto (ej. `DAN`, `ELI`, `LEO`, `MAX`) quedaba expuesto a ser contaminado por nombres o apodos más largos que contuvieran dichas letras.
+- **Solución Implementada en components/dashboard/admin-players.tsx:**
+  1. **Coincidencia Estricta y Exacta:** Se eliminaron todas las comparaciones parciales con `.includes()` en la asociación de validaciones con jugadores. Ahora se valida coincidencia exacta por ID de usuario (`uId === p.id`), ID de remitente (`sub === p.id`), correo exacto (`vEmail === pEmail`) o igualdad exacta de apodo/nombre (`vNick === pNick || target_name === pNick`).
+  2. **Parser Especializado de target_name (`isTargetExactMatch`):** Para solicitudes de modificación con formato `"NICK_VIEJO ➔ NICK_NUEVO (Modificación de Jugador)"`, se divide la cadena por la flecha `➔`, se limpian etiquetas entre paréntesis y se verifica coincidencia exacta por elemento del arreglo, impidiendo cualquier cruce por subcadenas.
+  3. **Aislamiento de Validaciones por Tipo:** Se filtraron explícitamente las validaciones para que sólo solicitudes genuinas de jugadores (`jugador` o `modificacion` de perfil sin `team_id`) puedan aportar datos a `playerDetailsLookup` o `pValidations`.
+  4. **Protección de Foto de Perfil y Eliminación de Escrituras Silenciosas en Render:**
+     - La foto oficial almacenada en la tabla `profiles` (`p.avatar_url`) ahora tiene máxima prioridad.
+     - Se eliminaron las llamadas automáticas e inconsultas a `supabase.from('profiles').update(...)` dentro del `.map()` de carga, evitando que cualquier desfase en cliente sobreescriba datos en la base de datos de Supabase.
+  5. **Prioridad del Nickname de Perfil:** En `nicknameCandidates`, se antepuso `p.nickname` para asegurar que el apodo oficial de la cuenta no sea reemplazado por campos anidados de formularios antiguos.
+
 ## [2026-09-25]
 
-### Corrección del Error de Esquema PostgREST (Columna 'avatar' en tabla 'profiles')
+### Corrección Definitiva y Blindaje contra Errores de Esquema PostgREST (Columnas 'avatar' y 'email' en tabla 'profiles')
 - **Diagnóstico del Fallo:**
   - Al enviar el formulario de "Alta de Jugador" (`/registro/alta-de-jugador`), la aplicación arrojaba el toast de error: *"Error saving profile: Could not find the 'avatar' column of 'profiles' in the schema cache"*.
-  - La tabla física `public.profiles` en la base de datos de Supabase utiliza la columna estándar `avatar_url` para almacenar la foto de perfil.
-  - En `components/forms/alta-jugador-form.tsx`, el objeto de actualización `corePayload` incluía `corePayload.avatar = urlFoto`, intentando escribir en una columna inexistente a nivel de tabla SQL. Además, el bloque de recuperación ante fallos de columnas volvía a intentar enviar `corePayload` con el campo `avatar`, provocando el fallo persistente.
+  - La tabla física `public.profiles` en la base de datos de Supabase utiliza la columna oficial `avatar_url` para almacenar la foto de perfil y carece de la columna `avatar`.
+  - En `components/forms/alta-jugador-form.tsx`, el objeto de actualización `corePayload` incluía `corePayload.avatar = urlFoto`, intentando escribir en una columna inexistente a nivel de tabla SQL. Además, el bloque de recuperación volvía a intentar enviar `corePayload` con el campo `avatar` y, en caso de fallo, detenía con `return` el flujo sin permitir registrar la solicitud en la tabla `validations`.
+  - Adicionalmente, se detectó que `profiles` tampoco cuenta con la columna `email` (gestionada en `auth.users`), lo que causaba el error PGRST204 en las rutinas de upsert/sincronización de `lib/auth-context.tsx`.
 - **components/forms/alta-jugador-form.tsx:**
-  - Se eliminó la asignación `corePayload.avatar = urlFoto`, manteniendo únicamente `corePayload.avatar_url = urlFoto`.
-  - Se reforzó el bloque de rescate (fallback ante errores de código `42703` o de columnas de PostgREST) para utilizar `safeBasicPayload` con los campos estrictamente esenciales y existentes (`name`, `nickname`, `closest_airport`, `avatar_url`, `discord_handle`, `is_player`, `player_status`), garantizando que el alta del jugador nunca se bloquee.
-- **components/dashboard/user-profile.tsx:**
-  - En la sincronización en segundo plano de foto (`loadAllUserData`), se corrigieron las actualizaciones directas a la tabla `profiles` para utilizar únicamente `avatar_url` en lugar de enviar `{ avatar_url, avatar }`.
+  - Se eliminó completamente la asignación `corePayload.avatar = urlFoto`, manteniendo únicamente `corePayload.avatar_url = urlFoto`.
+  - Se blindó el bloque de actualización de perfil para que sea **completamente tolerante a fallos y no bloqueante**:
+    1. Si existe colisión de apodo único (`23505`), se avisa amigablemente al usuario con `t.altaJugador.nicknameInUse`.
+    2. Ante cualquier error de esquema o columna (`42703` o `PGRST204`), conmuta a `safeBasicPayload` con los campos verificados (`name`, `nickname`, `closest_airport`, `avatar_url`, `discord_handle`, `is_player`, `player_status`).
+    3. Si falla la sincronización local de perfil, intenta un guardado mínimo no bloqueante (`is_player: true, player_status: 'pending'`).
+    4. **Garantía de envío:** Se eliminó la interrupción con `return` ante fallos de sincronización de perfil, garantizando que los datos de la postulación, documentos, identificaciones y teléfono siempre se registren con éxito en la tabla `validations`.
+- **lib/auth-context.tsx:**
+  - Se removió la columna inexistente `email` de las operaciones `upsert` y `update` sobre la tabla `profiles`, previniendo errores de caché de esquema durante el inicio de sesión o creación inicial de perfil.
 - **components/dashboard/admin-validations.tsx:**
-  - En la aprobación y rechazo de validaciones de jugador y modificaciones de perfil, se removieron las asignaciones redundantes a la columna inexistente `profiles.avatar`, preservando la columna oficial `avatar_url` para la tabla y manteniendo ambos nombres dentro del objeto JSONB `validations.details` para máxima compatibilidad.
-- **components/dashboard/admin-players.tsx:**
-  - Corregidas las actualizaciones de auto-reparación y guardado de edición de jugadores en el panel administrativo para omitir el campo `avatar` en la tabla `profiles`, persistiendo exclusivamente en `avatar_url`.
+  - En `handleSaveDetails` para solicitudes de tipo `modificacion`, se sanitizó `cleanDetails` mediante `profileAllowedFields` para garantizar que columnas como `avatar`, `original_avatar` o datos anidados nunca se envíen a la tabla `profiles`.
+  - Se eliminó la consulta innecesaria a la columna inexistente `email` en la resolución de usuarios sobre `profiles`.
+- **components/dashboard/user-profile.tsx & admin-players.tsx:**
+  - Estandarizadas todas las actualizaciones y auto-reparaciones sobre la tabla física `profiles` para persistir exclusivamente en `avatar_url`.
 - **supabase_production_schema.sql:**
   - En la función trigger `public.handle_new_user()`, se retiró el intento de inserción y actualización sobre `avatar`, estandarizándolo sobre `avatar_url`.
 

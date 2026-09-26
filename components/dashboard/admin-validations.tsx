@@ -476,13 +476,7 @@ export function AdminValidations() {
             targetUserId = requestToUpdate.submitted_by
           }
 
-          if (!targetUserId && (requestToUpdate.details?.email || (requestToUpdate.submitted_by && requestToUpdate.submitted_by.includes('@')))) {
-            const searchEmail = (requestToUpdate.details?.email || requestToUpdate.submitted_by).trim()
-            const { data: pUser } = await supabase.from('profiles').select('id').ilike('email', searchEmail).limit(1)
-            if (pUser && pUser.length > 0) {
-              targetUserId = pUser[0].id
-            }
-          }
+          // Skip querying profiles for email since the column does not exist on profiles (only in auth.users)
 
           if (!targetUserId && (requestToUpdate.details?.nickname || requestToUpdate.target_name)) {
             const searchNick = (requestToUpdate.details?.nickname || requestToUpdate.target_name).trim()
@@ -966,12 +960,7 @@ export function AdminValidations() {
         if (!targetUserId && selectedRequest.submitted_by && isUuid.test(selectedRequest.submitted_by)) {
           targetUserId = selectedRequest.submitted_by
         }
-        if (!targetUserId && (selectedRequest.details?.email || (selectedRequest.submitted_by && selectedRequest.submitted_by.includes('@')))) {
-          const sEmail = (selectedRequest.details?.email || selectedRequest.submitted_by).trim()
-          const { data: pUser } = await supabase.from('profiles').select('id').ilike('email', sEmail).limit(1)
-          if (pUser && pUser.length > 0) targetUserId = pUser[0].id
-        }
-
+        // Skip email query on profiles since email column is on auth.users, not on profiles table
         if (targetUserId) {
           const profileAllowedFields = [
             'name', 'nickname', 'discord_handle', 'closest_airport', 
@@ -1007,7 +996,24 @@ export function AdminValidations() {
           error = err;
         } else {
           const userId = selectedRequest.details?.user_id || selectedRequest.id
-          const { error: err } = await supabase.from('profiles').update({ ...cleanDetails, edit_requested: false }).eq('id', userId)
+          const profileAllowedFields = [
+            'name', 'nickname', 'discord_handle', 'closest_airport', 
+            'avatar_url', 'id_photo_url', 'passport_photo_url',
+            'social_ig', 'social_tiktok', 'social_yt', 'social_twitch',
+            'social_kick', 'social_x', 'social_fb', 'player_status', 'is_player',
+            'cover_url', 'passport_number'
+          ]
+          const safeProfileUpdates: Record<string, any> = { edit_requested: false }
+          profileAllowedFields.forEach(field => {
+            if ((cleanDetails as any)[field] !== undefined) {
+              safeProfileUpdates[field] = (cleanDetails as any)[field]
+            }
+          })
+          const candidateAvatar = extractAvatarFromDetails(editingDetails)
+          if (candidateAvatar) {
+            safeProfileUpdates.avatar_url = candidateAvatar
+          }
+          const { error: err } = await supabase.from('profiles').update(safeProfileUpdates).eq('id', userId)
           error = err;
         }
         await supabase.from('validations').update({ details: editingDetails }).eq('id', selectedRequest.id)

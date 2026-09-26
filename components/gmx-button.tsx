@@ -28,7 +28,7 @@ export function GmxButton({
   as,
 }: Props) {
   const base =
-    'group relative inline-flex items-center justify-center gap-2 overflow-hidden px-7 py-4 font-display text-[13px] font-600 uppercase tracking-[0.18em] transition-colors duration-300 clip-corner sm:text-sm cursor-pointer'
+    'group relative inline-flex items-center justify-center gap-2 overflow-hidden px-7 py-4 font-display text-sm font-700 uppercase tracking-[0.15em] transition-colors duration-300 clip-corner sm:text-sm md:text-base cursor-pointer'
 
   const styles =
     variant === 'primary'

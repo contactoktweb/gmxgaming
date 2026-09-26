@@ -80,7 +80,7 @@ export function Players() {
               nickname: p.name,
               game: 'Mobile Legends',
               team: p.team || d.players.freeAgent,
-              img: p.avatar_url || p.avatar || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
+              img: p.avatar_url || p.avatar || '/placeholder-user.jpg'
             }))
             setPlayers(formatted)
             setLoading(false)
@@ -92,7 +92,7 @@ export function Players() {
           const formatted = sourceList.map((p: any) => {
             const activeContract = p.contracts?.find((c: any) => c.status === 'activo' || c.status === 'active')
             const teamName = activeContract?.teams?.name || d.players.freeAgent
-            const finalImg = p.avatar_url || p.avatar || (p as any).photo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
+            const finalImg = p.avatar_url || p.avatar || (p as any).photo_url || '/placeholder-user.jpg'
 
             return {
               id: p.id,

@@ -246,7 +246,7 @@ gmx-gaming-website/
 
 | Tabla | Propósito | Claves / Campos Relevantes |
 |---|---|---|
-| `profiles` | Usuarios, administradores, jugadores y managers | `id` (PK auth.users), `email`, `name`, `nickname` (UNIQUE), `role`, `is_player`, `player_status`, `avatar_url`, `social_*` |
+| `profiles` | Usuarios, administradores, jugadores y managers | `id` (PK auth.users), `name`, `nickname` (UNIQUE), `role`, `is_player`, `player_status`, `avatar_url`, `social_*` |
 | `player_game_info` | Cuentas de juego vinculadas | `id` (PK), `profile_id` (FK), `game`, `game_id`, `server`, `game_nickname`, `country_account` |
 | `teams` | Equipos y organizaciones | `id` (PK), `manager_id` (FK), `name`, `tag`, `logo_url`, `jersey_url`, `gender_category`, `status`, `games` |
 | `contracts` | Vinculación jugador-equipo | `id` (PK), `player_id` (FK), `team_id` (FK), `division`, `roles`, `status` (`active`, `pending_*`, `completed`, `cancelled`, `rejected`), `end_date` |
@@ -321,7 +321,12 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000
 4. **Separación de Idiomas:**
    - Panel de administración (`/administracion`): **Exclusivamente en Español**.
    - Zona pública y de usuario (`/micuenta`, `/registro/*`): **Bilingüe (ES / EN)** mediante `useLanguage()`.
-5. **Calidad de Código:**
+5. **Vinculación Estricta de Validaciones y Jugadores (Prevención de Contaminación Cruzada):**
+   - Las validaciones de auditoría en el panel administrativo (`admin-players.tsx`) deben vincularse únicamente mediante coincidencia exacta (`uId === p.id`, `sub === p.id`, `email === pEmail`, o igualdad exacta de nombre/nickname).
+   - **Prohibido el uso de `.includes()`** para relacionar apodos o nombres entre jugadores, previniendo que apodos cortos (ej. `RIN`) se crucen con nombres más largos que los contengan como subcadena (ej. `MANDARINO`).
+   - La foto oficial de la tabla `profiles` (`avatar_url`) tiene máxima prioridad sobre solicitudes de modificación no aprobadas.
+   - **Imágenes y Fallbacks Seguros:** Usar siempre los recursos locales `/placeholder-user.jpg` y `/placeholder-logo.png` con `onError` defensivo. Prohibido usar URLs externas deprecadas de WordPress (`i0.wp.com/.../default_avatar.jpg`) que provocan errores 403 Forbidden e íconos de imagen rota.
+6. **Calidad de Código:**
    - TypeScript estricto sin uso de `any` injustificado.
    - `npx tsc --noEmit` y `npm run build` deben pasar con 0 errores antes de cada entrega.
 

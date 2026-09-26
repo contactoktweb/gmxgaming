@@ -32,7 +32,7 @@ export function About() {
           <Reveal direction="fade">
             <div className="mb-5 flex items-center gap-3">
               <span className="h-px w-10 bg-primary" />
-              <span className="font-display text-xs font-600 uppercase tracking-[0.3em] text-primary sm:text-sm">
+              <span className="font-display text-sm font-700 uppercase tracking-[0.25em] text-primary sm:text-base">
                 {d.about.badge}
               </span>
             </div>
@@ -46,7 +46,7 @@ export function About() {
           />
 
           <Reveal direction="up" delay={0.15} className="mt-7">
-            <p className="max-w-xl text-[15px] leading-relaxed text-muted-foreground">
+            <p className="max-w-xl text-base leading-relaxed text-zinc-300 sm:text-[17px]">
               {d.about.description}
             </p>
           </Reveal>

@@ -74,6 +74,39 @@ export default function TeamDetailsPage() {
           .in('status', ['active', 'activo', 'pending_player_release', 'pending_manager_release'])
         
         if (rosterData) {
+          // Si algún jugador no tiene avatar_url en profiles, resolver su foto desde validations
+          const missingAvatarIds = rosterData
+            .filter((r: any) => r.profiles && !r.profiles.avatar_url)
+            .map((r: any) => r.profiles.id)
+
+          if (missingAvatarIds.length > 0) {
+            try {
+              const { data: valAvatars } = await supabase
+                .from('validations')
+                .select('details')
+                .in('details->>user_id', missingAvatarIds)
+
+              if (valAvatars && valAvatars.length > 0) {
+                const avatarMap = new Map<string, string>()
+                valAvatars.forEach((v: any) => {
+                  const uId = v.details?.user_id
+                  const av = v.details?.avatar_url || v.details?.avatar
+                  if (uId && av && !av.includes('placehold.co') && !avatarMap.has(uId)) {
+                    avatarMap.set(uId, av)
+                  }
+                })
+
+                rosterData.forEach((r: any) => {
+                  if (r.profiles && !r.profiles.avatar_url && avatarMap.has(r.profiles.id)) {
+                    r.profiles.avatar_url = avatarMap.get(r.profiles.id)
+                  }
+                })
+              }
+            } catch (vErr) {
+              console.warn('Error resolviendo avatares de validations:', vErr)
+            }
+          }
+
           setRoster(rosterData)
         }
 
@@ -190,8 +223,9 @@ export default function TeamDetailsPage() {
           <Reveal direction="up" className="flex flex-col md:flex-row items-center md:items-start gap-8 mb-16 text-center md:text-left">
             <div className="relative w-40 h-40 shrink-0">
               <img 
-                src={team.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
+                src={team.logo_url || '/placeholder-logo.png'} 
                 alt={team.name}
+                onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/placeholder-logo.png' }}
                 className="w-full h-full object-cover rounded-full bg-surface border-4 border-surface shadow-2xl z-10 relative"
               />
               <div className="absolute inset-0 rounded-full border border-primary/30 scale-110 animate-pulse-slow"></div>
@@ -259,7 +293,7 @@ export default function TeamDetailsPage() {
                       const player = contract.profiles
                       if (!player) return null
                       const playerSlug = getPlayerSlug(player)
-                      const playerAvatar = player.avatar_url || player.avatar || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
+                      const playerAvatar = player.avatar_url || player.avatar || '/placeholder-user.jpg'
 
                       return (
                         <Link 
@@ -273,6 +307,7 @@ export default function TeamDetailsPage() {
                           <img 
                             src={playerAvatar} 
                             alt={player.nickname || player.name}
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/placeholder-user.jpg' }}
                             className="w-16 h-16 rounded-lg object-cover bg-surface border border-border shrink-0 z-10"
                           />
                           <div className="z-10 min-w-0">
@@ -322,7 +357,7 @@ export default function TeamDetailsPage() {
                           </div>
                           <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2 flex-1 min-w-0">
-                              <img src={enemy?.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} className="w-6 h-6 rounded bg-surface shrink-0" />
+                              <img src={enemy?.logo_url || '/placeholder-logo.png'} onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/placeholder-logo.png' }} className="w-6 h-6 rounded bg-surface shrink-0" />
                               <span className="font-600 text-xs text-white truncate">{d.teamDetail.vs} {enemy?.name || 'TBD'}</span>
                             </div>
                             <div className={cn("px-2 py-1 rounded text-xs font-700 min-w-[50px] text-center", 

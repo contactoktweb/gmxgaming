@@ -63,14 +63,13 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
           country_account
         )
       `)
-      .eq('is_player', true)
 
     if (allPlayers) {
       player = allPlayers.find(p => getPlayerSlug(p) === paramSlug || slugify(p.nickname) === paramSlug || slugify(p.name) === paramSlug || p.id === paramSlug)
     }
   }
 
-  if (!player || !player.is_player) {
+  if (!player || (!player.is_player && player.player_status !== 'active')) {
     notFound()
   }
 
@@ -121,7 +120,7 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
           <div className="container relative z-10 mx-auto max-w-5xl flex flex-col items-center gap-8 sm:flex-row sm:items-end">
             <div className="relative h-48 w-48 shrink-0 overflow-hidden rounded border-4 border-border bg-deep shadow-2xl">
               <img 
-                src={player.avatar_url || '/images/placeholder.jpg'} 
+                src={player.avatar_url || '/placeholder-user.jpg'} 
                 alt={player.nickname || player.name} 
                 className="h-full w-full object-cover"
               />

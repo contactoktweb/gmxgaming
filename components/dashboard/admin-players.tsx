@@ -195,7 +195,11 @@ export function AdminPlayers() {
             if (cId) valMap[cId] = v
           }
 
-          const uId = v.details?.user_id || v.details?.id
+          // Solo procesar validaciones vinculadas directamente a jugadores
+          const isPlayerRelated = v.type === 'jugador' || (v.type === 'modificacion' && !v.details?.team_id)
+          if (!isPlayerRelated) return
+
+          const uId = v.details?.user_id || (v.type === 'jugador' ? v.details?.id : null)
           const d = v.details || {}
 
           const emailVal = d.email || d['item_meta[676]'] || (v.submitted_by && v.submitted_by.includes('@') ? v.submitted_by : '')
@@ -280,19 +284,39 @@ export function AdminPlayers() {
 
           const extra = playerDetailsLookup[p.id] || { email: '', phone: '', birthDate: '', gender: '', details: {} }
 
-          // Búsqueda por nickname o nombre si falta algún campo
-          if ((!extra.email || !extra.phone || !extra.birthDate || !extra.gender) && allValidations) {
-            const pNick = (p.nickname || '').toLowerCase().trim()
-            const pName = (p.name || '').toLowerCase().trim()
+          const pNick = (p.nickname || '').toLowerCase().trim()
+          const pName = (p.name || '').toLowerCase().trim()
 
+          // Helper para validar coincidencia estricta de target_name (evitando que un nickname corto haga match parcial, ej: RIN dentro de MANDARINO)
+          const isTargetExactMatch = (targetStr: string, nickToTest: string, nameToTest: string) => {
+            if (!targetStr) return false
+            const cleanTarget = targetStr.toLowerCase().trim()
+            if (nickToTest && cleanTarget === nickToTest) return true
+            if (nameToTest && cleanTarget === nameToTest) return true
+            if (cleanTarget.includes('➔')) {
+              const parts = cleanTarget.split('➔').map(s => s.replace(/\(.*?\)/g, '').trim())
+              if (nickToTest && parts.includes(nickToTest)) return true
+              if (nameToTest && parts.includes(nameToTest)) return true
+            }
+            return false
+          }
+
+          // Búsqueda por nickname o nombre si falta algún campo esencial (con coincidencia EXACTA, nunca includes)
+          if ((!extra.email || !extra.phone || !extra.birthDate || !extra.gender) && allValidations) {
             for (const v of allValidations) {
+              const isPlayerRelated = v.type === 'jugador' || (v.type === 'modificacion' && !v.details?.team_id)
+              if (!isPlayerRelated) continue
+
               const tName = (v.target_name || '').toLowerCase().trim()
               const sub = (v.submitted_by || '').toLowerCase().trim()
-              const vNick = (v.details?.nickname || '').toLowerCase().trim()
+              const vNick = (v.details?.nickname || v.details?.game_nickname || '').toLowerCase().trim()
               const vName = (v.details?.name || '').toLowerCase().trim()
+              const uId = v.details?.user_id || (v.type === 'jugador' ? v.details?.id : null)
 
-              const isMatch = (pNick && (tName.includes(pNick) || sub === pNick || vNick === pNick)) ||
-                              (pName && (tName.includes(pName) || sub === pName || vName === pName))
+              const isMatch = (uId && uId === p.id) ||
+                              (sub && sub === p.id) ||
+                              (pNick && (vNick === pNick || isTargetExactMatch(tName, pNick, pName))) ||
+                              (pName && (vName === pName || isTargetExactMatch(tName, pNick, pName)))
 
               if (isMatch) {
                 const d = v.details || {}
@@ -315,26 +339,29 @@ export function AdminPlayers() {
           const playerBirthDate = extra.birthDate || ''
           const playerGender = extra.gender || 'Masculino'
 
-          // 1. Filtrar todas las validaciones asociadas a este jugador
+          // 1. Filtrar todas las validaciones asociadas a este jugador con coincidencia ESTRICTA
           const pValidations = (allValidations || []).filter((v: any) => {
-            const uId = v.details?.user_id || v.details?.id
+            const isPlayerVal = v.type === 'jugador' || (v.type === 'modificacion' && !v.details?.team_id)
+            if (!isPlayerVal) return false
+
+            const uId = v.details?.user_id || (v.type === 'jugador' ? v.details?.id : null)
             const sub = (v.submitted_by || '').toLowerCase().trim()
             const pId = p.id
             const pEmail = (playerEmail || '').toLowerCase().trim()
-            const pNick = (p.nickname || '').toLowerCase().trim()
-            const pName = (p.name || '').toLowerCase().trim()
             const tName = (v.target_name || '').toLowerCase().trim()
             const vNick = (v.details?.nickname || v.details?.game_nickname || '').toLowerCase().trim()
             const vName = (v.details?.name || '').toLowerCase().trim()
+            const vEmail = (v.details?.email || (v.submitted_by?.includes('@') ? v.submitted_by : '')).toLowerCase().trim()
 
             if (uId && uId === pId) return true
-            if (sub && (sub === pId || (pEmail && sub === pEmail))) return true
-            if (pNick && (tName.includes(pNick) || sub === pNick || vNick === pNick)) return true
-            if (pName && (tName.includes(pName) || sub === pName || vName === pName)) return true
+            if (sub && sub === pId) return true
+            if (pEmail && vEmail && (vEmail === pEmail || sub === pEmail)) return true
+            if (pNick && (vNick === pNick || isTargetExactMatch(tName, pNick, pName))) return true
+            if (pName && (vName === pName || isTargetExactMatch(tName, pNick, pName))) return true
             return false
           })
 
-          // Identificar validaciones de modificación y de alta de jugador
+          // Identificar validaciones de modificación y de alta de jugador de ESTE jugador
           const modVal = pValidations.find((v: any) => v.type === 'modificacion')
           const jugadorVal = pValidations.find((v: any) => v.type === 'jugador' && (v.status === 'active' || v.status === 'approved')) ||
                              pValidations.find((v: any) => v.type === 'jugador')
@@ -351,21 +378,18 @@ export function AdminPlayers() {
           const isModUnapproved = Boolean(modVal && (modVal.status === 'pending' || modVal.status === 'rejected'))
           const isModApproved = Boolean(modVal && (modVal.status === 'approved' || modVal.status === 'active'))
 
-          let resolvedAvatar = 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
+          let resolvedAvatar = '/placeholder-user.jpg'
 
           if (isModUnapproved) {
-            // SI EL CAMBIO NO FUE APROBADO: NO DEBE APARECER LA IMAGEN CAMBIADA SINO LA QUE SE MANTIENE ANTERIORMENTE ANTES DE APROBARLO
-            if (originalApprovedAvatar) {
+            // SI EL CAMBIO NO FUE APROBADO: Si la BD ya tenía la imagen modificada propuesta, mostrar la anterior legítima
+            if (proposedModAvatar && p.avatar_url === proposedModAvatar && originalApprovedAvatar) {
               resolvedAvatar = originalApprovedAvatar
-            } else if (p.avatar_url && p.avatar_url !== proposedModAvatar && !p.avatar_url.includes('placehold.co')) {
+            } else if (p.avatar_url && !p.avatar_url.includes('placehold.co')) {
               resolvedAvatar = p.avatar_url
-            } else if (p.avatar && p.avatar !== proposedModAvatar && !p.avatar.includes('placehold.co')) {
+            } else if (originalApprovedAvatar) {
+              resolvedAvatar = originalApprovedAvatar
+            } else if (p.avatar && !p.avatar.includes('placehold.co')) {
               resolvedAvatar = p.avatar
-            }
-
-            // Si en BD la tabla profiles tenía la imagen modificada no aprobada, restaurar la imagen anterior legítima
-            if (originalApprovedAvatar && (p.avatar_url === proposedModAvatar || !p.avatar_url || p.avatar_url.includes('placehold.co'))) {
-              supabase.from('profiles').update({ avatar_url: originalApprovedAvatar }).eq('id', p.id).then(() => {})
             }
           } else if (isModApproved) {
             // Si la modificación fue aprobada por el administrador, la imagen cambiada es la oficial
@@ -384,16 +408,15 @@ export function AdminPlayers() {
               resolvedAvatar = p.avatar
             } else if (defaultPlayerAvatar) {
               resolvedAvatar = defaultPlayerAvatar
-              supabase.from('profiles').update({ avatar_url: defaultPlayerAvatar }).eq('id', p.id).then(() => {})
             }
           }
 
           // Priorizar nickname gaming legítimo (evitar que se use el nombre real como nickname)
           const nicknameCandidates = [
+            p.nickname,
+            p.player_game_info?.[0]?.game_nickname,
             extra.details?.nickname,
             extra.details?.game_nickname,
-            p.player_game_info?.[0]?.game_nickname,
-            p.nickname,
             extra.details?.ign,
             extra.details?.['item_meta[674]']
           ].filter(Boolean) as string[]
@@ -419,8 +442,8 @@ export function AdminPlayers() {
             created_at: p.created_at,
             is_featured: p.is_featured || false,
             rawDetails: {
-              ...p,
               ...extra.details,
+              ...p,
               avatar_url: resolvedAvatar,
               avatar: resolvedAvatar,
               email: playerEmail,
@@ -1019,7 +1042,7 @@ export function AdminPlayers() {
                 </div>
                 <div className="flex items-start gap-4">
                   <img 
-                    src={player.avatar || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
+                    src={player.avatar || '/placeholder-user.jpg'} 
                     alt={player.nickname || player.name} 
                     className={cn(
                       "h-12 w-12 rounded-full border border-border object-cover",
