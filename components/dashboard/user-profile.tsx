@@ -1246,12 +1246,22 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
 
             <div className="pt-6">
               {isTeamApproved ? (
-                <button 
-                  onClick={() => onNavigateTab ? onNavigateTab(userTeam.isManager ? 'jugadores' : 'equipos') : null}
-                  className="flex items-center gap-2 text-sm font-600 text-primary hover:text-primary-dark transition-colors text-left cursor-pointer"
-                >
-                  {userTeam.isManager ? t.userProfile.managePlayersContracts : t.userProfile.viewMyTeam} <ArrowRight className="h-4 w-4" />
-                </button>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <button 
+                    onClick={() => onNavigateTab ? onNavigateTab(userTeam.isManager ? 'jugadores' : 'equipos') : null}
+                    className="flex items-center gap-2 text-sm font-600 text-primary hover:text-primary-dark transition-colors text-left cursor-pointer"
+                  >
+                    {userTeam.isManager ? t.userProfile.managePlayersContracts : t.userProfile.viewMyTeam} <ArrowRight className="h-4 w-4" />
+                  </button>
+                  {userTeam.isManager && (
+                    <Link
+                      href="/registro/alta-de-equipo"
+                      className="text-xs font-600 text-muted-foreground hover:text-white transition-colors inline-block"
+                    >
+                      + {t.userProfile.registerAnotherTeam || 'Registrar Otro Equipo'}
+                    </Link>
+                  )}
+                </div>
               ) : isTeamRejected ? (
                 <Link 
                   href="/registro/alta-de-equipo" 

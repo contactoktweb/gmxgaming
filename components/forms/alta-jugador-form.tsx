@@ -6,7 +6,7 @@ import { Upload, Image as ImageIcon, FileText, Loader2, CheckCircle2, HelpCircle
 import { GmxButton } from '@/components/gmx-button'
 import { PhoneInput } from '@/components/forms/phone-input'
 import { FileUpload } from '@/components/forms/file-upload'
-import { cn, formatNickname, formatPersonName } from '@/lib/utils'
+import { cn, formatNickname, formatPersonName, DEFAULT_COUNTRIES } from '@/lib/utils'
 import { compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS } from '@/lib/image-compression'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
@@ -25,13 +25,6 @@ function FieldTooltip({ text }: { text: string }) {
     </div>
   )
 }
-
-const DEFAULT_COUNTRIES = [
-  "Argentina", "Bolivia", "Chile", "Colombia", "Costa Rica", "Cuba", 
-  "Ecuador", "El Salvador", "Guatemala", "Honduras", "México", "Nicaragua", 
-  "Panamá", "Paraguay", "Perú", "Puerto Rico", "República Dominicana", 
-  "Uruguay", "Venezuela"
-]
 
 function FormContent() {
   const [formStatus, setFormStatus] = useState<'idle' | 'loading' | 'success' | 'already_registered' | 'pending_review'>('idle')
@@ -96,7 +89,10 @@ function FormContent() {
         const gameConfig = settings.find(c => c.id === 'enabled_games')
         
         if (countryConfig && Array.isArray(countryConfig.value) && countryConfig.value.length > 0) {
-          setCountries(countryConfig.value as string[])
+          const merged = Array.from(new Set([...(countryConfig.value as string[]), ...DEFAULT_COUNTRIES]))
+            .filter(Boolean)
+            .sort((a, b) => a.localeCompare(b, 'es'))
+          setCountries(merged)
         }
         if (gameConfig && Array.isArray(gameConfig.value) && gameConfig.value.length > 0) {
           const loadedGames = gameConfig.value

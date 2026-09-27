@@ -7,16 +7,9 @@ import { useAuth } from '@/lib/auth-context'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { GmxButton } from '@/components/gmx-button'
-import { cn, formatRoleTitle, formatRolesList, getTeamSlug } from '@/lib/utils'
+import { cn, formatRoleTitle, formatRolesList, getTeamSlug, DEFAULT_COUNTRIES } from '@/lib/utils'
 import { EditTeamModal } from '@/components/dashboard/edit-team-modal'
 import { useLanguage } from '@/lib/language-context'
-
-const DEFAULT_COUNTRIES = [
-  "Argentina", "Bolivia", "Chile", "Colombia", "Costa Rica", "Cuba", 
-  "Ecuador", "El Salvador", "Guatemala", "Honduras", "México", "Nicaragua", 
-  "Panamá", "Paraguay", "Perú", "Puerto Rico", "República Dominicana", 
-  "Uruguay", "Venezuela"
-]
 
 export function PlayerTeams() {
   const { user } = useAuth()
@@ -45,7 +38,10 @@ export function PlayerTeams() {
       if (settingsData && settingsData.length > 0) {
         const countryConfig = settingsData.find((s: any) => s.id === 'enabled_countries')
         if (countryConfig && Array.isArray(countryConfig.value) && countryConfig.value.length > 0) {
-          setCountries(countryConfig.value as string[])
+          const merged = Array.from(new Set([...(countryConfig.value as string[]), ...DEFAULT_COUNTRIES]))
+            .filter(Boolean)
+            .sort((a, b) => a.localeCompare(b, 'es'))
+          setCountries(merged)
         }
       }
       

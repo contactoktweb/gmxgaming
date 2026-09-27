@@ -7,7 +7,7 @@ import { PhoneInput } from '@/components/forms/phone-input'
 import { FileUpload } from '@/components/forms/file-upload'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
-import { cn, formatNickname, formatPersonName } from '@/lib/utils'
+import { cn, formatNickname, formatPersonName, DEFAULT_COUNTRIES } from '@/lib/utils'
 import { compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS } from '@/lib/image-compression'
 import { toast } from 'sonner'
 import { useLanguage } from '@/lib/language-context'
@@ -24,13 +24,6 @@ function FieldTooltip({ text }: { text: string }) {
   )
 }
 
-const DEFAULT_COUNTRIES = [
-  "Argentina", "Bolivia", "Chile", "Colombia", "Costa Rica", "Cuba", 
-  "Ecuador", "El Salvador", "Guatemala", "Honduras", "México", "Nicaragua", 
-  "Panamá", "Paraguay", "Perú", "Puerto Rico", "República Dominicana", 
-  "Uruguay", "Venezuela"
-]
-
 export function AltaEquipoForm() {
   const [formStatus, setFormStatus] = useState<'idle' | 'loading' | 'success'>('idle')
   const { user } = useAuth()
@@ -43,7 +36,6 @@ export function AltaEquipoForm() {
   const [selectedGames, setSelectedGames] = useState<string[]>(['Mobile Legends'])
   const [loadingConfig, setLoadingConfig] = useState(true)
   const [blockMessage, setBlockMessage] = useState<string | null>(null)
-  const [existingTeamInfo, setExistingTeamInfo] = useState<{ type: 'pending' | 'active', teamName: string } | null>(null)
 
   // Validation state
   const [teamName, setTeamName] = useState('')
@@ -185,55 +177,16 @@ export function AltaEquipoForm() {
 
       setBlockMessage(null)
 
-      try {
-        // Verificar si el usuario ya tiene un equipo registrado o pendiente
-        const { data: userTeams } = await supabase
-          .from('teams')
-          .select('id, name, status')
-          .eq('manager_id', user.id)
-
-        if (userTeams && userTeams.length > 0) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', user.id)
-            .single()
-
-          const isAdmin = profile?.role === 'admin'
-
-          if (!isAdmin) {
-            const pendingTeam = userTeams.find(t => t.status === 'pending')
-            if (pendingTeam) {
-              setExistingTeamInfo({
-                type: 'pending',
-                teamName: pendingTeam.name
-              })
-              setLoadingConfig(false)
-              return
-            }
-
-            const activeTeam = userTeams.find(t => t.status === 'active' || t.status === 'approved')
-            if (activeTeam) {
-              setExistingTeamInfo({
-                type: 'active',
-                teamName: activeTeam.name
-              })
-              setLoadingConfig(false)
-              return
-            }
-          }
-        }
-      } catch (userTeamErr) {
-        console.warn('Error verificando equipos del usuario:', userTeamErr)
-      }
-
       const { data } = await supabase.from('app_settings').select('*')
       if (data && data.length > 0) {
         const countryConfig = data.find(c => c.id === 'enabled_countries')
         const gameConfig = data.find(c => c.id === 'enabled_games')
         
         if (countryConfig && Array.isArray(countryConfig.value) && countryConfig.value.length > 0) {
-          setCountries(countryConfig.value as string[])
+          const merged = Array.from(new Set([...(countryConfig.value as string[]), ...DEFAULT_COUNTRIES]))
+            .filter(Boolean)
+            .sort((a, b) => a.localeCompare(b, 'es'))
+          setCountries(merged)
         }
         if (gameConfig && Array.isArray(gameConfig.value) && gameConfig.value.length > 0) {
           const loadedGames = gameConfig.value.map((g: any) => {
@@ -343,28 +296,7 @@ export function AltaEquipoForm() {
         return
       }
 
-      // 3. Verificar si el usuario ya tiene un equipo (si no es admin)
-      if (user?.id) {
-        const { data: prof } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single()
 
-        if (prof?.role !== 'admin') {
-          const { data: userTeams } = await supabase
-            .from('teams')
-            .select('id, name, status')
-            .eq('manager_id', user.id)
-            .in('status', ['pending', 'active', 'approved'])
-
-          if (userTeams && userTeams.length > 0) {
-            toast.error(`Ya cuentas con un equipo registrado (${userTeams[0].name}). No se permite registrar otro equipo.`)
-            setFormStatus('idle')
-            return
-          }
-        }
-      }
 
       let urlLogo = 'https://placehold.co/400x400/png?text=LOGO+EQUIPO'
       let urlJersey = 'https://placehold.co/400x400/png?text=JERSEY'
@@ -558,42 +490,7 @@ export function AltaEquipoForm() {
     )
   }
 
-  if (existingTeamInfo) {
-    const isPending = existingTeamInfo.type === 'pending'
-    return (
-      <div className="mx-auto w-full max-w-2xl rounded-xl border border-border bg-surface p-8 sm:p-12 text-center shadow-2xl space-y-6">
-        <div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-2xl ${
-          isPending ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-primary/10 text-primary border border-primary/20'
-        }`}>
-          <ShieldAlert className="h-8 w-8" />
-        </div>
-        <div>
-          <h2 className="font-display text-2xl sm:text-3xl font-700 uppercase tracking-tight text-white">
-            {isPending ? t.altaJugador.pendingTitle : t.altaEquipo.formTitle}
-          </h2>
-          <p className="mt-3 text-muted-foreground text-sm max-w-md mx-auto leading-relaxed">
-            {isPending ? (
-              <>
-                {t.altaJugador.pendingDesc} &quot;{existingTeamInfo.teamName}&quot;
-              </>
-            ) : (
-              <>
-                {t.altaEquipo.goToAccount} &quot;{existingTeamInfo.teamName}&quot;
-              </>
-            )}
-          </p>
-        </div>
-        <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-4">
-          <GmxButton href="/micuenta" className="w-full sm:w-auto px-8">
-            {t.altaEquipo.goToAccount}
-          </GmxButton>
-          <GmxButton href="/" variant="secondary" className="w-full sm:w-auto px-8">
-            {t.altaEquipo.backToHome}
-          </GmxButton>
-        </div>
-      </div>
-    )
-  }
+
 
   if (formStatus === 'success') {
     return (

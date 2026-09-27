@@ -103,6 +103,15 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
     )
   )
 
+  // Sincronización defensiva: si el apodo oficial difiere del registro de juego, sincronizar
+  if (player?.nickname && gameInfo && gameInfo.game_nickname !== player.nickname) {
+    supabase
+      .from('player_game_info')
+      .update({ game_nickname: player.nickname })
+      .eq('profile_id', player.id)
+      .then(() => {})
+  }
+
   return (
     <>
       <SiteHeader />
@@ -121,7 +130,7 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
             <div className="relative h-48 w-48 shrink-0 overflow-hidden rounded border-4 border-border bg-deep shadow-2xl">
               <img 
                 src={player.avatar_url || '/placeholder-user.jpg'} 
-                alt={player.nickname || player.name} 
+                alt={player.nickname || gameInfo?.game_nickname || player.name} 
                 className="h-full w-full object-cover"
               />
               {player.is_featured && (
@@ -138,7 +147,7 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
                 </span>
               )}
               <h1 className="font-display text-4xl font-700 uppercase tracking-tight text-white sm:text-6xl">
-                {gameInfo?.game_nickname || player.nickname || player.name}
+                {player.nickname || gameInfo?.game_nickname || player.name}
               </h1>
               {/* Solo el administrador ve el nombre real */}
               {isAdmin && player.name && (
@@ -231,8 +240,9 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
                           <div className="flex items-center gap-4">
                             <div className="h-12 w-12 shrink-0 overflow-hidden rounded bg-deep border border-border">
                               <img 
-                                src={team.logo_url || '/images/placeholder.jpg'} 
+                                src={team.logo_url || '/placeholder-logo.png'} 
                                 alt={team.name} 
+                                onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/placeholder-logo.png' }}
                                 className="h-full w-full object-cover transition-transform group-hover:scale-110"
                               />
                             </div>

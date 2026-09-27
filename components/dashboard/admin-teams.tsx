@@ -135,6 +135,7 @@ export function AdminTeams() {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterRegion, setFilterRegion] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
+  const [availableCountries, setAvailableCountries] = useState<string[]>(DEFAULT_COUNTRIES)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   // Quick Status Modal state
@@ -265,6 +266,25 @@ export function AdminTeams() {
         })
         setTeams(formattedTeams)
       }
+      // Cargar países dinámicos desde app_settings (ej. Canadá / Canada)
+      try {
+        const { data: countrySetting } = await supabase
+          .from('app_settings')
+          .select('value')
+          .eq('id', 'enabled_countries')
+          .maybeSingle()
+
+        if (countrySetting?.value && Array.isArray(countrySetting.value) && countrySetting.value.length > 0) {
+          const merged = Array.from(new Set([
+            ...countrySetting.value,
+            ...DEFAULT_COUNTRIES
+          ])).filter(Boolean).sort((a, b) => a.localeCompare(b, 'es'))
+          setAvailableCountries(merged)
+        }
+      } catch (err) {
+        console.warn('Error cargando países configurados en admin-teams:', err)
+      }
+
       setLoading(false)
     }
     fetchTeams()
@@ -682,7 +702,7 @@ export function AdminTeams() {
   ] as const
 
   const countrySelectOptions = Array.from(new Set([
-    ...DEFAULT_COUNTRIES,
+    ...availableCountries,
     editingTeam?.country
   ].filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b, 'es'))
 

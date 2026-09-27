@@ -7,7 +7,7 @@ import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
 import { useLanguage } from '@/lib/language-context'
 import { toast } from 'sonner'
-import { cn, formatNickname, formatPersonName } from '@/lib/utils'
+import { cn, formatNickname, formatPersonName, DEFAULT_COUNTRIES } from '@/lib/utils'
 import { compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS } from '@/lib/image-compression'
 import { useDebounce } from '@/hooks/use-debounce'
 
@@ -22,13 +22,6 @@ function FieldTooltip({ text }: { text: string }) {
     </span>
   )
 }
-
-const DEFAULT_COUNTRIES = [
-  "Argentina", "Bolivia", "Chile", "Colombia", "Costa Rica", "Cuba", 
-  "Ecuador", "El Salvador", "Guatemala", "Honduras", "México", "Nicaragua", 
-  "Panamá", "Paraguay", "Perú", "Puerto Rico", "República Dominicana", 
-  "Uruguay", "Venezuela"
-]
 
 const COUNTRY_CODES = [
   { code: '+52', label: '🇲🇽 +52' },
@@ -232,7 +225,10 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
           const gameConfig = settings.find(c => c.id === 'enabled_games')
           
           if (countryConfig && Array.isArray(countryConfig.value) && countryConfig.value.length > 0) {
-            setCountries(countryConfig.value as string[])
+            const merged = Array.from(new Set([...(countryConfig.value as string[]), ...DEFAULT_COUNTRIES]))
+              .filter(Boolean)
+              .sort((a, b) => a.localeCompare(b, 'es'))
+            setCountries(merged)
           }
           if (gameConfig && Array.isArray(gameConfig.value) && gameConfig.value.length > 0) {
             const loadedGames = gameConfig.value.map((g: any) => {

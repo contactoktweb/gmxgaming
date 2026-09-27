@@ -461,8 +461,9 @@ export function ManagerPlayers() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-border pb-6">
           <div className="flex items-center gap-4">
             <img 
-              src={currentTeam.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
+              src={currentTeam.logo_url || '/placeholder-logo.png'} 
               alt={currentTeam.name}
+              onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/placeholder-logo.png' }}
               className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-primary/30 bg-background shadow-lg" 
             />
             <div>
@@ -492,28 +493,36 @@ export function ManagerPlayers() {
             </div>
           </div>
 
-          {/* Selector si tiene más de 1 equipo */}
-          {managedTeams.length > 1 && (
-            <div className="w-full md:w-auto">
-              <label className="text-xs font-600 uppercase tracking-widest text-muted-foreground block mb-1.5">
-                {t.managerPlayers.changeTeam}
-              </label>
-              <div className="relative">
-                <select
-                  value={selectedTeamId}
-                  onChange={e => setSelectedTeamId(e.target.value)}
-                  className="w-full md:w-56 rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-white focus:border-primary focus:outline-none appearance-none font-600 cursor-pointer"
-                >
-                  {managedTeams.map(t => (
-                    <option key={t.id} value={t.id} className="bg-surface text-white">
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3 w-full md:w-auto">
+            {/* Selector si tiene más de 1 equipo */}
+            {managedTeams.length > 1 && (
+              <div className="w-full sm:w-auto">
+                <label className="text-xs font-600 uppercase tracking-widest text-muted-foreground block mb-1.5">
+                  {t.managerPlayers.changeTeam}
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedTeamId}
+                    onChange={e => setSelectedTeamId(e.target.value)}
+                    className="w-full sm:w-56 rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-white focus:border-primary focus:outline-none appearance-none font-600 cursor-pointer"
+                  >
+                    {managedTeams.map(t => (
+                      <option key={t.id} value={t.id} className="bg-surface text-white">
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                </div>
               </div>
-            </div>
-          )}
+            )}
+            <Link
+              href="/registro/alta-de-equipo"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-surface hover:bg-white/5 border border-border hover:border-primary/40 text-xs font-600 text-white uppercase tracking-wider transition-colors shrink-0 shadow-sm"
+            >
+              + {t.userProfile?.registerAnotherTeam || 'Registrar Otro Equipo'}
+            </Link>
+          </div>
         </div>
 
         {/* Métricas Rápidas del Equipo */}

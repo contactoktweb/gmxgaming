@@ -744,18 +744,33 @@ export function AdminValidations() {
             }
           } else {
             // Modificación de Perfil de Usuario / Jugador Profesional
-            const userId = details.user_id || confirmAction.id
+            let userId = details.user_id || details.id
+            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+            if (!userId && requestToUpdate.submitted_by && isUuid.test(requestToUpdate.submitted_by)) {
+              userId = requestToUpdate.submitted_by
+            }
+            if (!userId && (details.original_nickname || details.nickname || requestToUpdate.target_name)) {
+              const targetStr = requestToUpdate.target_name || ''
+              const nickMatch = targetStr.match(/^([^➔\->]+)/)
+              const oldNick = (details.original_nickname || (nickMatch ? nickMatch[1].trim() : '')).trim()
+              if (oldNick) {
+                const { data: pUser } = await supabase.from('profiles').select('id').ilike('nickname', oldNick).limit(1)
+                if (pUser && pUser.length > 0) userId = pUser[0].id
+              }
+            }
+            if (!userId) userId = confirmAction.id
+
             if (isApproved) {
               const updates: any = { edit_requested: false }
               if (details.name !== undefined && details.name !== '') updates.name = formatPersonName(details.name).trim()
-              if (details.nickname !== undefined && details.nickname !== '') {
-                updates.nickname = formatNickname(details.nickname).trim()
-              } else if (details.game_nickname !== undefined && details.game_nickname !== '') {
-                updates.nickname = formatNickname(details.game_nickname).trim()
+              const newNick = details.nickname ? formatNickname(details.nickname).trim() : (details.game_nickname ? formatNickname(details.game_nickname).trim() : null)
+              if (newNick) {
+                updates.nickname = newNick
               }
               if (details.discord_handle !== undefined) updates.discord_handle = details.discord_handle
               if (details.avatar_url !== undefined && details.avatar_url !== '') updates.avatar_url = details.avatar_url
               if (details.closest_airport !== undefined) updates.closest_airport = details.closest_airport
+              if (details.country !== undefined) updates.country = details.country
               if (details.social_ig !== undefined) updates.social_ig = details.social_ig
               if (details.social_tiktok !== undefined) updates.social_tiktok = details.social_tiktok
               if (details.social_yt !== undefined) updates.social_yt = details.social_yt
@@ -771,28 +786,24 @@ export function AdminValidations() {
                 return
               }
 
-              // Actualizar datos de juego en player_game_info si fueron provistos
+              // Sincronizar datos de juego en player_game_info
               try {
-                if (details.game_id !== undefined || details.server !== undefined || details.country_account !== undefined || details.game !== undefined || details.nickname !== undefined || details.game_nickname !== undefined) {
-                  const gameUpdates: any = {}
-                  if (details.game !== undefined && details.game !== '') gameUpdates.game = details.game
-                  if (details.game_id !== undefined) gameUpdates.game_id = details.game_id
-                  if (details.server !== undefined) gameUpdates.server = details.server
-                  if (details.country_account !== undefined) gameUpdates.country_account = details.country_account
-                  if (details.game_nickname !== undefined && details.game_nickname !== '') {
-                    gameUpdates.game_nickname = formatNickname(details.game_nickname).trim()
-                  } else if (details.nickname !== undefined && details.nickname !== '') {
-                    gameUpdates.game_nickname = formatNickname(details.nickname).trim()
-                  }
+                const gameUpdates: any = {}
+                if (newNick) gameUpdates.game_nickname = newNick
+                if (details.game !== undefined && details.game !== '') gameUpdates.game = details.game
+                if (details.game_id !== undefined && details.game_id !== '') gameUpdates.game_id = details.game_id
+                if (details.server !== undefined && details.server !== '') gameUpdates.server = details.server
+                if (details.country_account !== undefined && details.country_account !== '') gameUpdates.country_account = details.country_account
+                if (details.country !== undefined && details.country !== '') gameUpdates.country_account = details.country
 
+                if (Object.keys(gameUpdates).length > 0) {
                   const { data: existingGameInfo } = await supabase
                     .from('player_game_info')
                     .select('id')
                     .eq('profile_id', userId)
-                    .limit(1)
 
                   if (existingGameInfo && existingGameInfo.length > 0) {
-                    await supabase.from('player_game_info').update(gameUpdates).eq('id', existingGameInfo[0].id)
+                    await supabase.from('player_game_info').update(gameUpdates).eq('profile_id', userId)
                   } else {
                     await supabase.from('player_game_info').insert({
                       profile_id: userId,
@@ -995,13 +1006,17 @@ export function AdminValidations() {
           const { error: err } = await supabase.from('teams').update(cleanDetails).eq('id', selectedRequest.details.team_id)
           error = err;
         } else {
-          const userId = selectedRequest.details?.user_id || selectedRequest.id
+          let userId = selectedRequest.details?.user_id || selectedRequest.id
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+          if (!userId && selectedRequest.submitted_by && isUuid.test(selectedRequest.submitted_by)) {
+            userId = selectedRequest.submitted_by
+          }
           const profileAllowedFields = [
             'name', 'nickname', 'discord_handle', 'closest_airport', 
             'avatar_url', 'id_photo_url', 'passport_photo_url',
             'social_ig', 'social_tiktok', 'social_yt', 'social_twitch',
             'social_kick', 'social_x', 'social_fb', 'player_status', 'is_player',
-            'cover_url', 'passport_number'
+            'cover_url', 'passport_number', 'country'
           ]
           const safeProfileUpdates: Record<string, any> = { edit_requested: false }
           profileAllowedFields.forEach(field => {
@@ -1015,6 +1030,16 @@ export function AdminValidations() {
           }
           const { error: err } = await supabase.from('profiles').update(safeProfileUpdates).eq('id', userId)
           error = err;
+
+          // Sincronizar nickname también en player_game_info
+          const newNick = cleanDetails.nickname || cleanDetails.game_nickname
+          if (newNick && userId) {
+            try {
+              await supabase.from('player_game_info').update({ game_nickname: newNick }).eq('profile_id', userId)
+            } catch (pgErr) {
+              console.warn('Error sincronizando player_game_info en handleSaveDetails:', pgErr)
+            }
+          }
         }
         await supabase.from('validations').update({ details: editingDetails }).eq('id', selectedRequest.id)
       } else if (selectedRequest.type === 'contrato' || selectedRequest.type === 'baja_contrato') {

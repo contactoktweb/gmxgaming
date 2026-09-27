@@ -224,10 +224,10 @@ export function extractCountry(rawLocation?: string | null): string {
 }
 
 export const DEFAULT_COUNTRIES = [
-  "Argentina", "Bolivia", "Chile", "Colombia", "Costa Rica", "Cuba", 
+  "Argentina", "Bolivia", "Canadá", "Canada", "Chile", "Colombia", "Costa Rica", "Cuba", 
   "Ecuador", "El Salvador", "España", "Estados Unidos", "Guatemala", 
   "Honduras", "México", "Nicaragua", "Panamá", "Paraguay", "Perú", 
-  "Puerto Rico", "República Dominicana", "Uruguay", "Venezuela"
+  "Puerto Rico", "República Dominicana", "United States of America", "Uruguay", "Venezuela"
 ]
 
 /**

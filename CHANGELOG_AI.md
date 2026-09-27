@@ -2,6 +2,20 @@
 
 ## [2026-09-26]
 
+### Habilitación de Creación Múltiple de Equipos, Sincronización de Cambio de Nickname en Perfiles Públicos e Inclusión de Canadá en Selector de Países
+- **Diagnóstico y Solución de las 3 Incidencias:**
+  1. **Creación Múltiple de Equipos Restablecida (`alta-equipo-form.tsx`, `manager-players.tsx`, `user-profile.tsx`):**
+     - **Causa Raíz:** Se había incorporado una validación artificial en `alta-equipo-form.tsx` que comprobaba si el usuario ya tenía un equipo (`teams.manager_id = user.id`), bloqueando el formulario e indicándole al usuario "Ir a su cuenta", e impidiendo el envío en `handleSubmit`.
+     - **Solución:** Se eliminó la restricción monoeuquipo tanto en la carga de configuración (`loadConfig`) como en el manejador de envío (`handleSubmit`) y el estado bloqueante (`existingTeamInfo`). Los managers ahora pueden registrar múltiples equipos sin bloqueos.
+     - Se añadió un botón directo `+ Registrar Otro Equipo` en la cabecera de gestión de escuadras de `ManagerPlayers` y en la tarjeta de equipo de `UserProfile`.
+  2. **Visualización y Sincronización Inmediata del Cambio de Nickname (`app/jugadores/[id]/page.tsx`, `admin-validations.tsx`):**
+     - **Causa Raíz:** En la vista pública de jugador (`/jugadores/[id]`), el título principal `<h1>` priorizaba `{gameInfo?.game_nickname || player.nickname || player.name}`. Cuando una solicitud de modificación de apodo se aprobaba (ej. `RK ➔ ADMIRAL`), `profiles.nickname` se actualizaba a `ADMIRAL` (reflejado correctamente en los rosters), pero `gameInfo?.game_nickname` contenía el valor histórico (`RK`), por lo que la página pública continuaba mostrando el nombre anterior. Además, en `admin-validations.tsx`, la aprobación de modificación no sincronizaba de forma defensiva la tabla relacional `player_game_info`.
+     - **Solución:** En `app/jugadores/[id]/page.tsx`, se priorizó el apodo oficial de la plataforma `{player.nickname || gameInfo?.game_nickname || player.name}` y se agregó un mecanismo de autorreparación que sincroniza `player_game_info.game_nickname` si difiere del apodo del perfil. En `admin-validations.tsx`, se robusteció la resolución del usuario (`userId`) y se sincroniza siempre `player_game_info` al aprobar o guardar cambios de modificación.
+  3. **Inclusión de Canadá y Países Habilitados en Selector de Nacionalidad/Residencia (`admin-players.tsx`, `admin-teams.tsx`, `alta-jugador-form.tsx`, `lib/utils.ts`):**
+     - **Causa Raíz:** El modal de edición de jugador en `admin-players.tsx` utilizaba una lista estática `DEFAULT_COUNTRIES` que no incluía a Canadá y nunca consultaba la tabla `app_settings` (`enabled_countries`), a pesar de que el administrador tenía Canadá activo en los Ajustes de la plataforma.
+     - **Solución:** Se actualizó `DEFAULT_COUNTRIES` en `lib/utils.ts` para incluir `Canadá`, `Canada` y `United States of America`. En `admin-players.tsx`, `admin-teams.tsx`, `alta-jugador-form.tsx` y `edit-team-modal.tsx`, se consulta dinámicamente `app_settings` (`enabled_countries`) y se fusiona en tiempo de ejecución con la lista de países, permitiendo seleccionar Canadá tanto en el registro de jugadores como en la edición administrativa.
+
+
 ### Sincronización Dinámica de Puntos de Navegación con el Movimiento del Carrusel de Casters
 - **Diagnóstico del Fallo:**
   - Los puntos/indicadores de paginación inferiores permanecían bloqueados en el primer punto (`[ === ] [ • ] [ • ] [ • ]`) o no respondían adecuadamente al desplazarse por el carrusel de casters.

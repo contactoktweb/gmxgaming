@@ -128,6 +128,7 @@ export function AdminPlayers() {
   const [filterTeam, setFilterTeam] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterCountry, setFilterCountry] = useState<string>('all')
+  const [availableCountries, setAvailableCountries] = useState<string[]>(DEFAULT_COUNTRIES)
   
   // Modal Actions
   const [actionModal, setActionModal] = useState<{type: 'status' | 'team', player: Player} | null>(null)
@@ -462,6 +463,25 @@ export function AdminPlayers() {
       const { data: teamsData } = await supabase.from('teams').select('name')
       if (teamsData) {
         setAvailableTeams(teamsData.map(t => t.name))
+      }
+
+      // Cargar países dinámicos desde app_settings (ej. Canadá / Canada)
+      try {
+        const { data: countrySetting } = await supabase
+          .from('app_settings')
+          .select('value')
+          .eq('id', 'enabled_countries')
+          .maybeSingle()
+
+        if (countrySetting?.value && Array.isArray(countrySetting.value) && countrySetting.value.length > 0) {
+          const merged = Array.from(new Set([
+            ...countrySetting.value,
+            ...DEFAULT_COUNTRIES
+          ])).filter(Boolean).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }))
+          setAvailableCountries(merged)
+        }
+      } catch (err) {
+        console.warn('Error cargando países configurados:', err)
       }
 
       setLoading(false)
@@ -885,9 +905,9 @@ export function AdminPlayers() {
   , [players])
 
   const uniqueCountries = useMemo(() =>
-    Array.from(new Set(players.map(p => p.country).filter(Boolean)))
+    Array.from(new Set([...players.map(p => p.country), ...availableCountries].filter(Boolean)))
       .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }))
-  , [players])
+  , [players, availableCountries])
 
   const filteredAndSortedPlayers = useMemo(() => {
     let result = players.filter(p => {
@@ -1337,7 +1357,9 @@ export function AdminPlayers() {
                             onChange={(e) => setEditingDetails({ ...editingDetails, country: e.target.value })}
                             className="w-full appearance-none rounded-lg border border-border bg-surface px-3.5 py-2 pr-9 text-sm text-white focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer font-500"
                           >
-                            {DEFAULT_COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                            {Array.from(new Set([...availableCountries, editingDetails.country].filter(Boolean)))
+                              .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }))
+                              .map(c => <option key={c} value={c}>{c}</option>)}
                           </select>
                           <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         </div>
