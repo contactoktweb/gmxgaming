@@ -589,7 +589,12 @@ export function AltaContratoForm() {
               <FieldTooltip text={t.altaContrato.rolesTooltip} />
             </label>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {['JUGADOR(A)', 'COACH', 'ANALISTA', 'PSICOLOGO DEPORTIVO'].map((rol) => (
+              {[
+                { value: 'JUGADOR(A)',        label: t.altaContrato.rolePlayer },
+                { value: 'COACH',             label: t.altaContrato.roleCoach },
+                { value: 'ANALISTA',          label: t.altaContrato.roleAnalyst },
+                { value: 'PSICOLOGO DEPORTIVO', label: t.altaContrato.roleSportsPsych },
+              ].map(({ value: rol, label: rolLabel }) => (
                 <label key={rol} className={cn(
                   "flex cursor-pointer items-center gap-3 rounded-lg border p-4 transition-colors min-h-[60px]",
                   selectedRoles.includes(rol) ? "border-primary bg-primary/5" : "border-border bg-background hover:border-primary/50"
@@ -600,7 +605,7 @@ export function AltaContratoForm() {
                     onChange={() => handleRoleToggle(rol)}
                     className="h-5 w-5 shrink-0 rounded border-border bg-surface text-primary focus:ring-primary focus:ring-offset-background"
                   />
-                  <span className="text-sm font-600 text-white leading-tight">{rol}</span>
+                  <span className="text-sm font-600 text-white leading-tight">{rolLabel}</span>
                 </label>
               ))}
             </div>
