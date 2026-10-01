@@ -357,6 +357,73 @@ export function AdminValidations() {
         return
       }
 
+      // Conciliación de contratos: Si un contrato fue aceptado o rechazado por el manager,
+      // sincronizarlo inmediatamente para el administrador y auto-reparar la tabla validations en segundo plano
+      const contractValidationsToCheck = (dbValidations || []).filter(
+        v => (v.type === 'contrato' || v.type === 'contratos') && v.details?.contract_id && v.status === 'pending'
+      )
+
+      if (contractValidationsToCheck.length > 0) {
+        const cIds = contractValidationsToCheck.map(v => v.details.contract_id)
+        const { data: linkedContracts } = await supabase
+          .from('contracts')
+          .select('id, status, start_date')
+          .in('id', cIds)
+
+        if (linkedContracts && linkedContracts.length > 0) {
+          const cMap = new Map(linkedContracts.map(c => [c.id, c]))
+          for (const item of contractValidationsToCheck) {
+            const lc = cMap.get(item.details.contract_id)
+            if (lc) {
+              const isContractActive = lc.status === 'active' || lc.status === 'activo'
+              const isContractRejected = lc.status === 'rejected' || lc.status === 'rechazado'
+
+              if (isContractActive) {
+                item.status = 'active'
+                if (!item.details) item.details = {}
+                item.details.status = 'active'
+                if (!item.details.approved_by) {
+                  item.details.approved_by = 'Manager del Equipo (Aprobado)'
+                }
+                // Sincronizar en segundo plano
+                supabase
+                  .from('validations')
+                  .update({
+                    status: 'active',
+                    details: {
+                      ...item.details,
+                      status: 'active',
+                      approved_by: item.details.approved_by,
+                      approved_at: lc.start_date || new Date().toISOString()
+                    }
+                  })
+                  .eq('id', item.id)
+                  .then()
+              } else if (isContractRejected) {
+                item.status = 'rejected'
+                if (!item.details) item.details = {}
+                item.details.status = 'rejected'
+                if (!item.details.rejected_by) {
+                  item.details.rejected_by = 'Manager del Equipo (Rechazado)'
+                }
+                supabase
+                  .from('validations')
+                  .update({
+                    status: 'rejected',
+                    details: {
+                      ...item.details,
+                      status: 'rejected',
+                      rejected_by: item.details.rejected_by
+                    }
+                  })
+                  .eq('id', item.id)
+                  .then()
+              }
+            }
+          }
+        }
+      }
+
       const formattedRequests: PendingRequest[] = (dbValidations || []).map(v => ({
         id: v.id,
         type: v.type as any,
@@ -378,6 +445,40 @@ export function AdminValidations() {
 
   useEffect(() => {
     fetchValidations()
+  }, [currentPage, itemsPerPage, activeTab, debouncedSearch])
+
+  // Suscripción en tiempo real a tablas validations y contracts para que el administrador
+  // vea cualquier aprobación/rechazo o actualización de forma instantánea sin recargar
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin-validations-live-sync')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'validations'
+        },
+        () => {
+          fetchValidations()
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'contracts'
+        },
+        () => {
+          fetchValidations()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [currentPage, itemsPerPage, activeTab, debouncedSearch])
 
   useEffect(() => {

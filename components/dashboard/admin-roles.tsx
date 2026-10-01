@@ -96,7 +96,38 @@ export function AdminRoles() {
         console.error('Error al obtener perfiles:', error)
         toast.error('Error al cargar lista de usuarios: ' + error.message)
       } else {
-        setProfiles(data || [])
+        // Enriquecer emails consultando validaciones registradas y mapeos oficiales
+        const { data: valData } = await supabase
+          .from('validations')
+          .select('submitted_by, details')
+
+        const emailMap: Record<string, string> = {
+          '662f8b47-93c8-485e-9222-322f0f05849d': 'rulodevilsjr@gmail.com',
+          'ef534cb1-098d-4c1b-bb81-0c1c8ebac2fe': 'rulodevilsjr@gmail.com',
+        }
+
+        if (valData) {
+          valData.forEach((v: any) => {
+            const email = v.details?.email || (typeof v.submitted_by === 'string' && v.submitted_by.includes('@') ? v.submitted_by : null)
+            const uId = v.details?.user_id || v.details?.id
+            if (email && uId && !emailMap[uId]) {
+              emailMap[uId] = email
+            }
+          })
+        }
+
+        const enriched = (data || []).map((p: any) => {
+          let email = p.email || emailMap[p.id] || null
+          if (!email && user && user.id === p.id && user.email) {
+            email = user.email
+          }
+          return {
+            ...p,
+            email
+          }
+        })
+
+        setProfiles(enriched)
       }
     } catch (err: any) {
       console.error('Error en fetchProfiles:', err)

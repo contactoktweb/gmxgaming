@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Users, Shield, Clock, Check, X, UserX, AlertCircle, ChevronDown, CheckCircle2, FileText, Calendar, ExternalLink } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
@@ -9,6 +9,12 @@ import { GmxButton } from '@/components/gmx-button'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { useLanguage } from '@/lib/language-context'
+import { 
+  approveContractWithSync, 
+  rejectContractWithSync, 
+  approveReleaseWithSync, 
+  rejectReleaseWithSync 
+} from '@/lib/contract-service'
 
 interface ManagedTeam {
   id: string
@@ -81,68 +87,104 @@ export function ManagerPlayers() {
   }, [user])
 
   // 2. Cargar contratos para el equipo seleccionado y logs de bajas
-  useEffect(() => {
-    async function loadTeamContracts() {
-      if (!selectedTeamId) return
+  const loadTeamContracts = useCallback(async () => {
+    if (!selectedTeamId) return
 
-      const { data: contractsData } = await supabase
-        .from('contracts')
-        .select(`
-          *,
-          profiles (id, name, nickname, avatar_url, discord_handle, player_game_info(*))
-        `)
-        .eq('team_id', selectedTeamId)
-        .order('created_at', { ascending: false })
+    const { data: contractsData } = await supabase
+      .from('contracts')
+      .select(`
+        *,
+        profiles (id, name, nickname, avatar_url, discord_handle, player_game_info(*))
+      `)
+      .eq('team_id', selectedTeamId)
+      .order('created_at', { ascending: false })
 
-      if (contractsData) {
-        setContracts(contractsData as ContractRequest[])
-      }
-
-      const { data: bajaValidations } = await supabase
-        .from('validations')
-        .select('*')
-        .eq('type', 'baja_contrato')
-
-      if (bajaValidations) {
-        const adminIds: string[] = []
-        bajaValidations.forEach((v: any) => {
-          if (v.details?.admin_id) adminIds.push(v.details.admin_id)
-        })
-
-        const adminNickMap: Record<string, string> = {}
-        if (adminIds.length > 0) {
-          const { data: adminProfiles } = await supabase
-            .from('profiles')
-            .select('id, nickname, name')
-            .in('id', adminIds)
-          if (adminProfiles) {
-            adminProfiles.forEach((p: any) => {
-              adminNickMap[p.id] = p.nickname || p.name
-            })
-          }
-        }
-
-        const map: Record<string, any> = {}
-        bajaValidations.forEach((v: any) => {
-          if (v.details?.contract_id) {
-            const adminId = v.details.admin_id
-            const resolvedNick = (adminId && adminNickMap[adminId]) || v.details.admin_nickname || v.details.admin_name || v.submitted_by
-            map[v.details.contract_id] = {
-              ...v,
-              details: {
-                ...v.details,
-                admin_name: resolvedNick,
-                admin_nickname: resolvedNick
-              }
-            }
-          }
-        })
-        setBajaValidationsMap(map)
-      }
+    if (contractsData) {
+      setContracts(contractsData as ContractRequest[])
     }
 
+    const { data: bajaValidations } = await supabase
+      .from('validations')
+      .select('*')
+      .eq('type', 'baja_contrato')
+
+    if (bajaValidations) {
+      const adminIds: string[] = []
+      bajaValidations.forEach((v: any) => {
+        if (v.details?.admin_id) adminIds.push(v.details.admin_id)
+      })
+
+      const adminNickMap: Record<string, string> = {}
+      if (adminIds.length > 0) {
+        const { data: adminProfiles } = await supabase
+          .from('profiles')
+          .select('id, nickname, name')
+          .in('id', adminIds)
+        if (adminProfiles) {
+          adminProfiles.forEach((p: any) => {
+            adminNickMap[p.id] = p.nickname || p.name
+          })
+        }
+      }
+
+      const map: Record<string, any> = {}
+      bajaValidations.forEach((v: any) => {
+        if (v.details?.contract_id) {
+          const adminId = v.details.admin_id
+          const resolvedNick = (adminId && adminNickMap[adminId]) || v.details.admin_nickname || v.details.admin_name || v.submitted_by
+          map[v.details.contract_id] = {
+            ...v,
+            details: {
+              ...v.details,
+              admin_name: resolvedNick,
+              admin_nickname: resolvedNick
+            }
+          }
+        }
+      })
+      setBajaValidationsMap(map)
+    }
+  }, [selectedTeamId, supabase])
+
+  useEffect(() => {
     loadTeamContracts()
-  }, [selectedTeamId])
+  }, [loadTeamContracts])
+
+  // 2b. Suscripción en tiempo real a contratos y validaciones para que cualquier cambio se refleje al instante
+  useEffect(() => {
+    if (!selectedTeamId) return
+
+    const channel = supabase
+      .channel(`manager-contracts-sync-${selectedTeamId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'contracts',
+          filter: `team_id=eq.${selectedTeamId}`
+        },
+        () => {
+          loadTeamContracts()
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'validations'
+        },
+        () => {
+          loadTeamContracts()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [selectedTeamId, loadTeamContracts, supabase])
 
   // Acciones sobre contratos
   const handleApproveContract = async (contractId: string, playerName: string) => {
@@ -234,23 +276,20 @@ export function ManagerPlayers() {
         }
       }
 
-      const { error } = await supabase
-        .from('contracts')
-        .update({
-          status: 'active',
-          start_date: new Date().toISOString()
-        })
-        .eq('id', contractId)
+      await approveContractWithSync(supabase, {
+        contractId,
+        playerId,
+        teamId: contractToApprove.team_id || selectedTeamId,
+        managerUser: user,
+        playerName,
+        teamName: targetTeam?.name
+      })
 
-      if (!error) {
-        toast.success('¡Contrato Aprobado!', {
-          id: 'contract-action',
-          description: `${playerName} ahora forma parte oficial del roster de tu equipo.`
-        })
-        setContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'active', start_date: new Date().toISOString() } : c))
-      } else {
-        toast.error('Error al aprobar contrato: ' + error.message, { id: 'contract-action' })
-      }
+      toast.success('¡Contrato Aprobado!', {
+        id: 'contract-action',
+        description: `${playerName} ahora forma parte oficial del roster de tu equipo.`
+      })
+      setContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'active', start_date: new Date().toISOString() } : c))
     } catch (err: any) {
       console.error('Error al aprobar contrato:', err)
       toast.error('Error al procesar la aprobación: ' + (err?.message || 'Error inesperado'), { id: 'contract-action' })
@@ -264,20 +303,20 @@ export function ManagerPlayers() {
     toast.loading('Rechazando solicitud...', { id: 'contract-action' })
 
     try {
-      const { error } = await supabase
-        .from('contracts')
-        .update({ status: 'rejected' })
-        .eq('id', contractId)
+      const contractToReject = contracts.find(c => c.id === contractId)
+      await rejectContractWithSync(supabase, {
+        contractId,
+        playerId: contractToReject?.player_id,
+        teamId: contractToReject?.team_id || selectedTeamId,
+        managerUser: user,
+        reason: 'Rechazado por el manager del equipo'
+      })
 
-      if (!error) {
-        toast.success('Solicitud Rechazada', {
-          id: 'contract-action',
-          description: `Se rechazó la solicitud de contrato de ${playerName}.`
-        })
-        setContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'rejected' } : c))
-      } else {
-        toast.error('Error al rechazar solicitud: ' + error.message, { id: 'contract-action' })
-      }
+      toast.success('Solicitud Rechazada', {
+        id: 'contract-action',
+        description: `Se rechazó la solicitud de contrato de ${playerName}.`
+      })
+      setContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'rejected' } : c))
     } catch (err: any) {
       console.error('Error al rechazar contrato:', err)
       toast.error('Error al procesar el rechazo: ' + (err?.message || 'Error inesperado'), { id: 'contract-action' })
@@ -376,23 +415,16 @@ export function ManagerPlayers() {
     setProcessingId(contractId)
     toast.loading('Aceptando baja del jugador...', { id: 'contract-action' })
     try {
-      const { error } = await supabase
-        .from('contracts')
-        .update({
-          status: 'completado',
-          conclusion_date: new Date().toISOString()
-        })
-        .eq('id', contractId)
+      await approveReleaseWithSync(supabase, {
+        contractId,
+        managerUser: user
+      })
 
-      if (!error) {
-        toast.success('Baja Aceptada', {
-          id: 'contract-action',
-          description: `Se aceptó la baja de ${playerName}. El contrato finalizó y el jugador es ahora agente libre.`
-        })
-        setContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'completado', conclusion_date: new Date().toISOString() } : c))
-      } else {
-        toast.error('Error al aceptar la baja: ' + error.message, { id: 'contract-action' })
-      }
+      toast.success('Baja Aceptada', {
+        id: 'contract-action',
+        description: `Se aceptó la baja de ${playerName}. El contrato finalizó y el jugador es ahora agente libre.`
+      })
+      setContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'completado', conclusion_date: new Date().toISOString() } : c))
     } catch (err: any) {
       toast.error('Error al procesar: ' + (err?.message || 'Error inesperado'), { id: 'contract-action' })
     } finally {
@@ -405,20 +437,17 @@ export function ManagerPlayers() {
     setProcessingId(contractId)
     toast.loading('Rechazando baja...', { id: 'contract-action' })
     try {
-      const { error } = await supabase
-        .from('contracts')
-        .update({ status: 'active' })
-        .eq('id', contractId)
+      await rejectReleaseWithSync(supabase, {
+        contractId,
+        managerUser: user,
+        reason: 'Rechazado por el manager del equipo'
+      })
 
-      if (!error) {
-        toast.success('Solicitud Rechazada', {
-          id: 'contract-action',
-          description: `Se rechazó la solicitud de baja de ${playerName}. El contrato se mantiene activo.`
-        })
-        setContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'active' } : c))
-      } else {
-        toast.error('Error al rechazar la baja: ' + error.message, { id: 'contract-action' })
-      }
+      toast.success('Solicitud Rechazada', {
+        id: 'contract-action',
+        description: `Se rechazó la solicitud de baja de ${playerName}. El contrato se mantiene activo.`
+      })
+      setContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'active' } : c))
     } catch (err: any) {
       toast.error('Error al procesar rechazo: ' + (err?.message || 'Error inesperado'), { id: 'contract-action' })
     } finally {

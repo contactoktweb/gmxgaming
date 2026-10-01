@@ -334,6 +334,17 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
           loadAllUserData()
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'contracts'
+        },
+        () => {
+          loadAllUserData()
+        }
+      )
       .subscribe()
 
     return () => {

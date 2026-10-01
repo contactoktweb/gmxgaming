@@ -96,18 +96,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        const dbRole = (activeProfile?.role || '').trim().toLowerCase()
-        const isAdmPrincipal = dbRole === 'admin_principal' || dbRole === 'admin'
+        const userEmail = (authUser.email || '').trim().toLowerCase()
+        const isMasterAdminEmail = 
+          userEmail === 'rulodevilsjr@gmail.com' ||
+          userEmail === 'rulodevils88@gmail.com' ||
+          userEmail === 'raul.julian@gmx.gg' ||
+          userEmail === 'kike_301097@hotmail.com'
+
+        let dbRole = (activeProfile?.role || '').trim().toLowerCase()
+
+        // Sincronización automática en base de datos si el correo es Admin Principal
+        if (isMasterAdminEmail && dbRole !== 'admin_principal' && dbRole !== 'admin') {
+          try {
+            await supabase
+              .from('profiles')
+              .update({ role: 'admin_principal' })
+              .eq('id', authUser.id)
+            if (activeProfile) {
+              activeProfile.role = 'admin_principal'
+            }
+            dbRole = 'admin_principal'
+          } catch (syncErr) {
+            console.error('Error sincronizando rol de admin en profiles:', syncErr)
+          }
+        }
+
+        const isAdmPrincipal = dbRole === 'admin_principal' || dbRole === 'admin' || isMasterAdminEmail
         const isAdmSecundario = dbRole === 'admin_secundario'
         const isAdmVisitante = dbRole === 'admin_visitante'
         const isAdm = isAdmPrincipal || isAdmSecundario || isAdmVisitante
 
         const rawAvatar = activeProfile?.avatar_url || activeProfile?.avatar
-        const cleanAvatar = (rawAvatar && !rawAvatar.includes('placehold.co'))
+        const cleanAvatar = (rawAvatar && !rawAvatar.includes('placehold.co') && !rawAvatar.includes('i0.wp.com'))
           ? rawAvatar
-          : (googleAvatar && !googleAvatar.includes('placehold.co'))
+          : (googleAvatar && !googleAvatar.includes('placehold.co') && !googleAvatar.includes('i0.wp.com'))
           ? googleAvatar
-          : 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
+          : '/placeholder-user.jpg'
 
         let isPlayerVerified = Boolean(activeProfile?.is_player)
         let playerStatusVal = activeProfile?.player_status || 'none'
@@ -158,17 +182,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         console.error('Error fetching/creating profile:', err)
         if (mounted) {
+          const userEmail = (authUser.email || '').trim().toLowerCase()
+          const isMasterAdminEmail = 
+            userEmail === 'rulodevilsjr@gmail.com' ||
+            userEmail === 'rulodevils88@gmail.com' ||
+            userEmail === 'raul.julian@gmx.gg' ||
+            userEmail === 'kike_301097@hotmail.com'
+
           // Fallback usando directamente datos de autenticación
           setUser({
             id: authUser.id,
             name: googleName,
             email: authUser.email || '',
-            role: 'user',
-            avatar: googleAvatar || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg',
+            role: isMasterAdminEmail ? 'admin_principal' : 'user',
+            avatar: googleAvatar || '/placeholder-user.jpg',
             is_player: false,
             player_status: 'none',
-            isAdmin: false,
-            isAdminPrincipal: false,
+            isAdmin: isMasterAdminEmail,
+            isAdminPrincipal: isMasterAdminEmail,
             isAdminSecundario: false,
             isAdminVisitante: false
           })

@@ -6,6 +6,7 @@ import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
 import { useLanguage } from '@/lib/language-context'
 import { cn, formatRolesList } from '@/lib/utils'
+import { approveContractWithSync, rejectContractWithSync } from '@/lib/contract-service'
 
 interface Contract {
   id: string
@@ -69,24 +70,35 @@ export function ManagerDashboard() {
   }, [user])
 
   const handleApprove = async (contractId: string) => {
-    const { error } = await supabase
-      .from('contracts')
-      .update({ status: 'active' })
-      .eq('id', contractId)
-      
-    if (!error) {
+    try {
+      const cObj = contracts.find(c => c.id === contractId)
+      await approveContractWithSync(supabase, {
+        contractId,
+        playerId: cObj?.player_id || '',
+        teamId: cObj?.team_id || '',
+        managerUser: user,
+        playerName: cObj?.players?.name,
+        teamName: teamName || cObj?.teams?.name
+      })
       setContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'active' } : c))
+    } catch (e) {
+      console.error('Error al aprobar contrato en ManagerDashboard:', e)
     }
   }
 
   const handleReject = async (contractId: string) => {
-    const { error } = await supabase
-      .from('contracts')
-      .update({ status: 'rejected' })
-      .eq('id', contractId)
-      
-    if (!error) {
+    try {
+      const cObj = contracts.find(c => c.id === contractId)
+      await rejectContractWithSync(supabase, {
+        contractId,
+        playerId: cObj?.player_id,
+        teamId: cObj?.team_id,
+        managerUser: user,
+        reason: 'Rechazado por el manager del equipo'
+      })
       setContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'rejected' } : c))
+    } catch (e) {
+      console.error('Error al rechazar contrato en ManagerDashboard:', e)
     }
   }
 

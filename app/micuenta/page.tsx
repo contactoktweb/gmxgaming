@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { User, Loader2, ShieldCheck, ScrollText, Users } from 'lucide-react'
 import { UserProfile } from '@/components/dashboard/user-profile'
@@ -38,46 +38,70 @@ export default function MiCuentaPage() {
     }
   }, [user, isLoading, router])
 
-  useEffect(() => {
-    async function checkManagerStatus() {
-      if (!user) return
+  const checkManagerStatus = useCallback(async () => {
+    if (!user) return
+    
+    // Check if user has contracts with pending release from team
+    const { count: playerReleaseCount } = await supabase
+      .from('contracts')
+      .select('id', { count: 'exact', head: true })
+      .eq('player_id', user.id)
+      .eq('status', 'pending_player_release')
+
+    setPlayerPendingReleaseCount(playerReleaseCount || 0)
+
+    const { data: teams } = await supabase
+      .from('teams')
+      .select('id')
+      .eq('manager_id', user.id)
+
+    if (teams && teams.length > 0) {
+      setIsManager(true)
+      const teamIds = teams.map(t => t.id)
       
-      // Check if user has contracts with pending release from team
-      const { count: playerReleaseCount } = await supabase
+      const { count } = await supabase
         .from('contracts')
         .select('id', { count: 'exact', head: true })
-        .eq('player_id', user.id)
-        .eq('status', 'pending_player_release')
-
-      setPlayerPendingReleaseCount(playerReleaseCount || 0)
-
-      const { data: teams } = await supabase
-        .from('teams')
-        .select('id')
-        .eq('manager_id', user.id)
-
-      if (teams && teams.length > 0) {
-        setIsManager(true)
-        const teamIds = teams.map(t => t.id)
-        
-        const { count } = await supabase
-          .from('contracts')
-          .select('id', { count: 'exact', head: true })
-          .in('team_id', teamIds)
-          .in('status', ['pending_manager', 'pending', 'pendiente', 'pending_manager_release'])
-        
-        if (count) {
-          setPendingRequestsCount(count)
-        } else {
-          setPendingRequestsCount(0)
-        }
+        .in('team_id', teamIds)
+        .in('status', ['pending_manager', 'pending', 'pendiente', 'pending_manager_release'])
+      
+      if (count) {
+        setPendingRequestsCount(count)
       } else {
-        setIsManager(false)
+        setPendingRequestsCount(0)
       }
+    } else {
+      setIsManager(false)
     }
+  }, [user, supabase])
 
+  useEffect(() => {
     checkManagerStatus()
-  }, [user, activeTab])
+  }, [checkManagerStatus, activeTab])
+
+  // Suscripción en tiempo real a contratos para mantener contadores al día
+  useEffect(() => {
+    if (!user) return
+
+    const channel = supabase
+      .channel(`micuenta-contracts-live-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'contracts'
+        },
+        () => {
+          checkManagerStatus()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [user, checkManagerStatus, supabase])
 
   if (isLoading || !user) {
     return (

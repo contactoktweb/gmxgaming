@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { ScrollText, Calendar, Clock, AlertCircle, Check, X, UserX, ShieldAlert } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
@@ -17,9 +17,8 @@ export function PlayerContracts() {
   const supabase = createClient()
   const { t } = useLanguage()
 
-  useEffect(() => {
-    async function fetchContracts() {
-      if (!user) return
+  const fetchContracts = useCallback(async () => {
+    if (!user) return
       
       const { data } = await supabase
         .from('contracts')
@@ -80,9 +79,36 @@ export function PlayerContracts() {
         setContracts(enriched)
       }
       setLoading(false)
-    }
+  }, [user, supabase])
+
+  useEffect(() => {
     fetchContracts()
-  }, [user])
+  }, [fetchContracts])
+
+  // Suscripción en tiempo real a la tabla contracts para reflejar aprobaciones del manager al instante
+  useEffect(() => {
+    if (!user) return
+
+    const channel = supabase
+      .channel(`player-contracts-live-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'contracts',
+          filter: `player_id=eq.${user.id}`
+        },
+        () => {
+          fetchContracts()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [user, fetchContracts, supabase])
 
   // Aceptar la baja enviada por el equipo
   const handleAcceptTermination = async (contractId: string, teamName: string) => {

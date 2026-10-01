@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Shield, ShieldAlert, History, Calendar, Settings, Save, X, Loader2, Users, Check, Clock, UserCheck, AlertCircle, UserX } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
@@ -10,6 +10,12 @@ import { GmxButton } from '@/components/gmx-button'
 import { cn, formatRoleTitle, formatRolesList, getTeamSlug, DEFAULT_COUNTRIES } from '@/lib/utils'
 import { EditTeamModal } from '@/components/dashboard/edit-team-modal'
 import { useLanguage } from '@/lib/language-context'
+import { 
+  approveContractWithSync, 
+  rejectContractWithSync, 
+  approveReleaseWithSync, 
+  rejectReleaseWithSync 
+} from '@/lib/contract-service'
 
 export function PlayerTeams() {
   const { user } = useAuth()
@@ -29,9 +35,8 @@ export function PlayerTeams() {
   const supabase = createClient()
   const { t } = useLanguage()
 
-  useEffect(() => {
-    async function fetchTeams() {
-      if (!user) return
+  const fetchTeams = useCallback(async () => {
+    if (!user) return
 
       // Cargar países disponibles desde app_settings (administración)
       const { data: settingsData } = await supabase.from('app_settings').select('*')
@@ -168,9 +173,35 @@ export function PlayerTeams() {
       }
 
       setLoading(false)
-    }
+  }, [user, supabase])
+
+  useEffect(() => {
     fetchTeams()
-  }, [user])
+  }, [fetchTeams])
+
+  // Suscripción en tiempo real a contratos para que se actualicen las escuadras y solicitudes pendientes
+  useEffect(() => {
+    if (!user) return
+
+    const channel = supabase
+      .channel(`player-teams-live-sync-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'contracts'
+        },
+        () => {
+          fetchTeams()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [user, fetchTeams, supabase])
 
   const handleOpenEdit = (team: any) => {
     setEditingTeam(team)
@@ -178,34 +209,43 @@ export function PlayerTeams() {
 
   const handleApproveContract = async (contractId: string) => {
     toast.loading(t.playerTeams.approvingContract, { id: 'contract-action' })
-    const { error } = await supabase
-      .from('contracts')
-      .update({ status: 'active', start_date: new Date().toISOString() })
-      .eq('id', contractId)
+    try {
+      const contractObj = teamContracts.find(c => c.id === contractId)
+      await approveContractWithSync(supabase, {
+        contractId,
+        playerId: contractObj?.player_id,
+        teamId: contractObj?.team_id,
+        managerUser: user,
+        playerName: contractObj?.profiles?.name,
+        teamName: contractObj?.teams?.name
+      })
 
-    if (!error) {
       toast.success(t.playerTeams.contractApproved, { 
         id: 'contract-action',
         description: t.playerTeams.contractApprovedDesc 
       })
       setTeamContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'active' } : c))
-    } else {
-      toast.error(t.playerTeams.contractApproveError, { id: 'contract-action' })
+    } catch (err: any) {
+      toast.error(t.playerTeams.contractApproveError + ': ' + (err?.message || 'Error'), { id: 'contract-action' })
     }
   }
 
   const handleRejectContract = async (contractId: string) => {
     toast.loading(t.playerTeams.rejectingContract, { id: 'contract-action' })
-    const { error } = await supabase
-      .from('contracts')
-      .update({ status: 'rejected' })
-      .eq('id', contractId)
+    try {
+      const contractObj = teamContracts.find(c => c.id === contractId)
+      await rejectContractWithSync(supabase, {
+        contractId,
+        playerId: contractObj?.player_id,
+        teamId: contractObj?.team_id,
+        managerUser: user,
+        reason: 'Rechazado por el manager del equipo'
+      })
 
-    if (!error) {
       toast.success(t.playerTeams.contractRejected, { id: 'contract-action' })
       setTeamContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'rejected' } : c))
-    } else {
-      toast.error(t.playerTeams.contractRejectError, { id: 'contract-action' })
+    } catch (err: any) {
+      toast.error(t.playerTeams.contractRejectError + ': ' + (err?.message || 'Error'), { id: 'contract-action' })
     }
   }
 
@@ -213,45 +253,45 @@ export function PlayerTeams() {
   const handleManagerApprovePlayerRelease = async (contractId: string, playerName: string) => {
     setProcessingContractId(contractId)
     toast.loading(t.playerTeams.acceptingPlayerRelease, { id: 'manager-release' })
-    const { error } = await supabase
-      .from('contracts')
-      .update({
-        status: 'completado',
-        conclusion_date: new Date().toISOString()
+    try {
+      await approveReleaseWithSync(supabase, {
+        contractId,
+        managerUser: user
       })
-      .eq('id', contractId)
 
-    if (!error) {
       toast.success(t.playerTeams.releaseAccepted, {
         id: 'manager-release',
         description: t.playerTeams.releaseAcceptedDesc.replace('{name}', playerName)
       })
       setTeamContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'completado', conclusion_date: new Date().toISOString() } : c))
-    } else {
-      toast.error(t.playerTeams.releaseAcceptError.replace('{error}', error.message), { id: 'manager-release' })
+    } catch (error: any) {
+      toast.error(t.playerTeams.releaseAcceptError.replace('{error}', error?.message || 'Error'), { id: 'manager-release' })
+    } finally {
+      setProcessingContractId(null)
     }
-    setProcessingContractId(null)
   }
 
   // Manager rechaza baja solicitada por el jugador
   const handleManagerRejectPlayerRelease = async (contractId: string, playerName: string) => {
     setProcessingContractId(contractId)
     toast.loading(t.playerTeams.rejectingRelease, { id: 'manager-release' })
-    const { error } = await supabase
-      .from('contracts')
-      .update({ status: 'active' })
-      .eq('id', contractId)
+    try {
+      await rejectReleaseWithSync(supabase, {
+        contractId,
+        managerUser: user,
+        reason: 'Rechazado por el manager del equipo'
+      })
 
-    if (!error) {
       toast.success(t.playerTeams.releaseRejected, {
         id: 'manager-release',
         description: t.playerTeams.releaseRejectedDesc.replace('{name}', playerName)
       })
       setTeamContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'active' } : c))
-    } else {
-      toast.error(t.playerTeams.releaseRejectError.replace('{error}', error.message), { id: 'manager-release' })
+    } catch (error: any) {
+      toast.error(t.playerTeams.releaseRejectError.replace('{error}', error?.message || 'Error'), { id: 'manager-release' })
+    } finally {
+      setProcessingContractId(null)
     }
-    setProcessingContractId(null)
   }
 
   // Jugador acepta la baja solicitada por el equipo
