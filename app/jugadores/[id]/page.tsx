@@ -69,7 +69,7 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
     }
   }
 
-  if (!player || (!player.is_player && player.player_status !== 'active')) {
+  if (!player) {
     notFound()
   }
 
@@ -90,9 +90,22 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
     .eq('player_id', player.id)
     .in('status', ['active', 'activo', 'pending_player_release', 'pending_manager_release'])
 
+  const activeContracts = contracts || []
+  const hasActiveContracts = activeContracts.length > 0
+
+  if (!player.is_player && player.player_status !== 'active' && !hasActiveContracts) {
+    notFound()
+  }
+
+  // Auto-sincronización defensiva: si milita activamente en un equipo pero su perfil no tenía el flag
+  if (hasActiveContracts && (!player.is_player || player.player_status !== 'active')) {
+    supabase.from('profiles').update({ is_player: true, player_status: 'active' }).eq('id', player.id).then()
+    player.is_player = true
+    player.player_status = 'active'
+  }
+
   const gameInfo = player.player_game_info?.[0]
   const playerCountry = gameInfo?.country_account || player.country || null
-  const activeContracts = contracts || []
   const activeRoles = Array.from(
     new Set(
       activeContracts.flatMap((c: any) => {

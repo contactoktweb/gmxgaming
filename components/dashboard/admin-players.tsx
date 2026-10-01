@@ -92,6 +92,7 @@ export interface Player {
   gender?: string
   contractTimeLeft: string
   team: string
+  activeTeams?: string[]
   status: 'active' | 'inactive' | 'banned'
   avatar: string
   discord: string
@@ -100,6 +101,7 @@ export interface Player {
   is_featured: boolean
   rawDetails: any
   activeContract?: PlayerContractItem | null
+  activeContracts?: PlayerContractItem[]
   pastContracts?: PlayerContractItem[]
 }
 
@@ -154,6 +156,8 @@ export function AdminPlayers() {
   useEffect(() => {
     async function init() {
       setLoading(true)
+
+      // 1. Cargar perfiles que son jugadores o tienen estado de jugador
       const { data: playersData, error } = await supabase
         .from('profiles')
         .select(`
@@ -172,12 +176,56 @@ export function AdminPlayers() {
             teams(id, name, logo_url, country)
           )
         `)
-        .eq('is_player', true)
+        .or('is_player.eq.true,player_status.in.(active,approved,pending,inactive,banned)')
         .order('created_at', { ascending: false })
       
       if (error) {
         console.error("Error fetching players:", error)
         toast.error("Error al cargar jugadores: " + error.message)
+      }
+
+      // 2. Obtener además todos los contratos para detectar cualquier jugador con contrato activo
+      // cuyo perfil tenga is_player = false o player_status = 'none'
+      let allLoadedProfiles: any[] = playersData ? [...playersData] : []
+      try {
+        const { data: allContractsRows } = await supabase
+          .from('contracts')
+          .select('player_id, status')
+          .in('status', ['active', 'activo', 'pending_player_release', 'pending_manager_release', 'approved', 'pending_manager'])
+
+        if (allContractsRows && allContractsRows.length > 0) {
+          const loadedIds = new Set(allLoadedProfiles.map((p: any) => p.id))
+          const missingIds = Array.from(new Set(allContractsRows.map((c: any) => c.player_id)))
+            .filter((id): id is string => Boolean(id && !loadedIds.has(id)))
+
+          if (missingIds.length > 0) {
+            const { data: missingProfiles } = await supabase
+              .from('profiles')
+              .select(`
+                *,
+                player_game_info(game, game_id, server, game_nickname, country_account),
+                contracts(
+                  id,
+                  team_id,
+                  roles,
+                  team_gender_category,
+                  start_date,
+                  end_date,
+                  conclusion_date,
+                  status,
+                  created_at,
+                  teams(id, name, logo_url, country)
+                )
+              `)
+              .in('id', missingIds)
+
+            if (missingProfiles && missingProfiles.length > 0) {
+              allLoadedProfiles = [...allLoadedProfiles, ...missingProfiles]
+            }
+          }
+        }
+      } catch (cErr) {
+        console.warn('Error fetching contract players:', cErr)
       }
 
       // Fetch all validations to link audit trail, justifications, and player data (email, phone, birth_date, gender)
@@ -225,15 +273,36 @@ export function AdminPlayers() {
         })
       }
 
-      if (playersData) {
-        const formattedPlayers: Player[] = playersData.map((p: any) => {
+      if (allLoadedProfiles.length > 0) {
+        const isContractActive = (st: string) => 
+          ['active', 'activo', 'pending_player_release', 'pending_manager_release', 'approved'].includes((st || '').toLowerCase())
+
+        const formattedPlayers: Player[] = allLoadedProfiles.map((p: any) => {
           const allContracts = p.contracts || []
-          const activeContractRaw = allContracts.find((c: any) => c.status === 'active' || c.status === 'activo')
-          
-          let team = activeContractRaw?.teams?.name || 'Ninguno'
+          const activeContractsRaw = allContracts.filter((c: any) => isContractActive(c.status))
+          const activeContractRaw = activeContractsRaw[0] || null
+
+          // Nombres únicos de todos los equipos activos en los que milita
+          const activeTeams = Array.from(
+            new Set(activeContractsRaw.map((c: any) => c.teams?.name).filter(Boolean))
+          ) as string[]
+
+          // Si el jugador tiene contratos activos pero su perfil aún no estaba marcado como is_player o estaba en 'none',
+          // auto-reparar en segundo plano para sincronizar la base de datos
+          if (activeContractsRaw.length > 0 && (!p.is_player || p.player_status === 'none')) {
+            supabase
+              .from('profiles')
+              .update({ is_player: true, player_status: 'active' })
+              .eq('id', p.id)
+              .then()
+            p.is_player = true
+            if (p.player_status === 'none') p.player_status = 'active'
+          }
+
+          const team = activeTeams.length > 0 ? activeTeams.join(', ') : 'Ninguno'
           let contractTimeLeft = 'No aplica'
 
-          if (p.player_status === 'active' && activeContractRaw?.end_date) {
+          if (activeContractRaw?.end_date) {
              const end = new Date(activeContractRaw.end_date)
              const now = new Date()
              const diffTime = end.getTime() - now.getTime()
@@ -243,23 +312,22 @@ export function AdminPlayers() {
              } else {
                contractTimeLeft = 'Expirado'
              }
-          } else if (p.player_status === 'inactive' || p.player_status === 'banned') {
-             team = 'Ninguno'
-             contractTimeLeft = 'No aplica'
           }
 
-          const activeContract: PlayerContractItem | null = activeContractRaw ? {
-            id: activeContractRaw.id,
-            team_id: activeContractRaw.team_id,
-            teamName: activeContractRaw.teams?.name || 'Equipo',
-            teamLogo: activeContractRaw.teams?.logo_url || '',
-            status: activeContractRaw.status,
-            roles: activeContractRaw.roles,
-            team_gender_category: activeContractRaw.team_gender_category,
-            start_date: activeContractRaw.start_date,
-            end_date: activeContractRaw.end_date,
-            conclusion_date: activeContractRaw.conclusion_date
-          } : null
+          const activeContractsList: PlayerContractItem[] = activeContractsRaw.map((c: any) => ({
+            id: c.id,
+            team_id: c.team_id,
+            teamName: c.teams?.name || 'Equipo',
+            teamLogo: c.teams?.logo_url || '',
+            status: c.status,
+            roles: c.roles,
+            team_gender_category: c.team_gender_category,
+            start_date: c.start_date,
+            end_date: c.end_date,
+            conclusion_date: c.conclusion_date
+          }))
+
+          const activeContract: PlayerContractItem | null = activeContractsList[0] || null
 
           const pastContracts: PlayerContractItem[] = allContracts
             .filter((c: any) => c.status === 'completado' || c.status === 'cancelado' || c.status === 'rejected')
@@ -436,7 +504,8 @@ export function AdminPlayers() {
             gender: playerGender,
             contractTimeLeft,
             team,
-            status: p.player_status || 'inactive',
+            activeTeams,
+            status: (p.player_status && p.player_status !== 'none') ? p.player_status : (activeContractsRaw.length > 0 ? 'active' : 'inactive'),
             avatar: resolvedAvatar,
             discord: p.discord_handle,
             country: playerCountry,
@@ -454,6 +523,7 @@ export function AdminPlayers() {
               country: playerCountry
             },
             activeContract,
+            activeContracts: activeContractsList,
             pastContracts
           }
         })
@@ -500,7 +570,9 @@ export function AdminPlayers() {
 
   const handleUpdateStatus = async () => {
     if (!actionModal) return
-    const { error } = await supabase.from('profiles').update({ player_status: newStatus }).eq('id', actionModal.player.id)
+    const updatePayload: any = { player_status: newStatus }
+    if (newStatus === 'active') updatePayload.is_player = true
+    const { error } = await supabase.from('profiles').update(updatePayload).eq('id', actionModal.player.id)
     if (!error) {
       setPlayers(prev => prev.map(p => p.id === actionModal.player.id ? { ...p, status: newStatus } : p))
       setSelectedPlayer(prev => prev?.id === actionModal.player.id ? { ...prev, status: newStatus } : prev)
@@ -523,7 +595,7 @@ export function AdminPlayers() {
   }
 
   const handleReactivatePlayer = async (playerId: string, playerName: string) => {
-    const { error } = await supabase.from('profiles').update({ player_status: 'active' }).eq('id', playerId)
+    const { error } = await supabase.from('profiles').update({ player_status: 'active', is_player: true }).eq('id', playerId)
     if (error) {
       toast.error('Error al reactivar el jugador: ' + error.message)
     } else {
@@ -615,6 +687,7 @@ export function AdminPlayers() {
       nickname: nickVal || gameNickVal,
       discord_handle: editingDetails.discord_handle?.trim() || null,
       closest_airport: countryVal,
+      is_player: true,
       player_status: editingDetails.player_status || 'active',
       is_featured: Boolean(editingDetails.is_featured),
       passport_number: editingDetails.passport_number?.trim() || null,
@@ -787,11 +860,15 @@ export function AdminPlayers() {
 
       setPlayers(prev => prev.map(p => {
         if (p.id === terminatingContract.playerId) {
+          const remActive = (p.activeContracts || []).filter(c => c.id !== terminatingContract.contractId)
+          const remTeams = (p.activeTeams || []).filter(t => t !== terminatingContract.teamName)
           return {
             ...p,
-            team: 'Ninguno',
-            contractTimeLeft: 'No aplica',
-            activeContract: null,
+            team: remTeams.join(', ') || 'Ninguno',
+            activeTeams: remTeams,
+            contractTimeLeft: remActive.length > 0 ? p.contractTimeLeft : 'No aplica',
+            activeContract: remActive[0] || null,
+            activeContracts: remActive,
             pastContracts: [newPastItem, ...(p.pastContracts || [])]
           }
         }
@@ -799,11 +876,15 @@ export function AdminPlayers() {
       }))
 
       if (selectedPlayer && selectedPlayer.id === terminatingContract.playerId) {
+        const remActive = (selectedPlayer.activeContracts || []).filter(c => c.id !== terminatingContract.contractId)
+        const remTeams = (selectedPlayer.activeTeams || []).filter(t => t !== terminatingContract.teamName)
         setSelectedPlayer({
           ...selectedPlayer,
-          team: 'Ninguno',
-          contractTimeLeft: 'No aplica',
-          activeContract: null,
+          team: remTeams.join(', ') || 'Ninguno',
+          activeTeams: remTeams,
+          contractTimeLeft: remActive.length > 0 ? selectedPlayer.contractTimeLeft : 'No aplica',
+          activeContract: remActive[0] || null,
+          activeContracts: remActive,
           pastContracts: [newPastItem, ...(selectedPlayer.pastContracts || [])]
         })
       }
@@ -899,10 +980,11 @@ export function AdminPlayers() {
   }
 
   // Unique values for filters — exclude 'Ninguno' from teams (handled separately)
-  const uniqueTeams = useMemo(() =>
-    Array.from(new Set(players.map(p => p.team).filter(t => Boolean(t) && t !== 'Ninguno')))
+  const uniqueTeams = useMemo(() => {
+    const fromPlayers = players.flatMap(p => (p.activeTeams && p.activeTeams.length > 0) ? p.activeTeams : [p.team])
+    return Array.from(new Set([...fromPlayers, ...availableTeams].filter(t => Boolean(t) && t !== 'Ninguno')))
       .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }))
-  , [players])
+  }, [players, availableTeams])
 
   const uniqueCountries = useMemo(() =>
     Array.from(new Set([...players.map(p => p.country), ...availableCountries].filter(Boolean)))
@@ -912,9 +994,11 @@ export function AdminPlayers() {
   const filteredAndSortedPlayers = useMemo(() => {
     let result = players.filter(p => {
       if (filterTeam === 'none') {
+        if (p.activeTeams && p.activeTeams.length > 0) return false
         if (p.team !== 'Ninguno') return false
       } else if (filterTeam !== 'all') {
-        if (p.team !== filterTeam) return false
+        const matchesTeam = p.team === filterTeam || (p.activeTeams && p.activeTeams.includes(filterTeam))
+        if (!matchesTeam) return false
       }
       if (filterStatus !== 'all' && p.status !== filterStatus) return false
       if (filterCountry !== 'all' && p.country !== filterCountry) return false
@@ -927,6 +1011,7 @@ export function AdminPlayers() {
           (p.rawDetails?.nickname && p.rawDetails.nickname.toLowerCase().includes(q)) ||
           (p.rawDetails?.game_nickname && p.rawDetails.game_nickname.toLowerCase().includes(q)) ||
           (p.team && p.team.toLowerCase().includes(q)) ||
+          (p.activeTeams && p.activeTeams.some(t => t.toLowerCase().includes(q))) ||
           (p.country && p.country.toLowerCase().includes(q))
         )
       }

@@ -986,12 +986,24 @@ export function AdminValidations() {
           }
         } else if (requestToUpdate.type === 'contrato') {
           const contractId = requestToUpdate.details?.contract_id
+          const playerId = requestToUpdate.details?.player_id || requestToUpdate.details?.user_id
           if (contractId) {
             if (isApproved) {
               await supabase.from('contracts').update({
                 status: 'active',
                 start_date: new Date().toISOString()
               }).eq('id', contractId)
+
+              if (playerId) {
+                try {
+                  await supabase.from('profiles').update({
+                    is_player: true,
+                    player_status: 'active'
+                  }).eq('id', playerId)
+                } catch (profErr) {
+                  console.warn('Error sincronizando perfil al aprobar contrato:', profErr)
+                }
+              }
             } else {
               await supabase.from('contracts').update({
                 status: 'rejected'

@@ -47,6 +47,19 @@ export async function approveContractWithSync(
     throw contractError
   }
 
+  // 1.1 Sincronizar el perfil del jugador: asegurar is_player: true y player_status: 'active'
+  try {
+    await supabase
+      .from('profiles')
+      .update({
+        is_player: true,
+        player_status: 'active'
+      })
+      .eq('id', playerId)
+  } catch (profErr) {
+    console.warn('Error sincronizando perfil en approveContractWithSync:', profErr)
+  }
+
   // 2. Sincronizar en la tabla validations para que el Administrador lo vea en su panel
   try {
     // Buscar validación registrada por contract_id
