@@ -508,7 +508,21 @@ export function AdminValidations() {
         // Eliminar también el registro de validations si existe
         await supabase.from('validations').delete().eq('id', confirmAction.id)
       } else if (requestToUpdate?.type === 'equipo') {
-        await supabase.from('teams').delete().eq('id', confirmAction.id)
+        const teamIdToDelete = requestToUpdate.details?.team_id || requestToUpdate.details?.id
+        if (teamIdToDelete) {
+          // 1. Eliminar contratos asociados al equipo
+          await supabase.from('contracts').delete().eq('team_id', teamIdToDelete)
+          // 2. Eliminar inscripciones de torneos del equipo
+          await supabase.from('tournament_participants').delete().eq('team_id', teamIdToDelete)
+          // 3. Eliminar el equipo de la tabla teams
+          await supabase.from('teams').delete().eq('id', teamIdToDelete)
+          // 4. Eliminar validaciones vinculadas a este equipo
+          await supabase.from('validations').delete().or(`details->>team_id.eq.${teamIdToDelete},details->>id.eq.${teamIdToDelete}`)
+        } else if (requestToUpdate.target_name) {
+          await supabase.from('teams').delete().ilike('name', requestToUpdate.target_name.trim())
+        }
+        // 5. Eliminar la validación actual
+        await supabase.from('validations').delete().eq('id', confirmAction.id)
       } else if (requestToUpdate?.type === 'modificacion') {
         await supabase.from('profiles').update({ edit_requested: false }).eq('id', confirmAction.id)
         await supabase.from('validations').delete().eq('id', confirmAction.id)
@@ -1111,8 +1125,10 @@ export function AdminValidations() {
         }
         await supabase.from('validations').update({ details: editingDetails }).eq('id', selectedRequest.id)
       } else if (selectedRequest.type === 'equipo') {
-        const { error: err } = await supabase.from('teams').update(cleanDetails).eq('id', selectedRequest.id)
+        const targetTeamId = selectedRequest.details?.team_id || selectedRequest.details?.id || selectedRequest.id
+        const { error: err } = await supabase.from('teams').update(cleanDetails).eq('id', targetTeamId)
         error = err;
+        await supabase.from('validations').update({ details: editingDetails }).eq('id', selectedRequest.id)
       } else if (selectedRequest.type === 'modificacion') {
         const isTeamMod = Boolean(selectedRequest.details?.team_id)
         if (isTeamMod) {

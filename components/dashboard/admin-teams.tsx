@@ -117,6 +117,9 @@ export function AdminTeams() {
   const [lightboxImage, setLightboxImage] = useState<{ src: string; label: string } | null>(null)
 
   const [confirmAction, setConfirmAction] = useState<{ id: string, name: string } | null>(null)
+  const [deleteTeamConfirm, setDeleteTeamConfirm] = useState<{ id: string, name: string } | null>(null)
+  const [deleteConfirmationWord, setDeleteConfirmationWord] = useState('')
+  const [isDeletingTeam, setIsDeletingTeam] = useState(false)
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
@@ -291,13 +294,13 @@ export function AdminTeams() {
   }, [])
 
   useEffect(() => {
-    if (selectedTeam || confirmAction || terminatingContract || lightboxImage || statusModalTeam) {
+    if (selectedTeam || confirmAction || deleteTeamConfirm || terminatingContract || lightboxImage || statusModalTeam) {
       window.__lenis?.stop()
     } else {
       window.__lenis?.start()
     }
     return () => { window.__lenis?.start() }
-  }, [selectedTeam, confirmAction, terminatingContract, lightboxImage, statusModalTeam])
+  }, [selectedTeam, confirmAction, deleteTeamConfirm, terminatingContract, lightboxImage, statusModalTeam])
 
   const openTeamDetails = (team: Team) => {
     const raw = team.rawDetails || {}
@@ -611,6 +614,48 @@ export function AdminTeams() {
     }
   }
 
+  const handleDeleteTeamPermanent = async () => {
+    if (!deleteTeamConfirm || deleteConfirmationWord !== 'SI' || isVisitor) return
+    setIsDeletingTeam(true)
+    const teamId = deleteTeamConfirm.id
+    const teamName = deleteTeamConfirm.name
+
+    try {
+      // 1. Eliminar contratos asociados al equipo
+      await supabase.from('contracts').delete().eq('team_id', teamId)
+
+      // 2. Eliminar inscripciones de torneos del equipo
+      await supabase.from('tournament_participants').delete().eq('team_id', teamId)
+
+      // 3. Eliminar validaciones vinculadas a este equipo
+      await supabase.from('validations').delete().or(`details->>team_id.eq.${teamId},details->>id.eq.${teamId},target_name.eq.${teamName}`)
+
+      // 4. Eliminar el equipo de la tabla teams
+      const { error } = await supabase.from('teams').delete().eq('id', teamId)
+      if (error) throw error
+
+      setTeams(prev => prev.filter(t => t.id !== teamId))
+      setSelectedIds(prev => {
+        const next = new Set(prev)
+        next.delete(teamId)
+        return next
+      })
+
+      if (selectedTeam?.id === teamId) setSelectedTeam(null)
+      if (editingTeam?.id === teamId) setEditingTeam(null)
+      if (statusModalTeam?.id === teamId) setStatusModalTeam(null)
+
+      toast.success(`Equipo "${teamName}" y todos sus registros han sido eliminados por completo.`)
+      setDeleteTeamConfirm(null)
+      setDeleteConfirmationWord('')
+    } catch (err: any) {
+      console.error('Error al eliminar equipo permanentemente:', err)
+      toast.error('Error al eliminar equipo: ' + (err?.message || 'Error inesperado'))
+    } finally {
+      setIsDeletingTeam(false)
+    }
+  }
+
   // Unique regions — sorted alphabetically
   const uniqueRegions = Array.from(new Set(teams.map(t => t.region).filter(Boolean)))
     .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }))
@@ -861,6 +906,16 @@ export function AdminTeams() {
                           <Power className="w-4 h-4" />
                         </button>
                       )}
+                      <button 
+                        onClick={() => {
+                          setDeleteTeamConfirm({ id: team.id, name: team.name })
+                          setDeleteConfirmationWord('')
+                        }}
+                        title="Eliminar Equipo Permanentemente"
+                        className="p-2 text-muted-foreground hover:text-red-400 transition-colors bg-surface border border-border rounded-md hover:border-red-500/50 hover:bg-red-500/10"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </>
                   )}
                 </div>
@@ -1740,6 +1795,82 @@ export function AdminTeams() {
               >
                 <span className="relative z-10 flex items-center justify-center gap-2">
                   DESACTIVAR <Power className="w-4 h-4" />
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal (Eliminación Total) */}
+      {deleteTeamConfirm && (
+        <div className="fixed inset-0 z-[1010] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => { if (!isDeletingTeam) { setDeleteTeamConfirm(null); setDeleteConfirmationWord(''); } }} />
+          <div className="relative w-full max-w-md rounded-xl border border-red-500/30 bg-surface p-6 sm:p-8 shadow-2xl animate-in zoom-in-95 duration-200 text-center">
+            
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full mb-6 bg-red-500/10 text-red-500">
+              <Trash2 className="h-8 w-8" />
+            </div>
+
+            <h3 className="font-display text-2xl font-700 uppercase tracking-tight text-white mb-2">
+              ¿Eliminar Equipo?
+            </h3>
+            
+            <p className="text-muted-foreground mb-4 text-sm">
+              Estás a punto de eliminar definitivamente al equipo:<br/>
+              <span className="text-white mt-1 block font-semibold text-base">{deleteTeamConfirm.name}</span>
+            </p>
+
+            <div className="bg-red-950/30 p-3.5 rounded-lg border border-red-900/50 mb-6 text-xs text-red-300 text-left space-y-2">
+              <p>⚠️ <strong>Acción destructiva y definitiva:</strong></p>
+              <ul className="list-disc list-inside space-y-1 text-[11px] text-red-300/80">
+                <li>El equipo dejará de existir en la plataforma sin dejar registro.</li>
+                <li>Se purgarán sus contratos, solicitudes e inscripciones.</li>
+                <li>Su nombre y tag quedarán liberados para futuros registros.</li>
+              </ul>
+            </div>
+
+            <div className="mb-6 text-left">
+              <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">
+                Escribe &quot;SI&quot; para confirmar:
+              </label>
+              <input
+                type="text"
+                disabled={isDeletingTeam}
+                value={deleteConfirmationWord}
+                onChange={(e) => setDeleteConfirmationWord(e.target.value.toUpperCase())}
+                placeholder="SI"
+                className="w-full bg-deep border border-red-900/50 rounded px-3 py-2 text-white text-center font-bold tracking-widest focus:outline-none focus:border-red-500 disabled:opacity-50"
+              />
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button 
+                type="button"
+                disabled={isDeletingTeam}
+                onClick={() => {
+                  setDeleteTeamConfirm(null)
+                  setDeleteConfirmationWord('')
+                }}
+                className="flex-1 rounded-md border border-border bg-transparent px-4 py-3 font-display text-[13px] font-600 uppercase tracking-widest text-muted-foreground transition-colors hover:text-white disabled:opacity-50"
+              >
+                CANCELAR
+              </button>
+              <button 
+                type="button"
+                disabled={deleteConfirmationWord !== 'SI' || isDeletingTeam}
+                onClick={handleDeleteTeamPermanent}
+                className={cn(
+                  "flex-1 rounded-md px-4 py-3 font-display text-[13px] font-600 uppercase tracking-widest text-white transition-colors relative overflow-hidden clip-corner group bg-red-600 hover:bg-red-500",
+                  (deleteConfirmationWord !== 'SI' || isDeletingTeam) ? "opacity-50 cursor-not-allowed grayscale" : ""
+                )}
+              >
+                <span className="relative z-10 flex items-center justify-center gap-2">
+                  {isDeletingTeam ? (
+                    <>ELIMINANDO... <Loader2 className="w-4 h-4 animate-spin" /></>
+                  ) : (
+                    <>ELIMINAR <Trash2 className="w-4 h-4" /></>
+                  )}
                 </span>
               </button>
             </div>
