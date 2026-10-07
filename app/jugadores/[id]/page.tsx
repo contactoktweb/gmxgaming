@@ -50,7 +50,7 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
       .single()
     player = data
   } else {
-    // Buscar jugador por slug de nickname o nombre
+    // Buscar jugador por slug de nickname o nombre en TODOS los perfiles
     const { data: allPlayers } = await supabase
       .from('profiles')
       .select(`
@@ -67,13 +67,44 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
     if (allPlayers) {
       player = allPlayers.find(p => getPlayerSlug(p) === paramSlug || slugify(p.nickname) === paramSlug || slugify(p.name) === paramSlug || p.id === paramSlug)
     }
+
+    // Si no se encontró por slug, intentar buscar via contratos activos por nickname
+    // (cubre casos donde el perfil no tiene is_player pero sí aparece en un roster)
+    if (!player) {
+      const { data: contractMatches } = await supabase
+        .from('contracts')
+        .select(`
+          profiles!contracts_player_id_fkey (
+            *,
+            player_game_info (
+              game,
+              game_id,
+              server,
+              game_nickname,
+              country_account
+            )
+          )
+        `)
+        .in('status', ['active', 'activo', 'pending_player_release', 'pending_manager_release'])
+
+      if (contractMatches) {
+        for (const c of contractMatches) {
+          const p = c.profiles as any
+          if (!p) continue
+          if (getPlayerSlug(p) === paramSlug || slugify(p.nickname) === paramSlug || slugify(p.name) === paramSlug || p.id === paramSlug) {
+            player = p
+            break
+          }
+        }
+      }
+    }
   }
 
   if (!player) {
     notFound()
   }
 
-  // Fetch Current Contracts (Teams)
+  // Fetch Current Contracts (Teams) — usando FK explícita para evitar ambigüedad
   const { data: contracts } = await supabase
     .from('contracts')
     .select(`
@@ -87,15 +118,28 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
         tag
       )
     `)
-    .eq('player_id', player.id)
+    .eq('player_id', player!.id)
     .in('status', ['active', 'activo', 'pending_player_release', 'pending_manager_release'])
 
-  const activeContracts = contracts || []
+  // Fallback: verificar contratos también desde la tabla de contratos usando el FK explícito
+  // por si el query anterior falla silenciosamente
+  let activeContracts = contracts || []
+  if (activeContracts.length === 0) {
+    const { data: contractsAlt } = await supabase
+      .from('contracts')
+      .select('id, roles, status, team_id, teams(id, name, logo_url, tag)')
+      .eq('player_id', player!.id)
+      .in('status', ['active', 'activo', 'pending_player_release', 'pending_manager_release'])
+    if (contractsAlt && contractsAlt.length > 0) {
+      activeContracts = contractsAlt
+    }
+  }
+
   const hasActiveContracts = activeContracts.length > 0
 
-  // Si el jugador tiene contratos activos (aparece en un roster), siempre es accesible.
-  // Solo aplicar notFound si no es jugador, no está activo Y tampoco tiene contratos activos.
-  if (!hasActiveContracts && !player.is_player && player.player_status !== 'active') {
+  // Bloquear acceso solo si el jugador definitivamente no es jugador ni tiene contratos activos.
+  // Si tiene contratos activos (aparece en un roster), SIEMPRE es accesible.
+  if (!hasActiveContracts && !player!.is_player && player!.player_status !== 'active') {
     notFound()
   }
 
