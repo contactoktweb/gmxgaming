@@ -32,44 +32,66 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
 
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(paramSlug)
 
+  const playerSelect = `
+    *,
+    player_game_info (
+      game,
+      game_id,
+      server,
+      game_nickname,
+      country_account
+    )
+  `
+
   let player = null
   if (isUuid) {
     const { data } = await supabase
       .from('profiles')
-      .select(`
-        *,
-        player_game_info (
-          game,
-          game_id,
-          server,
-          game_nickname,
-          country_account
-        )
-      `)
+      .select(playerSelect)
       .eq('id', paramSlug)
       .single()
     player = data
   } else {
-    // Buscar jugador por slug de nickname o nombre en TODOS los perfiles
-    const { data: allPlayers } = await supabase
-      .from('profiles')
-      .select(`
-        *,
-        player_game_info (
-          game,
-          game_id,
-          server,
-          game_nickname,
-          country_account
-        )
-      `)
+    // Reconstruir posibles variantes del nombre/nickname a partir del slug
+    // El slug reemplaza espacios y caracteres especiales por guiones, ej: "cry-yousaf" → "Cry Yousaf"
+    // Supabase no soporta búsqueda por función de transformación, así que buscamos candidatos
+    // con ilike por nickname y name, y luego verificamos el slug en memoria (conjunto pequeño).
+    const nicknameFromSlug = paramSlug.replace(/-/g, ' ')
 
-    if (allPlayers) {
-      player = allPlayers.find(p => getPlayerSlug(p) === paramSlug || slugify(p.nickname) === paramSlug || slugify(p.name) === paramSlug || p.id === paramSlug)
+    const { data: candidatesByNickname } = await supabase
+      .from('profiles')
+      .select(playerSelect)
+      .or(`nickname.ilike.%${nicknameFromSlug}%,name.ilike.%${nicknameFromSlug}%`)
+      .limit(50)
+
+    if (candidatesByNickname) {
+      player = candidatesByNickname.find(
+        p => getPlayerSlug(p) === paramSlug
+          || slugify(p.nickname) === paramSlug
+          || slugify(p.name) === paramSlug
+          || p.id === paramSlug
+      ) || null
     }
 
-    // Si no se encontró por slug, intentar buscar via contratos activos por nickname
-    // (cubre casos donde el perfil no tiene is_player pero sí aparece en un roster)
+    // Fallback: también intentar una búsqueda exacta por nickname o name igual al slug sin guiones
+    if (!player) {
+      const { data: exactMatches } = await supabase
+        .from('profiles')
+        .select(playerSelect)
+        .or(`nickname.ilike.${nicknameFromSlug},name.ilike.${nicknameFromSlug}`)
+        .limit(20)
+
+      if (exactMatches) {
+        player = exactMatches.find(
+          p => getPlayerSlug(p) === paramSlug
+            || slugify(p.nickname) === paramSlug
+            || slugify(p.name) === paramSlug
+            || p.id === paramSlug
+        ) || null
+      }
+    }
+
+    // Último fallback: buscar via contratos activos (cubre jugadores sin is_player flag)
     if (!player) {
       const { data: contractMatches } = await supabase
         .from('contracts')
@@ -86,12 +108,18 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
           )
         `)
         .in('status', ['active', 'activo', 'pending_player_release', 'pending_manager_release'])
+        .limit(200)
 
       if (contractMatches) {
         for (const c of contractMatches) {
           const p = c.profiles as any
           if (!p) continue
-          if (getPlayerSlug(p) === paramSlug || slugify(p.nickname) === paramSlug || slugify(p.name) === paramSlug || p.id === paramSlug) {
+          if (
+            getPlayerSlug(p) === paramSlug
+            || slugify(p.nickname) === paramSlug
+            || slugify(p.name) === paramSlug
+            || p.id === paramSlug
+          ) {
             player = p
             break
           }
