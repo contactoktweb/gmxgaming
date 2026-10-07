@@ -93,7 +93,9 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
   const activeContracts = contracts || []
   const hasActiveContracts = activeContracts.length > 0
 
-  if (!player.is_player && player.player_status !== 'active' && !hasActiveContracts) {
+  // Si el jugador tiene contratos activos (aparece en un roster), siempre es accesible.
+  // Solo aplicar notFound si no es jugador, no está activo Y tampoco tiene contratos activos.
+  if (!hasActiveContracts && !player.is_player && player.player_status !== 'active') {
     notFound()
   }
 
