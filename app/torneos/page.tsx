@@ -13,6 +13,7 @@ import { createClient } from '@/utils/supabase/client'
 import { getTournamentSlug, formatStatus } from '@/lib/utils'
 import { useLanguage } from '@/lib/language-context'
 import Link from 'next/link'
+import { SafeImage } from '@/components/safe-image'
 
 export default function TorneosPage() {
   const [ready, setReady] = useState(false)
@@ -71,14 +72,15 @@ export default function TorneosPage() {
 
   const renderTournamentCard = (t: any) => {
     const tmplObj = Array.isArray(t.templates) ? t.templates[0] : t.templates
-    const imgUrl = t.logo_url || t.banner_url || t.image_url || tmplObj?.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
+    const imgUrl = t.logo_url || t.banner_url || t.image_url || tmplObj?.logo_url || '/placeholder-logo.png'
 
     return (
     <Link href={`/torneos/${getTournamentSlug(t)}`} key={t.id} className="group relative rounded-xl border border-border bg-surface p-6 sm:p-8 transition-colors hover:border-primary/50 block">
       <div className="flex flex-col sm:flex-row gap-6">
         <div className="shrink-0 flex justify-center sm:justify-start">
-          <img 
+          <SafeImage 
             src={imgUrl} 
+            fallbackSrc="/placeholder-logo.png"
             alt={t.name} 
             className="w-24 h-24 sm:w-32 sm:h-32 object-cover rounded-xl bg-background border border-border transition-transform duration-500 group-hover:scale-105" 
           />

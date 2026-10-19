@@ -7,6 +7,7 @@ import { Trophy, Shield, Gamepad2, Users, Medal, ExternalLink, Camera, Tv } from
 import { cn, formatRoleTitle, getPlayerSlug, getTeamSlug, slugify } from '@/lib/utils'
 import { cookies } from 'next/headers'
 import { translations, type Language } from '@/lib/i18n/translations'
+import { SafeImage } from '@/components/safe-image'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -215,8 +216,9 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
           
           <div className="container relative z-10 mx-auto max-w-5xl flex flex-col items-center gap-8 sm:flex-row sm:items-end">
             <div className="relative h-48 w-48 shrink-0 overflow-hidden rounded border-4 border-border bg-deep shadow-2xl">
-              <img 
+              <SafeImage 
                 src={player.avatar_url || '/placeholder-user.jpg'} 
+                fallbackSrc="/placeholder-user.jpg"
                 alt={player.nickname || gameInfo?.game_nickname || player.name} 
                 className="h-full w-full object-cover"
               />
@@ -326,10 +328,10 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
                         >
                           <div className="flex items-center gap-4">
                             <div className="h-12 w-12 shrink-0 overflow-hidden rounded bg-deep border border-border">
-                              <img 
+                              <SafeImage 
                                 src={team.logo_url || '/placeholder-logo.png'} 
+                                fallbackSrc="/placeholder-logo.png"
                                 alt={team.name} 
-                                onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/placeholder-logo.png' }}
                                 className="h-full w-full object-cover transition-transform group-hover:scale-110"
                               />
                             </div>

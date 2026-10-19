@@ -13,6 +13,7 @@ import { ShieldAlert, MapPin, ArrowUpRight, Search } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useLanguage } from '@/lib/language-context'
 import Link from 'next/link'
+import { SafeImage } from '@/components/safe-image'
 
 export default function EquiposPage() {
   const [ready, setReady] = useState(false)
@@ -107,8 +108,9 @@ export default function EquiposPage() {
                     <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
                     <div className="relative w-28 h-28 mb-6">
-                      <img 
-                        src={team.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} 
+                      <SafeImage 
+                        src={team.logo_url || '/placeholder-logo.png'} 
+                        fallbackSrc="/placeholder-logo.png"
                         alt={team.name}
                         className="w-full h-full object-cover rounded-full bg-background border-4 border-background shadow-xl z-10 relative transition-transform duration-500 group-hover:scale-110"
                       />

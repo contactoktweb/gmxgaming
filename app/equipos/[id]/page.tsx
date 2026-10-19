@@ -14,6 +14,7 @@ import { Users, Trophy, ShieldAlert, MapPin, CheckCircle2, User, Swords } from '
 import Link from 'next/link'
 import { cn, formatRoleTitle, formatRolesList, getPlayerSlug, slugify, formatStatus } from '@/lib/utils'
 import { useLanguage } from '@/lib/language-context'
+import { SafeImage } from '@/components/safe-image'
 
 export default function TeamDetailsPage() {
   const params = useParams()
@@ -222,10 +223,10 @@ export default function TeamDetailsPage() {
           {/* Hero Header */}
           <Reveal direction="up" className="flex flex-col md:flex-row items-center md:items-start gap-8 mb-16 text-center md:text-left">
             <div className="relative w-40 h-40 shrink-0">
-              <img 
+              <SafeImage 
                 src={team.logo_url || '/placeholder-logo.png'} 
+                fallbackSrc="/placeholder-logo.png"
                 alt={team.name}
-                onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/placeholder-logo.png' }}
                 className="w-full h-full object-cover rounded-full bg-surface border-4 border-surface shadow-2xl z-10 relative"
               />
               <div className="absolute inset-0 rounded-full border border-primary/30 scale-110 animate-pulse-slow"></div>
@@ -304,10 +305,10 @@ export default function TeamDetailsPage() {
                           <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
                             <span className="font-display text-6xl font-700 text-primary">{i+1}</span>
                           </div>
-                          <img 
+                          <SafeImage 
                             src={playerAvatar} 
+                            fallbackSrc="/placeholder-user.jpg"
                             alt={player.nickname || player.name}
-                            onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/placeholder-user.jpg' }}
                             className="w-16 h-16 rounded-lg object-cover bg-surface border border-border shrink-0 z-10"
                           />
                           <div className="z-10 min-w-0">
@@ -357,7 +358,7 @@ export default function TeamDetailsPage() {
                           </div>
                           <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2 flex-1 min-w-0">
-                              <img src={enemy?.logo_url || '/placeholder-logo.png'} onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/placeholder-logo.png' }} className="w-6 h-6 rounded bg-surface shrink-0" />
+                              <SafeImage src={enemy?.logo_url || '/placeholder-logo.png'} fallbackSrc="/placeholder-logo.png" alt={enemy?.name || 'Enemy logo'} className="w-6 h-6 rounded bg-surface shrink-0" />
                               <span className="font-600 text-xs text-white truncate">{d.teamDetail.vs} {enemy?.name || 'TBD'}</span>
                             </div>
                             <div className={cn("px-2 py-1 rounded text-xs font-700 min-w-[50px] text-center", 

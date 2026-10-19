@@ -18,6 +18,7 @@ import Link from 'next/link'
 import { toast } from 'sonner'
 import { cn, getTeamSlug, slugify, formatStatus } from '@/lib/utils'
 import { useLanguage } from '@/lib/language-context'
+import { SafeImage } from '@/components/safe-image'
 
 export default function TournamentDetailsPage() {
   const params = useParams()
@@ -185,11 +186,12 @@ export default function TournamentDetailsPage() {
           <Reveal direction="up" className="flex flex-col md:flex-row items-center md:items-start gap-8 mb-16 text-center md:text-left">
             {(() => {
               const tmplObj = Array.isArray(tournament.templates) ? tournament.templates[0] : tournament.templates
-              const displayImg = tournament.logo_url || tournament.banner_url || tournament.image_url || tmplObj?.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'
+              const displayImg = tournament.logo_url || tournament.banner_url || tournament.image_url || tmplObj?.logo_url || '/placeholder-logo.png'
 
               return (
-                <img 
+                <SafeImage 
                   src={displayImg} 
+                  fallbackSrc="/placeholder-logo.png"
                   alt={tournament.name}
                   className="w-40 h-40 object-cover rounded-2xl bg-surface border-2 border-border shadow-2xl shrink-0"
                 />
@@ -288,7 +290,12 @@ export default function TournamentDetailsPage() {
                         href={`/equipos/${getTeamSlug(team)}`}
                         className="flex flex-col items-center text-center p-3 rounded-xl bg-background border border-border hover:border-primary/50 transition-colors group block"
                       >
-                        <img src={team.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} alt={team.name} className="w-12 h-12 rounded-full mb-2 object-cover group-hover:scale-105 transition-transform" />
+                        <SafeImage 
+                          src={team.logo_url || '/placeholder-logo.png'} 
+                          fallbackSrc="/placeholder-logo.png"
+                          alt={team.name} 
+                          className="w-12 h-12 rounded-full mb-2 object-cover group-hover:scale-105 transition-transform" 
+                        />
                         <span className="text-xs font-600 text-white group-hover:text-primary transition-colors truncate w-full">{team.name}</span>
                       </Link>
                     ))}
@@ -331,7 +338,12 @@ export default function TournamentDetailsPage() {
                                   {/* Team 1 */}
                                   <div className={cn("flex items-center gap-3 flex-1 justify-end", isPlayed && isT2Winner ? "opacity-50" : "", isPlayed && isT1Winner ? "font-700 text-white" : "font-500 text-muted-foreground")}>
                                     <span className="text-sm truncate">{m.team1?.name || d.tournamentDetail.tbd}</span>
-                                    <img src={m.team1?.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} className={cn("w-8 h-8 rounded-full bg-surface border border-border", isPlayed && isT1Winner && "ring-2 ring-primary border-transparent")} />
+                                    <SafeImage 
+                                      src={m.team1?.logo_url || '/placeholder-logo.png'} 
+                                      fallbackSrc="/placeholder-logo.png"
+                                      alt={m.team1?.name || 'Team 1'}
+                                      className={cn("w-8 h-8 rounded-full bg-surface border border-border", isPlayed && isT1Winner && "ring-2 ring-primary border-transparent")} 
+                                    />
                                   </div>
                                   
                                   {/* Score */}
@@ -349,7 +361,12 @@ export default function TournamentDetailsPage() {
 
                                   {/* Team 2 */}
                                   <div className={cn("flex items-center gap-3 flex-1", isPlayed && isT1Winner ? "opacity-50" : "", isPlayed && isT2Winner ? "font-700 text-white" : "font-500 text-muted-foreground")}>
-                                    <img src={m.team2?.logo_url || 'https://i0.wp.com/gmxgaming.com/wp-content/plugins/ultimate-member/assets/img/default_avatar.jpg'} className={cn("w-8 h-8 rounded-full bg-surface border border-border", isPlayed && isT2Winner && "ring-2 ring-primary border-transparent")} />
+                                    <SafeImage 
+                                      src={m.team2?.logo_url || '/placeholder-logo.png'} 
+                                      fallbackSrc="/placeholder-logo.png"
+                                      alt={m.team2?.name || 'Team 2'}
+                                      className={cn("w-8 h-8 rounded-full bg-surface border border-border", isPlayed && isT2Winner && "ring-2 ring-primary border-transparent")} 
+                                    />
                                     <span className="text-sm truncate">{m.team2?.name || d.tournamentDetail.tbd}</span>
                                   </div>
                                 </div>
