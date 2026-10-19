@@ -59,7 +59,6 @@ export function AdminCasters() {
   })
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
-  const [hasNativeColumns, setHasNativeColumns] = useState<boolean | null>(null)
   const supabase = createClient()
 
   useEffect(() => {
@@ -84,10 +83,6 @@ export function AdminCasters() {
         console.error('Error fetching casters:', error)
         toast.error('Error al cargar casters: ' + error.message)
       } else if (data) {
-        // Detectar si la tabla física contiene las nuevas columnas
-        const hasFbColumn = data.length > 0 ? 'social_fb' in data[0] : null
-        setHasNativeColumns(hasFbColumn)
-
         const merged: Caster[] = data.map(c => {
           const fallback = fallbackMap[c.id] || {}
           return {
@@ -349,32 +344,6 @@ export function AdminCasters() {
             <Plus className="w-4 h-4" /> Agregar Caster
           </GmxButton>
         </div>
-
-        {hasNativeColumns === false && (
-          <div className="mb-6 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-200/90 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
-              <span>
-                <strong>Sincronización Segura Activa:</strong> Todas las 7 redes sociales (Twitch, Instagram, X, Facebook, TikTok, Kick y YouTube) se guardan y sincronizan perfectamente. Puedes ejecutar el SQL en Supabase para habilitar columnas nativas.
-              </span>
-            </div>
-            <button
-              onClick={() => {
-                const sql = `-- Migración para habilitar columnas completas de redes en Supabase
-ALTER TABLE public.casters ADD COLUMN IF NOT EXISTS social_fb text;
-ALTER TABLE public.casters ADD COLUMN IF NOT EXISTS social_tiktok text;
-ALTER TABLE public.casters ADD COLUMN IF NOT EXISTS social_kick text;
-ALTER TABLE public.casters ADD COLUMN IF NOT EXISTS social_yt text;
-NOTIFY pgrst, 'reload schema';`
-                navigator.clipboard.writeText(sql)
-                toast.success('SQL copiado al portapapeles', { description: 'Pégalo en el SQL Editor de Supabase para activar columnas nativas.' })
-              }}
-              className="shrink-0 px-3 py-1.5 rounded bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 font-mono text-[11px] transition-colors cursor-pointer"
-            >
-              Copiar SQL de Migración
-            </button>
-          </div>
-        )}
 
         {loading ? (
           <div className="py-12 text-center text-muted-foreground animate-pulse">Cargando casters...</div>
