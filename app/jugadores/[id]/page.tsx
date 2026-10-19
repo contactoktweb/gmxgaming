@@ -9,8 +9,7 @@ import { cookies } from 'next/headers'
 import { translations, type Language } from '@/lib/i18n/translations'
 import { SafeImage } from '@/components/safe-image'
 
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
+export const revalidate = 60
 
 export default async function PlayerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: paramSlug } = await params
@@ -19,16 +18,24 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
   const d = translations[lang] || translations.es
   const supabase = createClient(cookieStore)
 
-  // Verificar si el usuario actual es administrador
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  // Solo verificar si el usuario es administrador si existen cookies de sesión de Supabase
+  const allCookies = cookieStore.getAll()
+  const hasAuth = allCookies.some(c => c.name.startsWith('sb-') || c.name.includes('auth-token') || c.name.includes('supabase'))
   let isAdmin = false
-  if (authUser) {
-    const { data: authProfile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', authUser.id)
-      .single()
-    isAdmin = authProfile?.role === 'admin'
+  if (hasAuth) {
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (authUser) {
+        const { data: authProfile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', authUser.id)
+          .single()
+        isAdmin = authProfile?.role === 'admin'
+      }
+    } catch {
+      isAdmin = false
+    }
   }
 
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(paramSlug)
@@ -54,16 +61,13 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
     player = data
   } else {
     // Reconstruir posibles variantes del nombre/nickname a partir del slug
-    // El slug reemplaza espacios y caracteres especiales por guiones, ej: "cry-yousaf" → "Cry Yousaf"
-    // Supabase no soporta búsqueda por función de transformación, así que buscamos candidatos
-    // con ilike por nickname y name, y luego verificamos el slug en memoria (conjunto pequeño).
     const nicknameFromSlug = paramSlug.replace(/-/g, ' ')
 
     const { data: candidatesByNickname } = await supabase
       .from('profiles')
       .select(playerSelect)
       .or(`nickname.ilike.%${nicknameFromSlug}%,name.ilike.%${nicknameFromSlug}%`)
-      .limit(50)
+      .limit(20)
 
     if (candidatesByNickname) {
       player = candidatesByNickname.find(
@@ -74,13 +78,13 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
       ) || null
     }
 
-    // Fallback: también intentar una búsqueda exacta por nickname o name igual al slug sin guiones
+    // Fallback: búsqueda exacta por nickname o name
     if (!player) {
       const { data: exactMatches } = await supabase
         .from('profiles')
         .select(playerSelect)
         .or(`nickname.ilike.${nicknameFromSlug},name.ilike.${nicknameFromSlug}`)
-        .limit(20)
+        .limit(10)
 
       if (exactMatches) {
         player = exactMatches.find(
@@ -92,7 +96,7 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
       }
     }
 
-    // Último fallback: buscar via contratos activos (cubre jugadores sin is_player flag)
+    // Último fallback: buscar via contratos activos
     if (!player) {
       const { data: contractMatches } = await supabase
         .from('contracts')
@@ -109,7 +113,7 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
           )
         `)
         .in('status', ['active', 'activo', 'pending_player_release', 'pending_manager_release'])
-        .limit(200)
+        .limit(50)
 
       if (contractMatches) {
         for (const c of contractMatches) {
@@ -133,7 +137,7 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
     notFound()
   }
 
-  // Fetch Current Contracts (Teams) — usando FK explícita para evitar ambigüedad
+  // Fetch Current Contracts (Teams)
   const { data: contracts } = await supabase
     .from('contracts')
     .select(`
@@ -147,17 +151,15 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
         tag
       )
     `)
-    .eq('player_id', player!.id)
+    .eq('player_id', player.id)
     .in('status', ['active', 'activo', 'pending_player_release', 'pending_manager_release'])
 
-  // Fallback: verificar contratos también desde la tabla de contratos usando el FK explícito
-  // por si el query anterior falla silenciosamente
   let activeContracts = contracts || []
   if (activeContracts.length === 0) {
     const { data: contractsAlt } = await supabase
       .from('contracts')
       .select('id, roles, status, team_id, teams(id, name, logo_url, tag)')
-      .eq('player_id', player!.id)
+      .eq('player_id', player.id)
       .in('status', ['active', 'activo', 'pending_player_release', 'pending_manager_release'])
     if (contractsAlt && contractsAlt.length > 0) {
       activeContracts = contractsAlt
@@ -166,17 +168,9 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
 
   const hasActiveContracts = activeContracts.length > 0
 
-  // Bloquear acceso solo si el jugador definitivamente no es jugador ni tiene contratos activos.
-  // Si tiene contratos activos (aparece en un roster), SIEMPRE es accesible.
-  if (!hasActiveContracts && !player!.is_player && player!.player_status !== 'active') {
+  // Bloquear acceso solo si el usuario no es jugador ni tiene contratos activos
+  if (!hasActiveContracts && !player.is_player && player.player_status !== 'active') {
     notFound()
-  }
-
-  // Auto-sincronización defensiva: si milita activamente en un equipo pero su perfil no tenía el flag
-  if (hasActiveContracts && (!player.is_player || player.player_status !== 'active')) {
-    supabase.from('profiles').update({ is_player: true, player_status: 'active' }).eq('id', player.id).then()
-    player.is_player = true
-    player.player_status = 'active'
   }
 
   const gameInfo = player.player_game_info?.[0]
@@ -190,15 +184,6 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
       }).filter(Boolean)
     )
   )
-
-  // Sincronización defensiva: si el apodo oficial difiere del registro de juego, sincronizar
-  if (player?.nickname && gameInfo && gameInfo.game_nickname !== player.nickname) {
-    supabase
-      .from('player_game_info')
-      .update({ game_nickname: player.nickname })
-      .eq('profile_id', player.id)
-      .then(() => {})
-  }
 
   return (
     <>

@@ -41,9 +41,26 @@ export default function TeamDetailsPage() {
         const { data } = await supabase.from('teams').select('*').eq('id', paramSlug).single()
         teamData = data
       } else {
-        const { data: allTeams } = await supabase.from('teams').select('*')
-        if (allTeams) {
-          teamData = allTeams.find(t => slugify(t.name) === paramSlug || slugify(t.tag) === paramSlug || t.id === paramSlug)
+        const slugClean = paramSlug.replace(/-/g, ' ')
+        const { data: teamCandidates } = await supabase
+          .from('teams')
+          .select('*')
+          .or(`name.ilike.%${slugClean}%,tag.ilike.%${slugClean}%`)
+          .limit(10)
+
+        if (teamCandidates && teamCandidates.length > 0) {
+          teamData = teamCandidates.find(t => 
+            slugify(t.name) === paramSlug || 
+            slugify(t.tag) === paramSlug || 
+            t.id === paramSlug
+          )
+        }
+
+        if (!teamData) {
+          const { data: allTeams } = await supabase.from('teams').select('*').limit(50)
+          if (allTeams) {
+            teamData = allTeams.find(t => slugify(t.name) === paramSlug || slugify(t.tag) === paramSlug || t.id === paramSlug)
+          }
         }
       }
       
@@ -51,78 +68,50 @@ export default function TeamDetailsPage() {
         setTeam(teamData)
         const teamId = teamData.id
 
-        // Fetch Manager profile
-        if (teamData.manager_id) {
-          const { data: managerProfile } = await supabase
-            .from('profiles')
-            .select('id, name, nickname, discord_handle, avatar_url')
-            .eq('id', teamData.manager_id)
-            .maybeSingle()
-          if (managerProfile) {
-            setManager(managerProfile)
-          }
-        }
-        
-        // Fetch Roster (Active contracts)
-        const { data: rosterData } = await supabase
-          .from('contracts')
-          .select(`
-            roles, 
-            status,
-            profiles!contracts_player_id_fkey (id, name, nickname, avatar_url, discord_handle)
-          `)
-          .eq('team_id', teamId)
-          .in('status', ['active', 'activo', 'pending_player_release', 'pending_manager_release'])
-        
-        if (rosterData) {
-          // Si algún jugador no tiene avatar_url en profiles, resolver su foto desde validations
-          const missingAvatarIds = rosterData
-            .filter((r: any) => r.profiles && !r.profiles.avatar_url)
-            .map((r: any) => r.profiles.id)
+        // Fetch Manager, Roster, Matches, and Tournaments count in parallel
+        const [managerRes, rosterRes, matchesRes, ttRes] = await Promise.all([
+          teamData.manager_id
+            ? supabase
+                .from('profiles')
+                .select('id, name, nickname, discord_handle, avatar_url')
+                .eq('id', teamData.manager_id)
+                .maybeSingle()
+            : Promise.resolve({ data: null }),
+          supabase
+            .from('contracts')
+            .select(`
+              roles, 
+              status,
+              profiles!contracts_player_id_fkey (id, name, nickname, avatar_url, discord_handle)
+            `)
+            .eq('team_id', teamId)
+            .in('status', ['active', 'activo', 'pending_player_release', 'pending_manager_release']),
+          supabase
+            .from('matches')
+            .select(`
+              *,
+              tournaments(name)
+            `)
+            .or(`team_a_id.eq.${teamId},team_b_id.eq.${teamId}`)
+            .order('match_date', { ascending: false })
+            .limit(10),
+          supabase
+            .from('tournament_teams')
+            .select('tournament_id')
+            .eq('team_id', teamId)
+        ])
 
-          if (missingAvatarIds.length > 0) {
-            try {
-              const { data: valAvatars } = await supabase
-                .from('validations')
-                .select('details')
-                .in('details->>user_id', missingAvatarIds)
-
-              if (valAvatars && valAvatars.length > 0) {
-                const avatarMap = new Map<string, string>()
-                valAvatars.forEach((v: any) => {
-                  const uId = v.details?.user_id
-                  const av = v.details?.avatar_url || v.details?.avatar
-                  if (uId && av && !av.includes('placehold.co') && !avatarMap.has(uId)) {
-                    avatarMap.set(uId, av)
-                  }
-                })
-
-                rosterData.forEach((r: any) => {
-                  if (r.profiles && !r.profiles.avatar_url && avatarMap.has(r.profiles.id)) {
-                    r.profiles.avatar_url = avatarMap.get(r.profiles.id)
-                  }
-                })
-              }
-            } catch (vErr) {
-              console.warn('Error resolviendo avatares de validations:', vErr)
-            }
-          }
-
-          setRoster(rosterData)
+        if (managerRes.data) {
+          setManager(managerRes.data)
         }
 
-        // Fetch Matches where team participated
-        const { data: matchesData } = await supabase
-          .from('matches')
-          .select(`
-            *,
-            tournaments(name)
-          `)
-          .or(`team_a_id.eq.${teamId},team_b_id.eq.${teamId}`)
-          .order('match_date', { ascending: false })
-          .limit(10)
+        if (rosterRes.data) {
+          setRoster(rosterRes.data)
+        }
 
-        if (matchesData) {
+        // Process Matches
+        const matchesData = matchesRes.data
+        if (matchesData && matchesData.length > 0) {
           const matchTeamIds = new Set<string>()
           matchesData.forEach(m => {
             const t1Id = m.team_a_id || m.team1_id
@@ -132,7 +121,7 @@ export default function TeamDetailsPage() {
           })
 
           const teamMap = new Map<string, any>()
-          if (teamData) teamMap.set(teamData.id, teamData)
+          teamMap.set(teamData.id, teamData)
 
           const missingIds = Array.from(matchTeamIds).filter(id => !teamMap.has(id))
           if (missingIds.length > 0) {
@@ -163,15 +152,10 @@ export default function TeamDetailsPage() {
           setMatches([])
         }
         
-        // Fetch Unique Tournaments count (combinando registros de torneos y encuentros)
-        const { data: ttData } = await supabase
-          .from('tournament_teams')
-          .select('tournament_id')
-          .eq('team_id', teamId)
-          
+        // Calculate Unique Tournaments count
         const tourneySet = new Set<string>()
-        if (ttData) {
-          ttData.forEach((t: any) => { if (t.tournament_id) tourneySet.add(t.tournament_id) })
+        if (ttRes.data) {
+          ttRes.data.forEach((t: any) => { if (t.tournament_id) tourneySet.add(t.tournament_id) })
         }
         if (matchesData) {
           matchesData.forEach((m: any) => { if (m.tournament_id) tourneySet.add(m.tournament_id) })
@@ -186,8 +170,44 @@ export default function TeamDetailsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex justify-center items-center">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+      <div className="min-h-screen bg-background pt-32 pb-24">
+        <div className="max-w-[1200px] mx-auto px-5 lg:px-10">
+          <div className="flex flex-col md:flex-row items-center md:items-start gap-8 mb-16 animate-pulse">
+            <div className="w-40 h-40 rounded-full bg-white/5 shrink-0" />
+            <div className="flex-1 space-y-4">
+              <div className="h-6 w-32 bg-white/10 rounded-full" />
+              <div className="h-12 w-64 bg-white/10 rounded" />
+              <div className="flex gap-8 pt-4">
+                <div className="h-10 w-24 bg-white/5 rounded" />
+                <div className="h-10 w-28 bg-white/5 rounded" />
+              </div>
+            </div>
+          </div>
+          <div className="grid lg:grid-cols-3 gap-10">
+            <div className="lg:col-span-2 rounded-2xl border border-border bg-surface p-8 animate-pulse">
+              <div className="h-8 w-44 bg-white/10 rounded mb-8" />
+              <div className="grid sm:grid-cols-2 gap-6">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="flex items-center gap-4 p-4 rounded-xl bg-background border border-border">
+                    <div className="w-16 h-16 rounded-lg bg-white/5 shrink-0" />
+                    <div className="space-y-2 flex-1">
+                      <div className="h-4 w-28 bg-white/10 rounded" />
+                      <div className="h-3 w-16 bg-white/5 rounded" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="lg:col-span-1 rounded-2xl border border-border bg-surface p-6 animate-pulse">
+              <div className="h-6 w-36 bg-white/10 rounded mb-6" />
+              <div className="space-y-4">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="h-16 rounded-lg bg-background border border-border" />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     )
   }
@@ -207,7 +227,6 @@ export default function TeamDetailsPage() {
 
   return (
     <>
-      <Preloader onDone={() => setReady(true)} />
       <SmoothScroll />
       <CustomCursor />
       <SiteHeader />

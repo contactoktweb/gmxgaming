@@ -27,7 +27,7 @@ export default function EquiposPage() {
       const supabase = createClient()
       const { data } = await supabase
         .from('teams')
-        .select('*')
+        .select('id, name, tag, logo_url, country, status')
         .in('status', ['active', 'activo'])
         .order('name', { ascending: true })
       
@@ -78,8 +78,14 @@ export default function EquiposPage() {
           </div>
 
           {loading ? (
-            <div className="flex justify-center py-24">
-              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {[...Array(8)].map((_, i) => (
+                <div key={i} className="flex flex-col items-center p-8 rounded-2xl bg-surface border border-border animate-pulse">
+                  <div className="w-28 h-28 rounded-full bg-white/5 mb-6" />
+                  <div className="h-5 w-32 bg-white/10 rounded mb-3" />
+                  <div className="h-3 w-20 bg-white/5 rounded" />
+                </div>
+              ))}
             </div>
           ) : teams.length === 0 ? (
             <Reveal direction="up">

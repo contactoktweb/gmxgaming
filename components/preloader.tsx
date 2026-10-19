@@ -8,19 +8,32 @@ const LETTERS = ['G', 'M', 'X', ' ', 'G', 'A', 'M', 'I', 'N', 'G']
 let hasShownPreloader = false
 
 export function Preloader({ onDone }: { onDone?: () => void }) {
-  const [phase, setPhase] = useState<'loading' | 'reveal' | 'done'>(
-    hasShownPreloader ? 'done' : 'loading'
-  )
+  const [phase, setPhase] = useState<'loading' | 'reveal' | 'done'>(() => {
+    if (typeof window === 'undefined') return 'done'
+    try {
+      if (hasShownPreloader || sessionStorage.getItem('gmx_preloader_seen') === '1') {
+        return 'done'
+      }
+    } catch {
+      // Ignore sessionStorage errors
+    }
+    return 'loading'
+  })
 
   useEffect(() => {
-    if (hasShownPreloader) {
-      onDone?.()
-      return
+    try {
+      if (hasShownPreloader || sessionStorage.getItem('gmx_preloader_seen') === '1') {
+        setPhase('done')
+        onDone?.()
+        return
+      }
+    } catch {
+      // Ignore sessionStorage errors
     }
 
     document.body.style.overflow = 'hidden'
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    const loadMs = reduce ? 700 : 2200
+    const loadMs = reduce ? 400 : 1100
     const t1 = setTimeout(() => setPhase('reveal'), loadMs)
     return () => clearTimeout(t1)
   }, [onDone])
@@ -30,9 +43,14 @@ export function Preloader({ onDone }: { onDone?: () => void }) {
       const t = setTimeout(() => {
         setPhase('done')
         hasShownPreloader = true
+        try {
+          sessionStorage.setItem('gmx_preloader_seen', '1')
+        } catch {
+          // Ignore
+        }
         document.body.style.overflow = ''
         onDone?.()
-      }, 1000)
+      }, 500)
       return () => clearTimeout(t)
     }
   }, [phase, onDone])

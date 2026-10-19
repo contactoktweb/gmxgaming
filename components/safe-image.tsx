@@ -22,6 +22,8 @@ export function SafeImage({
 
   return (
     <img
+      loading="lazy"
+      decoding="async"
       {...props}
       src={imgSrc}
       alt={alt}
