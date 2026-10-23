@@ -513,12 +513,13 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
 
         setName(formattedName)
         setBio(editForm.bio.trim())
-        if (finalAvatarUrl) setProfilePhoto(finalAvatarUrl)
+        // Reflejar la imagen que realmente quedó en BD (para jugadores aprobados no cambia aquí)
+        if (avatarToPersist) setProfilePhoto(avatarToPersist)
         setProfileData((prev: any) => ({
           ...prev,
           name: formattedName,
           bio: editForm.bio.trim(),
-          avatar_url: finalAvatarUrl,
+          avatar_url: avatarToPersist,
           discord_handle: editForm.discord_handle.trim() || null,
           country: editForm.country.trim() || null,
           phone: editForm.phone.trim() || null,

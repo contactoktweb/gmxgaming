@@ -58,3 +58,20 @@ WHERE id = 'd78946ec-aded-4a24-bbb5-bde2aa5616c7';
 DELETE FROM public.teams WHERE name = 'GMXVIXENS';
 
 COMMIT;
+
+-- ----------------------------------------------------------------------------------------
+-- 4. Diagnóstico de foto distinta (caso MY KILLARI)
+--    El sitio público usa profiles.avatar_url; el panel de admin calcula la foto a partir
+--    de las solicitudes de modificación. Si hay una modificación pendiente/rechazada cuya
+--    foto propuesta ya está en profiles, cada vista muestra una imagen diferente.
+-- ----------------------------------------------------------------------------------------
+SELECT p.id, p.nickname, p.player_status, p.avatar_url AS foto_publica
+FROM public.profiles p
+WHERE upper(p.nickname) = 'MY KILLARI';
+
+SELECT v.id, v.type, v.status, v.created_at,
+       v.details->>'avatar_url'      AS foto_propuesta,
+       v.details->>'original_avatar' AS foto_original
+FROM public.validations v
+WHERE v.details->>'user_id' = (SELECT id::text FROM public.profiles WHERE upper(nickname) = 'MY KILLARI')
+ORDER BY v.created_at DESC;
