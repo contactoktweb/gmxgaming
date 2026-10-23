@@ -21,7 +21,7 @@ export function Teams() {
       const { data } = await supabase
         .from('teams')
         .select('*')
-        .eq('status', 'active')
+        .in('status', ['active', 'activo', 'approved'])
         .order('created_at', { ascending: false })
       
       if (data) setTeams(data)

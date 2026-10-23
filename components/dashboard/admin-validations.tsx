@@ -515,7 +515,12 @@ export function AdminValidations() {
           // 2. Eliminar inscripciones de torneos del equipo
           await supabase.from('tournament_participants').delete().eq('team_id', teamIdToDelete)
           // 3. Eliminar el equipo de la tabla teams
-          await supabase.from('teams').delete().eq('id', teamIdToDelete)
+          const { data: deletedTeams, error: deleteTeamErr } = await supabase.from('teams').delete().eq('id', teamIdToDelete).select('id')
+          // Si RLS bloquea el DELETE, Supabase no devuelve error: solo 0 filas borradas
+          if (deleteTeamErr || !deletedTeams || deletedTeams.length === 0) {
+            toast.error('No se pudo eliminar el equipo: ' + (deleteTeamErr?.message || 'la base de datos no permitió el borrado (revisa la política DELETE de la tabla teams).'))
+            return
+          }
           // 4. Eliminar validaciones vinculadas a este equipo
           await supabase.from('validations').delete().or(`details->>team_id.eq.${teamIdToDelete},details->>id.eq.${teamIdToDelete}`)
         } else if (requestToUpdate.target_name) {

@@ -631,8 +631,13 @@ export function AdminTeams() {
       await supabase.from('validations').delete().or(`details->>team_id.eq.${teamId},details->>id.eq.${teamId},target_name.eq.${teamName}`)
 
       // 4. Eliminar el equipo de la tabla teams
-      const { error } = await supabase.from('teams').delete().eq('id', teamId)
+      // .select() devuelve las filas borradas: si RLS bloquea el DELETE, Supabase no
+      // lanza error sino que borra 0 filas, y el equipo seguiría existiendo en la BD.
+      const { data: deletedRows, error } = await supabase.from('teams').delete().eq('id', teamId).select('id')
       if (error) throw error
+      if (!deletedRows || deletedRows.length === 0) {
+        throw new Error('La base de datos no permitió eliminar el equipo (falta la política DELETE en la tabla teams).')
+      }
 
       setTeams(prev => prev.filter(t => t.id !== teamId))
       setSelectedIds(prev => {

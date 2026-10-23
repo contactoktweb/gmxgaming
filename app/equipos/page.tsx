@@ -28,7 +28,7 @@ export default function EquiposPage() {
       const { data } = await supabase
         .from('teams')
         .select('id, name, tag, logo_url, country, status')
-        .in('status', ['active', 'activo'])
+        .in('status', ['active', 'activo', 'approved'])
         .order('name', { ascending: true })
       
       if (data) setTeams(data)
