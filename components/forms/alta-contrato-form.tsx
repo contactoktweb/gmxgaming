@@ -92,15 +92,26 @@ export function AltaContratoForm() {
       }
 
       // 1. Validar si el usuario es jugador profesional aprobado
-      const { data: profile } = await supabase
+      const fetchProfile = () => supabase
         .from('profiles')
         .select('is_player, player_status')
         .eq('id', user.id)
-        .single()
+        .maybeSingle()
+
+      let { data: profile, error: profileError } = await fetchProfile()
+
+      // Una sesión vencida hace fallar la consulta aunque la UI muestre al usuario conectado:
+      // renovar la sesión y reintentar antes de concluir que no es jugador
+      if (profileError || !profile) {
+        await supabase.auth.refreshSession()
+        ;({ data: profile, error: profileError } = await fetchProfile())
+      }
 
       const isApproved = Boolean(profile?.is_player && (profile?.player_status === 'active' || profile?.player_status === 'approved'))
       if (!isApproved) {
-        if (!profile?.is_player) {
+        if (profileError || !profile) {
+          setBlockMessage(`No pudimos verificar tu perfil de jugador (${user.email || 'sesión actual'}). Cierra sesión y vuelve a iniciarla; si el problema continúa, contacta a un administrador.`)
+        } else if (!profile.is_player) {
           setBlockMessage('Debes estar registrado y aprobado como Jugador Profesional para poder registrar contratos con equipos.')
         } else if (profile?.player_status === 'pending') {
           setBlockMessage('Tu registro como Jugador Profesional se encuentra actualmente en revisión por los administradores. Podrás solicitar contratos tan pronto como sea aprobado.')
