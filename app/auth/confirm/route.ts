@@ -226,15 +226,32 @@ export async function handleAuthCallback(request: NextRequest) {
           const avatarUrl = meta.avatar_url || meta.picture || null;
           
           try {
-            await client.from('profiles').upsert({
-              id: user.id,
-              email: user.email || null,
-              name: fullName,
-              avatar_url: avatarUrl,
-              role: 'user',
-              is_player: false,
-              player_status: 'none'
-            });
+            // Crear el perfil solo si no existe. Un upsert completo aquí reiniciaba
+            // perfiles existentes (jugadores aprobados volvían a 'none', admins a 'user').
+            const { data: existing } = await client.from('profiles')
+              .select('id, name, avatar_url, email')
+              .eq('id', user.id)
+              .maybeSingle();
+
+            if (!existing) {
+              await client.from('profiles').insert({
+                id: user.id,
+                email: user.email || null,
+                name: fullName,
+                avatar_url: avatarUrl,
+                role: 'user',
+                is_player: false,
+                player_status: 'none'
+              });
+            } else {
+              const updates = {};
+              if (!existing.name && fullName) updates.name = fullName;
+              if (!existing.avatar_url && avatarUrl) updates.avatar_url = avatarUrl;
+              if (!existing.email && user.email) updates.email = user.email;
+              if (Object.keys(updates).length > 0) {
+                await client.from('profiles').update(updates).eq('id', user.id);
+              }
+            }
           } catch(e) {
             console.error('Error syncing profile:', e);
           }

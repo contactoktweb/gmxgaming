@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const googleAvatar = metadata.avatar_url || metadata.picture || null
 
       try {
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', authUser.id)
@@ -58,8 +58,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         let activeProfile = profile
 
-        // Si no existe el perfil en la base de datos, lo creamos automáticamente
-        if (!profile) {
+        // Si no existe el perfil en la base de datos, lo creamos automáticamente.
+        // Solo cuando la consulta confirma que no hay fila (PGRST116): si falló por red o
+        // sesión, el upsert reiniciaría un perfil existente (is_player/role/status).
+        if (!profile && profileError?.code === 'PGRST116') {
           const { data: newProfile } = await supabase
             .from('profiles')
             .upsert({
@@ -76,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (newProfile) {
             activeProfile = newProfile
           }
-        } else {
+        } else if (profile) {
           // Si existe pero le falta nombre o avatar, completamos
           const updates: Record<string, any> = {}
           if (!profile.name && googleName) updates.name = googleName
