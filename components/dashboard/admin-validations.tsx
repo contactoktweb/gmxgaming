@@ -651,8 +651,22 @@ export function AdminValidations() {
               if (requestToUpdate.details?.[key]) profileUpdates[key] = requestToUpdate.details[key]
             })
 
+            // Sin perfil vinculado o con error al activarlo, el jugador seguiría bloqueado para
+            // contratos aunque la solicitud se marque aprobada: abortar y avisar al admin.
+            if (!targetUserId) {
+              toast.error('No se encontró la cuenta del jugador vinculada a esta solicitud. No se aprobó.')
+              return
+            }
+
             if (targetUserId) {
-              await supabase.from('profiles').update(profileUpdates).eq('id', targetUserId)
+              const { data: activatedRows, error: activateErr } = await supabase.from('profiles').update(profileUpdates).eq('id', targetUserId).select('id')
+              if (activateErr || !activatedRows || activatedRows.length === 0) {
+                const isNickTaken = activateErr?.code === '23505'
+                toast.error(isNickTaken
+                  ? `No se pudo activar al jugador: el nickname "${profileUpdates.nickname}" ya lo usa otra cuenta.`
+                  : 'No se pudo activar el perfil del jugador: ' + (activateErr?.message || 'la base de datos no actualizó el perfil.'))
+                return
+              }
 
               // Sincronizar en player_game_info
               const gameVal = requestToUpdate.details?.game || 'Mobile Legends'

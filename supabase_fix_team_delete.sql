@@ -75,3 +75,23 @@ SELECT v.id, v.type, v.status, v.created_at,
 FROM public.validations v
 WHERE v.details->>'user_id' = (SELECT id::text FROM public.profiles WHERE upper(nickname) = 'MY KILLARI')
 ORDER BY v.created_at DESC;
+
+-- ----------------------------------------------------------------------------------------
+-- 5. Jugador aprobado que no puede registrar contratos (caso BICEPSLUVR69)
+--    El formulario de contratos exige profiles.is_player = true y player_status = 'active'.
+-- ----------------------------------------------------------------------------------------
+-- 5a. ¿Cuántas cuentas tienen ese nickname/nombre y en qué estado están?
+SELECT id, name, nickname, is_player, player_status, created_at
+FROM public.profiles
+WHERE upper(nickname) = 'BICEPSLUVR69' OR upper(name) LIKE '%SHILOH%';
+
+-- 5b. ¿Qué solicitudes de jugador existen y a qué cuenta apuntan?
+SELECT id, status, created_at, submitted_by, details->>'user_id' AS user_id
+FROM public.validations
+WHERE type = 'jugador' AND (upper(target_name) LIKE '%BICEPSLUVR69%' OR upper(details->>'nickname') = 'BICEPSLUVR69')
+ORDER BY created_at DESC;
+
+-- 5c. Activar la cuenta correcta (reemplazar <ID_DE_LA_CUENTA> con el id de 5a que
+--     corresponde a la cuenta con la que la jugadora inicia sesión)
+-- UPDATE public.profiles SET is_player = true, player_status = 'active'
+-- WHERE id = '<ID_DE_LA_CUENTA>';
