@@ -67,13 +67,16 @@ export function AltaContratoForm() {
     }
   }
 
+  // Incrementarlo vuelve a ejecutar la verificación de elegibilidad sin recargar la página
+  const [recheckKey, setRecheckKey] = useState(0)
+
   useEffect(() => {
     async function init() {
       if (!user) {
         setIsInitializing(false)
         return
       }
-      setIsInitializing(true)
+      if (recheckKey === 0) setIsInitializing(true)
 
       // Cargar configuraciones de países desde app_settings
       try {
@@ -230,10 +233,29 @@ export function AltaContratoForm() {
           setInfoNotice('Regla para jugadoras: Puedes tener hasta 2 contratos activos simultáneos (exclusivamente 1 en división Femenil y 1 en división Varonil / Mixto).')
         }
       }
+      // Pasó todas las verificaciones: desbloquear si una revisión anterior lo había bloqueado
+      setFormStatus(prev => prev === 'blocked' ? 'idle' : prev)
       setIsInitializing(false)
     }
     init()
-  }, [user])
+  }, [user, recheckKey])
+
+  // Si está bloqueado (p. ej. registro en revisión), volver a comprobar al regresar a la
+  // pestaña y cada 20 s, para que una aprobación del admin desbloquee el formulario sola
+  useEffect(() => {
+    if (formStatus !== 'blocked') return
+    const recheck = () => {
+      if (document.visibilityState === 'visible') setRecheckKey(k => k + 1)
+    }
+    window.addEventListener('focus', recheck)
+    document.addEventListener('visibilitychange', recheck)
+    const pollId = window.setInterval(recheck, 20000)
+    return () => {
+      window.removeEventListener('focus', recheck)
+      document.removeEventListener('visibilitychange', recheck)
+      window.clearInterval(pollId)
+    }
+  }, [formStatus])
 
   const handleRoleToggle = (rol: string) => {
     setSelectedRoles(prev => 

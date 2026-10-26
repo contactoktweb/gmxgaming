@@ -170,8 +170,8 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
     const initialCurrentAvatar = (currentUser.avatar && !currentUser.avatar.includes('placehold.co')) ? currentUser.avatar : null
     setProfilePhoto(initialCurrentAvatar)
 
-    async function loadAllUserData() {
-      setLoadingData(true)
+    async function loadAllUserData(silent = false) {
+      if (!silent) setLoadingData(true)
       try {
         // 1. Fetch DB Profile (with player game info)
         const { data: profile } = await supabase
@@ -320,7 +320,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
           filter: `id=eq.${user.id}`
         },
         () => {
-          loadAllUserData()
+          loadAllUserData(true)
         }
       )
       .on(
@@ -331,7 +331,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
           table: 'validations'
         },
         () => {
-          loadAllUserData()
+          loadAllUserData(true)
         }
       )
       .on(
@@ -342,13 +342,25 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
           table: 'contracts'
         },
         () => {
-          loadAllUserData()
+          loadAllUserData(true)
         }
       )
       .subscribe()
 
+    // Respaldo si Realtime no está habilitado en las tablas: volver a comprobar el estado
+    // (p. ej. una aprobación) al regresar a la pestaña y cada 45 s mientras está visible
+    const silentReload = () => {
+      if (document.visibilityState === 'visible') loadAllUserData(true)
+    }
+    window.addEventListener('focus', silentReload)
+    document.addEventListener('visibilitychange', silentReload)
+    const pollId = window.setInterval(silentReload, 45000)
+
     return () => {
       supabase.removeChannel(channel)
+      window.removeEventListener('focus', silentReload)
+      document.removeEventListener('visibilitychange', silentReload)
+      window.clearInterval(pollId)
     }
   }, [user])
 
