@@ -175,6 +175,16 @@ function FormContent() {
       return
     }
 
+    if (!fotoFile) {
+      toast.error(t.altaJugador.photoRequired)
+      return
+    }
+
+    if (!identidadFile) {
+      toast.error(t.altaJugador.idRequired)
+      return
+    }
+
     setFormStatus('loading')
 
     try {
@@ -248,8 +258,8 @@ function FormContent() {
           if (!uploadError && data) {
             const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(data.path)
             urlFoto = publicUrlData.publicUrl
-          } else if (uploadError) {
-            console.warn('Warning uploading photo:', uploadError)
+          } else {
+            throw new Error(t.altaJugador.photoUploadFailed + (uploadError?.message ? ` (${uploadError.message})` : ''))
           }
         }
 
@@ -261,8 +271,8 @@ function FormContent() {
           if (!uploadError && data) {
             const { data: publicUrlData } = supabase.storage.from('documents').getPublicUrl(data.path)
             urlIdentidad = publicUrlData.publicUrl
-          } else if (uploadError) {
-            console.warn('Warning uploading ID:', uploadError)
+          } else {
+            throw new Error(t.altaJugador.idUploadFailed + (uploadError?.message ? ` (${uploadError.message})` : ''))
           }
         }
 
@@ -278,8 +288,12 @@ function FormContent() {
             console.warn('Warning uploading passport:', uploadError)
           }
         }
-      } catch (err) {
+      } catch (err: any) {
+        // Foto e identificación son obligatorias: no registrar al jugador sin ellas
         console.error('Error processing player files:', err)
+        toast.error(err?.message || t.altaJugador.photoUploadFailed)
+        setFormStatus('idle')
+        return
       }
       
       const fullName = `${firstName.trim()} ${lastName.trim()}`.trim().toUpperCase()
@@ -776,12 +790,12 @@ function FormContent() {
           
           <div className="space-y-4">
             <label className="text-sm font-500 text-white">
-              {t.altaJugador.idLabel}
+              {t.altaJugador.idLabel} <span className="text-primary">*</span>
             </label>
             <p className="text-xs text-muted-foreground">
               {t.altaJugador.idDesc}
             </p>
-            <FileUpload name="item_meta[750]" icon={<FileText className="h-10 w-10" />} onFileSelect={setIdentidadFile} />
+            <FileUpload name="item_meta[750]" required icon={<FileText className="h-10 w-10" />} onFileSelect={setIdentidadFile} />
           </div>
         </div>
       </div>

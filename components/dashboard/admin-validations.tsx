@@ -100,6 +100,7 @@ const EXCLUDED_FIELDS = new Set([
   'original_tipo_equipo',
   'original_logo',
   'original_avatar',
+  'original_id_photo_url',
   'original_bio'
 ])
 
@@ -903,6 +904,7 @@ export function AdminValidations() {
               }
               if (details.discord_handle !== undefined) updates.discord_handle = details.discord_handle
               if (details.avatar_url !== undefined && details.avatar_url !== '') updates.avatar_url = details.avatar_url
+              if (details.id_photo_url && !details.id_photo_url.includes('placehold.co')) updates.id_photo_url = details.id_photo_url
               if (details.closest_airport !== undefined) updates.closest_airport = details.closest_airport
               if (details.country !== undefined) updates.country = details.country
               if (details.social_ig !== undefined) updates.social_ig = details.social_ig

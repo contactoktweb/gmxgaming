@@ -28,7 +28,8 @@ import {
   EyeOff,
   Mail,
   Check,
-  Loader2
+  Loader2,
+  FileText
 } from 'lucide-react'
 import { cn, formatRoleTitle, formatRolesList, formatNickname, formatPersonName, extractCountry, extractAvatarFromDetails } from '@/lib/utils'
 import { compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS } from '@/lib/image-compression'
@@ -59,6 +60,8 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
   const playerFileInputRef = useRef<HTMLInputElement>(null)
   const [fotoFile, setFotoFile] = useState<File | null>(null)
   const [playerFotoFile, setPlayerFotoFile] = useState<File | null>(null)
+  const [playerIdFile, setPlayerIdFile] = useState<File | null>(null)
+  const playerIdInputRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
   
   const [editForm, setEditForm] = useState({
@@ -427,6 +430,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
       imagesChanged: false
     })
     setPlayerFotoFile(null)
+    setPlayerIdFile(null)
     setIsEditingPlayer(true)
   }
 
@@ -593,12 +597,34 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
           const fileExt = compressed.name.split('.').pop() || 'webp'
           const fileName = `${Date.now()}_player_${user.id}.${fileExt}`
           const { error: uploadError, data } = await supabase.storage.from('avatars').upload(fileName, compressed, SUPABASE_STORAGE_CACHE_OPTIONS)
-          if (!uploadError && data) {
-            const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(data.path)
-            avatarUrl = publicUrlData.publicUrl
-          }
-        } catch (uploadErr) {
-          console.warn('Could not upload avatar file, using existing URL:', uploadErr)
+          if (uploadError || !data) throw uploadError || new Error('Sin respuesta del almacenamiento')
+          const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(data.path)
+          avatarUrl = publicUrlData.publicUrl
+        } catch (uploadErr: any) {
+          // Detenerse: profilePhoto contiene la vista previa en base64 y no debe enviarse como URL
+          toast.error('No se pudo subir la foto de perfil', {
+            description: uploadErr?.message || 'Intenta con otra imagen en formato JPG o PNG.'
+          })
+          return
+        }
+      }
+
+      // Documento de identidad (INE / acta / ID): se guarda en el perfil al aprobarse la solicitud
+      let idPhotoUrl: string = profileData?.id_photo_url || ''
+      if (playerIdFile) {
+        try {
+          const compressedId = await compressImage(playerIdFile, IMAGE_PRESETS.DOCUMENT)
+          const fileExt = compressedId.name.split('.').pop()?.toLowerCase() || 'webp'
+          const fileName = `${Date.now()}_ine_${user.id}.${fileExt}`
+          const { error: uploadError, data } = await supabase.storage.from('documents').upload(fileName, compressedId, SUPABASE_STORAGE_CACHE_OPTIONS)
+          if (uploadError || !data) throw uploadError || new Error('Sin respuesta del almacenamiento')
+          const { data: publicUrlData } = supabase.storage.from('documents').getPublicUrl(data.path)
+          idPhotoUrl = publicUrlData.publicUrl
+        } catch (uploadErr: any) {
+          toast.error('No se pudo subir el documento de identidad', {
+            description: uploadErr?.message || 'Intenta con otra imagen en formato JPG o PNG.'
+          })
+          return
         }
       }
 
@@ -613,6 +639,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
         discord_handle: playerEditForm.discord_handle.trim(),
         bio: playerEditForm.bio.trim(),
         avatar_url: avatarUrl,
+        id_photo_url: idPhotoUrl,
         game: playerEditForm.game,
         game_id: playerEditForm.game_id.trim(),
         server: playerEditForm.server.trim(),
@@ -644,7 +671,8 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
         original_social_twitch: latestValidation?.details?.original_social_twitch || profileData?.social_twitch || '',
         original_social_kick: latestValidation?.details?.original_social_kick || profileData?.social_kick || '',
         original_social_x: latestValidation?.details?.original_social_x || profileData?.social_x || '',
-        original_social_fb: latestValidation?.details?.original_social_fb || profileData?.social_fb || ''
+        original_social_fb: latestValidation?.details?.original_social_fb || profileData?.social_fb || '',
+        original_id_photo_url: profileData?.id_photo_url || ''
       }
 
       let valError = null
@@ -1887,6 +1915,40 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                     </button>
                     <p className="text-[11px] text-muted-foreground">
                       {t.userProfile.recommendedFormats}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Subir Documento de Identidad */}
+                <div className={cn(
+                  "flex items-center gap-5 rounded-xl border p-3",
+                  !profileData?.id_photo_url && !playerIdFile ? "border-amber-500/40 bg-amber-500/5" : "border-border"
+                )}>
+                  <input
+                    type="file"
+                    ref={playerIdInputRef}
+                    onChange={(e) => setPlayerIdFile(e.target.files?.[0] || null)}
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                  />
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border-2 border-border bg-background">
+                    <FileText className={cn("h-6 w-6", playerIdFile || profileData?.id_photo_url ? "text-primary" : "text-amber-500")} />
+                  </div>
+                  <div className="space-y-1.5 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => playerIdInputRef.current?.click()}
+                      className="flex items-center gap-2 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2 text-xs font-600 uppercase tracking-wider text-white transition-colors cursor-pointer"
+                    >
+                      <Upload className="w-4 h-4 text-primary" />
+                      {profileData?.id_photo_url ? t.userProfile.replaceIdDocument : t.userProfile.uploadIdDocument}
+                    </button>
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      {playerIdFile
+                        ? playerIdFile.name
+                        : profileData?.id_photo_url
+                          ? t.userProfile.idDocumentOnFile
+                          : t.userProfile.idDocumentMissing}
                     </p>
                   </div>
                 </div>
