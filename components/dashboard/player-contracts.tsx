@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { ScrollText, Calendar, Clock, AlertCircle, Check, X, UserX, ShieldAlert } from 'lucide-react'
+import Link from 'next/link'
+import { ScrollText, Calendar, Clock, AlertCircle, Check, X, UserX, ShieldAlert, Plus } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
 import { cn, formatRoleTitle } from '@/lib/utils'
@@ -19,6 +20,9 @@ export function PlayerContracts() {
 
   const fetchContracts = useCallback(async () => {
     if (!user) return
+
+      // Concluir contratos vencidos antes de leerlos (respaldo de la tarea programada en Supabase)
+      await supabase.rpc('expire_contracts').then(() => {}, () => {})
       
       const { data } = await supabase
         .from('contracts')
@@ -210,14 +214,30 @@ export function PlayerContracts() {
     return <div className="p-8 text-center text-muted-foreground animate-pulse">{t.playerContracts.loading}</div>
   }
 
+  // Sin contratos vigentes (todos finalizados, cancelados o rechazados): puede registrar uno nuevo
+  const hasOngoingContract = contracts.some(c =>
+    ['active', 'activo', 'pendiente', 'pending_manager', 'pending_player_release', 'pending_manager_release'].includes(c.status)
+  )
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
       <div className="rounded-xl border border-border bg-surface p-6 sm:p-8">
-        <h3 className="font-display text-2xl font-700 uppercase tracking-tight text-white mb-6 flex items-center gap-2">
-          <ScrollText className="h-6 w-6 text-primary" />
-          {t.playerContracts.title}
-        </h3>
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <h3 className="font-display text-2xl font-700 uppercase tracking-tight text-white flex items-center gap-2">
+            <ScrollText className="h-6 w-6 text-primary" />
+            {t.playerContracts.title}
+          </h3>
+          {!hasOngoingContract && (
+            <Link
+              href="/registro/alta-de-contrato"
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-700 uppercase tracking-wider text-white transition-colors hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4" />
+              {t.userProfile.registerNewContract}
+            </Link>
+          )}
+        </div>
 
         {contracts.length === 0 ? (
           <div className="text-center py-12 rounded-lg bg-background border border-dashed border-border">

@@ -153,7 +153,13 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
     (activeContract && (activeContract.status === 'pending' || activeContract.status === 'pendiente' || activeContract.status === 'pending_manager' || activeContract.status === 'pending_player_release' || activeContract.status === 'pending_manager_release')) || 
     contractVal?.status === 'pending'
   )
-  const isContractRejected = !isContractApproved && !isContractPending && Boolean(
+  // El contrato más reciente ya concluyó (por fecha de fin o baja): mostrarlo como finalizado
+  // y permitir registrar uno nuevo
+  const latestContract = userContracts[0]
+  const isContractFinished = !isContractApproved && !isContractPending && Boolean(
+    latestContract && (latestContract.status === 'completado' || latestContract.status === 'completed')
+  )
+  const isContractRejected = !isContractApproved && !isContractPending && !isContractFinished && Boolean(
     contractVal?.status === 'rejected' ||
     userContracts.some((c: any) => c.status === 'rejected')
   )
@@ -253,6 +259,8 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
           .order('created_at', { ascending: false })
 
         // 3b. Contracts (Teams playing for)
+        // Concluir contratos vencidos antes de leerlos (respaldo de la tarea programada en Supabase)
+        if (!silent) await supabase.rpc('expire_contracts').then(() => {}, () => {})
         const { data: contractsData } = await supabase
           .from('contracts')
           .select(`
@@ -1366,6 +1374,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                    activeContract?.status === 'pending_manager_release' ? t.userProfile.releaseInProgress :
                    isContractPending ? t.userProfile.pending :
                    isContractRejected ? t.userProfile.rejected :
+                   isContractFinished ? t.userProfile.contractFinished :
                    t.userProfile.noContracts}
                 </span>
               </div>
@@ -1374,8 +1383,16 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                 <h4 className="font-display font-700 text-lg text-white">
                   {activeContract?.teams?.name 
                     ? `${t.userProfile.contract}: ${activeContract.teams.name}` 
-                    : (contractVal?.target_name ? `Contrato: ${contractVal.target_name}` : t.userProfile.contracts)}
+                    : isContractFinished && latestContract?.teams?.name
+                      ? `${t.userProfile.contract}: ${latestContract.teams.name}`
+                      : (contractVal?.target_name ? `Contrato: ${contractVal.target_name}` : t.userProfile.contracts)}
                 </h4>
+                {isContractFinished && (latestContract?.conclusion_date || latestContract?.end_date) && (
+                  <p className="text-xs font-600 text-muted-foreground uppercase tracking-wider mt-0.5 flex items-center gap-1.5">
+                    <Calendar className="h-3 w-3" />
+                    {t.userProfile.finishedOn.replace('{date}', new Date(latestContract.conclusion_date || latestContract.end_date).toLocaleDateString())}
+                  </p>
+                )}
                 {activeContract && isContractApproved && (
                   <p className="text-xs font-600 text-purple-400 uppercase tracking-wider mt-0.5 flex items-center gap-1.5">
                     <Calendar className="h-3 w-3" />
@@ -1418,6 +1435,8 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                       ? 'La vinculación del contrato fue rechazada por la administración o directiva.'
                       : isContractPending
                       ? 'El contrato está pendiente de confirmación por el manager o la administración de GMX Gaming.'
+                      : isContractFinished
+                      ? t.userProfile.contractFinishedDesc
                       : t.userProfile.noActiveContractDesc}
                   </p>
                 )}
@@ -1453,6 +1472,13 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                   className="flex items-center gap-2 text-sm font-600 text-red-400 hover:text-red-300 transition-colors"
                 >
                   {t.userProfile.registerContract} <ArrowRight className="h-4 w-4" />
+                </Link>
+              ) : isContractFinished ? (
+                <Link 
+                  href="/registro/alta-de-contrato" 
+                  className="flex items-center gap-2 text-sm font-600 text-primary hover:text-primary/80 transition-colors"
+                >
+                  {t.userProfile.registerNewContract} <ArrowRight className="h-4 w-4" />
                 </Link>
               ) : (
                 <Link 
