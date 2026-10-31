@@ -157,6 +157,9 @@ export function AdminPlayers() {
     async function init() {
       setLoading(true)
 
+      // Concluir contratos vencidos antes de leerlos (respaldo de la tarea programada en Supabase)
+      await supabase.rpc('expire_contracts').then(() => {}, () => {})
+
       // 1. Cargar perfiles que son jugadores o tienen estado de jugador
       const { data: playersData, error } = await supabase
         .from('profiles')

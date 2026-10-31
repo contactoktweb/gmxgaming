@@ -183,6 +183,9 @@ export function AltaContratoForm() {
         })
         .sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }))
 
+      // Concluir contratos vencidos antes de leerlos (respaldo de la tarea programada en Supabase): un contrato vencido no debe bloquear uno nuevo
+      await supabase.rpc('expire_contracts').then(() => {}, () => {})
+
       // 4. Obtener únicamente contratos activos o en proceso (excluye completados, cancelados y rechazados)
       const { data: contracts } = await supabase
         .from('contracts')

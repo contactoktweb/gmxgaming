@@ -175,6 +175,9 @@ export function AdminTeams() {
         })
       }
 
+      // Concluir contratos vencidos antes de leerlos (respaldo de la tarea programada en Supabase)
+      await supabase.rpc('expire_contracts').then(() => {}, () => {})
+
       // Cargar perfiles de managers disponibles para asignación
       const { data: managersData } = await supabase
         .from('profiles')
