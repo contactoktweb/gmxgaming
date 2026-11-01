@@ -508,7 +508,11 @@ export function AdminPlayers() {
             contractTimeLeft,
             team,
             activeTeams,
-            status: (p.player_status && p.player_status !== 'none') ? p.player_status : (activeContractsRaw.length > 0 ? 'active' : 'inactive'),
+            // Sin estado guardado ('none'), un jugador con registro aprobado se considera activo.
+            // Antes se mostraba 'inactive' y al guardar "Detalles / Editar" se escribía en la BD.
+            status: (p.player_status && p.player_status !== 'none')
+              ? p.player_status
+              : ((activeContractsRaw.length > 0 || jugadorVal?.status === 'active' || jugadorVal?.status === 'approved') ? 'active' : 'inactive'),
             avatar: resolvedAvatar,
             discord: p.discord_handle,
             country: playerCountry,
