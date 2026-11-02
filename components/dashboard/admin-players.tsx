@@ -521,6 +521,9 @@ export function AdminPlayers() {
             rawDetails: {
               ...extra.details,
               ...p,
+              // Un campo vacío en el perfil no debe ocultar el documento que sí trae la solicitud
+              id_photo_url: p.id_photo_url || extra.details?.id_photo_url || null,
+              passport_photo_url: p.passport_photo_url || extra.details?.passport_photo_url || null,
               avatar_url: resolvedAvatar,
               avatar: resolvedAvatar,
               email: playerEmail,
@@ -1548,7 +1551,12 @@ export function AdminPlayers() {
                           <div key={item.key} className="space-y-3">
                             <label className="text-xs font-600 text-muted-foreground uppercase block">{item.label}</label>
                             <div className="relative w-full h-36 rounded-xl border border-border bg-surface overflow-hidden flex items-center justify-center group">
-                              {url ? (
+                              {url && /\.pdf($|\?)/i.test(url) ? (
+                                <a href={url} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-1.5 text-xs font-600 text-primary hover:underline">
+                                  <FileText className="w-7 h-7" />
+                                  Ver PDF
+                                </a>
+                              ) : url ? (
                                 <img src={url} alt={item.label} className="w-full h-full object-cover" />
                               ) : (
                                 <div className="text-center p-3 text-muted-foreground text-xs">
@@ -1556,7 +1564,7 @@ export function AdminPlayers() {
                                   Sin imagen
                                 </div>
                               )}
-                              {url && (
+                              {url && !/\.pdf($|\?)/i.test(url) && (
                                 <button
                                   type="button"
                                   onClick={() => setLightboxImage({ src: url, label: item.label })}

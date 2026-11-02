@@ -1954,7 +1954,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                     type="file"
                     ref={playerIdInputRef}
                     onChange={(e) => setPlayerIdFile(e.target.files?.[0] || null)}
-                    accept="image/jpeg,image/png,image/webp"
+                    accept="image/jpeg,image/png,image/webp,application/pdf,.pdf"
                     className="hidden"
                   />
                   <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border-2 border-border bg-background">
