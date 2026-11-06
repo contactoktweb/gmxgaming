@@ -464,8 +464,10 @@ export function AdminPlayers() {
               resolvedAvatar = p.avatar
             }
           } else if (isModApproved) {
-            // Si la modificación fue aprobada por el administrador, la imagen cambiada es la oficial
-            const approvedAvatar = proposedModAvatar || p.avatar_url || originalApprovedAvatar
+            // La modificación aprobada ya se aplicó al perfil al aprobarla; si después un admin
+            // cambió la foto desde "Detalles / Editar", la del perfil es la vigente y debe ganar
+            const profileAvatar = (p.avatar_url && !p.avatar_url.includes('placehold.co')) ? p.avatar_url : null
+            const approvedAvatar = profileAvatar || proposedModAvatar || originalApprovedAvatar
             if (approvedAvatar && !approvedAvatar.includes('placehold.co')) {
               resolvedAvatar = approvedAvatar
             } else if (originalApprovedAvatar) {
@@ -743,7 +745,10 @@ export function AdminPlayers() {
               gender: genderVal,
               nickname: nickVal,
               name: nameVal,
-              country: countryVal
+              country: countryVal,
+              // Mantener la foto e identificación del registro alineadas con lo que fijó el admin
+              ...(updates.avatar_url ? { avatar_url: updates.avatar_url } : {}),
+              ...(updates.id_photo_url ? { id_photo_url: updates.id_photo_url } : {})
             }
           }).eq('id', userVal[0].id)
         } else {
