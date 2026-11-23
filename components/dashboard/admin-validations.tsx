@@ -108,7 +108,7 @@ const EXCLUDED_FIELDS = new Set([
 // de una subida que falló antes de las correcciones): se ignora al aprobar y se avisa al admin
 function isLostImage(value: unknown, original: unknown): boolean {
   return typeof value === 'string' && value.trim() !== '' && value !== original
-    && !value.includes('placehold.co') && !isStoredImageUrl(value)
+    && !value.startsWith('/') && !value.includes('placehold.co') && !isStoredImageUrl(value)
 }
 
 function getAdminDisplayName(user: any): string {
@@ -537,7 +537,12 @@ export function AdminValidations() {
         // 5. Eliminar la validación actual
         await supabase.from('validations').delete().eq('id', confirmAction.id)
       } else if (requestToUpdate?.type === 'modificacion') {
-        await supabase.from('profiles').update({ edit_requested: false }).eq('id', confirmAction.id)
+        // La marca está en el perfil del jugador: usar su id, no el de la solicitud (con el de la
+        // solicitud no se actualizaba nada y la marca quedaba activa para siempre)
+        const modUserId = requestToUpdate.details?.team_id ? null : requestToUpdate.details?.user_id
+        if (modUserId) {
+          await supabase.from('profiles').update({ edit_requested: false }).eq('id', modUserId)
+        }
         await supabase.from('validations').delete().eq('id', confirmAction.id)
       } else if (requestToUpdate?.type === 'contrato' || requestToUpdate?.type === 'baja_contrato' || requestToUpdate?.type === 'inscripcion_torneo') {
         await supabase.from('validations').delete().eq('id', confirmAction.id)

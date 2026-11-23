@@ -149,9 +149,12 @@ export function AdminSettings() {
     if (!tournamentTypes.some(t => t.toLowerCase() === targetType.toLowerCase())) {
       const updated = [...tournamentTypes, targetType]
       setTournamentTypes(updated)
+      // Sin await ni .then(), Supabase no envía la petición: el tipo nunca se guardaba
       supabase.from('app_settings').upsert({
         id: 'tournament_types',
         value: updated
+      }).then(({ error }) => {
+        if (error) toast.error('No se pudo guardar el tipo de torneo: ' + error.message)
       })
     }
 

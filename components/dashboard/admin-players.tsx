@@ -658,9 +658,13 @@ export function AdminPlayers() {
     const birthVal = editingDetails.birth_date?.trim() || ''
     const genderVal = editingDetails.gender?.trim() || 'Masculino'
 
-    // Imágenes: solo se guardan enlaces a archivos reales. Una imagen de respaldo
-    // ('/placeholder-user.jpg') o una vista previa base64 no deben escribirse en el perfil.
-    const storedImage = (value: any) => isStoredImageUrl(value) ? value.trim() : undefined
+    // Imágenes: un campo vacío quita la imagen (null); un enlace a un archivo real se guarda; cualquier
+    // otro valor (la imagen de respaldo '/placeholder-user.jpg' o una vista previa base64) se ignora
+    // para no escribirlo en el perfil, y la imagen actual se conserva.
+    const storedImage = (value: any) => {
+      if (typeof value !== 'string' || value.trim() === '') return null
+      return isStoredImageUrl(value) ? value.trim() : undefined
+    }
 
     const updates: Record<string, any> = {
       name: nameVal,
@@ -716,9 +720,11 @@ export function AdminPlayers() {
               nickname: nickVal,
               name: nameVal,
               country: countryVal,
-              // Mantener la foto e identificación del registro alineadas con lo que fijó el admin
-              ...(updates.avatar_url ? { avatar_url: updates.avatar_url } : {}),
-              ...(updates.id_photo_url ? { id_photo_url: updates.id_photo_url } : {})
+              // Mantener la foto y los documentos del registro alineados con lo que fijó el admin
+              // (incluido quitarlos: si no, el panel volvería a mostrarlos y a guardarlos)
+              ...('avatar_url' in updates ? { avatar_url: updates.avatar_url, avatar: updates.avatar_url } : {}),
+              ...('id_photo_url' in updates ? { id_photo_url: updates.id_photo_url } : {}),
+              ...('passport_photo_url' in updates ? { passport_photo_url: updates.passport_photo_url } : {})
             }
           }).eq('id', userVal[0].id)
         } else {

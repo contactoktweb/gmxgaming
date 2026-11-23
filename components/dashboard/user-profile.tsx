@@ -242,8 +242,12 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               && isStoredImageUrl(v.details?.avatar_url) && v.details.avatar_url !== v.details.original_avatar)
             const fallbackAvatar = approvedPlayerMod?.details?.avatar_url || pValAvatar
             if (isStoredImageUrl(fallbackAvatar) && dbAvatarMissing) {
-              setProfilePhoto(fallbackAvatar)
-              supabase.from('profiles').update({ avatar_url: fallbackAvatar }).eq('id', currentUser.id)
+              // await: sin él Supabase no envía la petición y la foto solo cambiaba en pantalla
+              const { error: fillError } = await supabase.from('profiles').update({ avatar_url: fallbackAvatar }).eq('id', currentUser.id)
+              if (!fillError) {
+                setProfilePhoto(fallbackAvatar)
+                setProfileData((prev: any) => prev ? ({ ...prev, avatar_url: fallbackAvatar }) : prev)
+              }
             }
           }
           // Nota: una modificación pendiente o rechazada no requiere "restaurar" la foto del perfil:
@@ -416,7 +420,9 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
   }
 
   const openEditPlayer = () => {
-    const pendingDetails = (isRequested || hasRejectedModification) ? (modVal?.details || latestValidation?.details) : null
+    // Solo se prellena desde una solicitud de jugador pendiente o rechazada. Una aprobada es historial,
+    // y la validación más reciente puede ser de otro tipo (registro, contrato, equipo)
+    const pendingDetails = (modVal && (modVal.status === 'pending' || modVal.status === 'rejected')) ? modVal.details : null
     const gameInfo = profileData?.player_game_info?.[0] || {}
     // La solicitud anterior copia la foto/identificación vigentes aunque no las cambie; reutilizarlas
     // sin más convertía una solicitud sin cambio de foto en un "cambio" que regresaba fotos nuevas
@@ -432,7 +438,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
       nickname: pendingDetails?.nickname || pendingDetails?.game_nickname || profileData?.nickname || profileData?.game_nickname || '',
       discord_handle: pendingDetails?.discord_handle || profileData?.discord_handle || '',
       bio: pendingDetails?.bio || profileData?.bio || bio || '',
-      profilePhoto: prevProposedPhoto || currentPhoto || profilePhoto || null,
+      profilePhoto: prevProposedPhoto || currentPhoto || null,
       game: pendingDetails?.game || gameInfo.game || 'Mobile Legends',
       game_id: pendingDetails?.game_id || gameInfo.game_id || '',
       server: pendingDetails?.server || gameInfo.server || '',
@@ -628,9 +634,11 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
 
     try {
       const gameInfo = profileData.player_game_info?.[0] || {}
-      let avatarUrl = playerEditForm.profilePhoto || profileData.avatar_url || profilePhoto
+      // Foto del formulario (la que el jugador ve); sin una nueva, la vigente al abrirlo. No usar el
+      // estado en vivo: pudo cambiar mientras el formulario estaba abierto
+      let avatarUrl: string = playerEditForm.profilePhoto || playerEditForm.originalPhoto || ''
       // Una vista previa base64 (de una solicitud anterior con subida fallida) no es una foto guardada
-      if (typeof avatarUrl === 'string' && avatarUrl.startsWith('data:') && !playerFotoFile) {
+      if (avatarUrl.startsWith('data:') && !playerFotoFile) {
         avatarUrl = playerEditForm.originalPhoto || ''
       }
 

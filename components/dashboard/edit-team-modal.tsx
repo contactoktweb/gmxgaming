@@ -359,8 +359,11 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
         // guardado. La solicitud copia el logo vigente aunque no lo cambie: reutilizarlo sin más
         // regresaba logos que un admin cambió después; y una vista previa blob:/data: de una
         // subida fallida dejaría el logo roto.
-        const prevLogo = isStoredImageUrl(d?.logo_url) && d.logo_url !== d.original_logo ? d.logo_url : ''
-        const prevJersey = isStoredImageUrl(d?.jersey_url) && d.jersey_url !== d.original_jersey ? d.jersey_url : ''
+        // Solo una modificación previa propone imágenes; el registro del equipo ('equipo') no tiene
+        // original_logo y su logo no es un cambio
+        const isPrevModification = validation?.type === 'modificacion'
+        const prevLogo = isPrevModification && isStoredImageUrl(d?.logo_url) && d.logo_url !== d.original_logo ? d.logo_url : ''
+        const prevJersey = isPrevModification && isStoredImageUrl(d?.jersey_url) && d.jersey_url !== d.original_jersey ? d.jersey_url : ''
         setLogoUrl(prevLogo || team.logo_url || '')
         setLogoFile(null)
         setJerseyUrl(prevJersey || team.jersey_url || '')
@@ -549,8 +552,9 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
 
       let savedValidation: any = null
 
-      // Si ya hay una solicitud pendiente con id, actualizamos
-      if (validation?.id && validation.status === 'pending') {
+      // Si ya hay una modificación pendiente, la actualizamos. Nunca se escribe sobre el registro del
+      // equipo ('equipo'): aprobarlo solo cambia el estado, así que el logo y los datos nuevos se perdían
+      if (validation?.id && validation.status === 'pending' && validation.type === 'modificacion') {
         const { error } = await supabase.from('validations').update({
           target_name: `${name.trim().toUpperCase()} (Modificación de Equipo)`,
           submitted_by: senderNick,
