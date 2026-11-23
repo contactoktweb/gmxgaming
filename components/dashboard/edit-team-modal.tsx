@@ -49,7 +49,9 @@ export interface EditTeamModalProps {
   team: any
   isOpen: boolean
   onClose: () => void
-  onSuccess?: (updatedDetails?: any) => void
+  // savedValidation: la solicitud que realmente quedó guardada (con su id), para que la página
+  // no siga usando una anterior (borrada o la del registro del equipo) en el siguiente envío
+  onSuccess?: (updatedDetails?: any, savedValidation?: any) => void
   validation?: any
 }
 
@@ -353,11 +355,15 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
           setSelectedGames(['Mobile Legends'])
         }
 
-        // Solo se reutiliza la imagen de una solicitud previa si es un archivo realmente guardado
-        // (una vista previa blob:/data: de una subida fallida dejaría el logo roto)
-        setLogoUrl((isStoredImageUrl(d?.logo_url) ? d.logo_url : '') || team.logo_url || '')
+        // Solo se reutiliza la imagen de una solicitud previa si era un cambio real y un archivo
+        // guardado. La solicitud copia el logo vigente aunque no lo cambie: reutilizarlo sin más
+        // regresaba logos que un admin cambió después; y una vista previa blob:/data: de una
+        // subida fallida dejaría el logo roto.
+        const prevLogo = isStoredImageUrl(d?.logo_url) && d.logo_url !== d.original_logo ? d.logo_url : ''
+        const prevJersey = isStoredImageUrl(d?.jersey_url) && d.jersey_url !== d.original_jersey ? d.jersey_url : ''
+        setLogoUrl(prevLogo || team.logo_url || '')
         setLogoFile(null)
-        setJerseyUrl((isStoredImageUrl(d?.jersey_url) ? d.jersey_url : '') || team.jersey_url || '')
+        setJerseyUrl(prevJersey || team.jersey_url || '')
         setJerseyFile(null)
 
         setSocialIg(d?.social_ig || team.social_ig || '')
@@ -541,6 +547,8 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
 
       const senderNick = user?.nickname || user?.name || user?.email || 'Líder de Equipo'
 
+      let savedValidation: any = null
+
       // Si ya hay una solicitud pendiente con id, actualizamos
       if (validation?.id && validation.status === 'pending') {
         const { error } = await supabase.from('validations').update({
@@ -551,6 +559,7 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
         }).eq('id', validation.id)
 
         if (error) throw error
+        savedValidation = { ...validation, status: 'pending', details: payloadDetails }
 
         toast.success(t.editTeamModal.toastUpdatedTitle, {
           description: t.editTeamModal.toastUpdatedDesc
@@ -574,6 +583,7 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
         }).select().single()
 
         if (error) throw error
+        savedValidation = newVal
 
         toast.success(t.editTeamModal.toastCreatedTitle, {
           description: t.editTeamModal.toastCreatedDesc
@@ -581,7 +591,7 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
       }
 
       if (onSuccess) {
-        onSuccess(payloadDetails)
+        onSuccess(payloadDetails, savedValidation)
       }
       onClose()
     } catch (err: any) {

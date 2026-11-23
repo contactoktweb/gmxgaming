@@ -887,15 +887,16 @@ export function PlayerTeams() {
           isOpen={!!editingTeam}
           onClose={() => setEditingTeam(null)}
           validation={teamValidations[editingTeam.id]}
-          onSuccess={(updatedDetails) => {
+          onSuccess={(updatedDetails, savedValidation) => {
             if (updatedDetails) {
               setTeamValidations(prev => ({
                 ...prev,
-                [editingTeam.id]: {
-                  ...(teamValidations[editingTeam.id] || {}),
-                  status: 'pending',
-                  details: updatedDetails
-                }
+                // Usar la solicitud que realmente se guardó: conservar el id de la anterior hacía que
+                // un segundo envío actualizara una solicitud borrada (y se perdiera el cambio) o
+                // sobrescribiera el registro del equipo
+                [editingTeam.id]: savedValidation
+                  ? { ...savedValidation, status: 'pending', details: updatedDetails }
+                  : { ...(teamValidations[editingTeam.id] || {}), status: 'pending', details: updatedDetails }
               }))
             }
           }}

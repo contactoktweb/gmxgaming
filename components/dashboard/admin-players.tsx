@@ -6,7 +6,7 @@ import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
 import { GmxButton } from '@/components/gmx-button'
 import { toast } from 'sonner'
-import { cn, formatNickname, formatPersonName, formatRoleTitle, extractCountry, DEFAULT_COUNTRIES, extractAvatarFromDetails } from '@/lib/utils'
+import { cn, formatNickname, formatPersonName, formatRoleTitle, extractCountry, DEFAULT_COUNTRIES, extractAvatarFromDetails, isStoredImageUrl } from '@/lib/utils'
 import { compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS } from '@/lib/image-compression'
 import { AdminPagination } from '@/components/dashboard/admin-pagination'
 
@@ -434,56 +434,20 @@ export function AdminPlayers() {
           })
 
           // Identificar validaciones de modificación y de alta de jugador de ESTE jugador
-          const modVal = pValidations.find((v: any) => v.type === 'modificacion')
+          const modVal = pValidations.find((v: any) => v.type === 'modificacion' && !v.details?.team_id)
           const jugadorVal = pValidations.find((v: any) => v.type === 'jugador' && (v.status === 'active' || v.status === 'approved')) ||
                              pValidations.find((v: any) => v.type === 'jugador')
 
-          // Imagen que se mantenía anteriormente antes de solicitar la modificación / antes de aprobar
-          const originalApprovedAvatar = (modVal?.details?.original_avatar && !modVal.details.original_avatar.includes('placehold.co'))
-            ? modVal.details.original_avatar
-            : (jugadorVal ? extractAvatarFromDetails(jugadorVal.details) : null)
-
-          // Imagen que se mandó a modificar en la solicitud
-          const proposedModAvatar = modVal ? extractAvatarFromDetails(modVal.details) : null
-
-          // ¿El cambio de imagen NO fue aprobado? (la modificación está pendiente o fue rechazada)
-          const isModUnapproved = Boolean(modVal && (modVal.status === 'pending' || modVal.status === 'rejected'))
-          const isModApproved = Boolean(modVal && (modVal.status === 'approved' || modVal.status === 'active'))
-
-          let resolvedAvatar = '/placeholder-user.jpg'
-
-          if (isModUnapproved) {
-            // SI EL CAMBIO NO FUE APROBADO: Si la BD ya tenía la imagen modificada propuesta, mostrar la anterior legítima
-            if (proposedModAvatar && p.avatar_url === proposedModAvatar && originalApprovedAvatar) {
-              resolvedAvatar = originalApprovedAvatar
-            } else if (p.avatar_url && !p.avatar_url.includes('placehold.co')) {
-              resolvedAvatar = p.avatar_url
-            } else if (originalApprovedAvatar) {
-              resolvedAvatar = originalApprovedAvatar
-            } else if (p.avatar && !p.avatar.includes('placehold.co')) {
-              resolvedAvatar = p.avatar
-            }
-          } else if (isModApproved) {
-            // La modificación aprobada ya se aplicó al perfil al aprobarla; si después un admin
-            // cambió la foto desde "Detalles / Editar", la del perfil es la vigente y debe ganar
-            const profileAvatar = (p.avatar_url && !p.avatar_url.includes('placehold.co')) ? p.avatar_url : null
-            const approvedAvatar = profileAvatar || proposedModAvatar || originalApprovedAvatar
-            if (approvedAvatar && !approvedAvatar.includes('placehold.co')) {
-              resolvedAvatar = approvedAvatar
-            } else if (originalApprovedAvatar) {
-              resolvedAvatar = originalApprovedAvatar
-            }
-          } else {
-            // Sin solicitud de modificación: usar foto de profiles o la foto de la postulación de jugador aprobada
-            const defaultPlayerAvatar = jugadorVal ? extractAvatarFromDetails(jugadorVal.details) : null
-            if (p.avatar_url && !p.avatar_url.includes('placehold.co')) {
-              resolvedAvatar = p.avatar_url
-            } else if (p.avatar && !p.avatar.includes('placehold.co')) {
-              resolvedAvatar = p.avatar
-            } else if (defaultPlayerAvatar) {
-              resolvedAvatar = defaultPlayerAvatar
-            }
-          }
+          // Foto a mostrar: la del perfil, igual que en las páginas públicas. Las solicitudes nunca
+          // escriben su foto propuesta en el perfil, así que no hay nada que "corregir" con ellas;
+          // hacerlo mostraba (y al guardar, escribía) la foto del registro encima de fotos más nuevas.
+          // Solo si el perfil no tiene una foto guardada se usa como respaldo la aprobada o la del registro.
+          const approvedModAvatar = (modVal && (modVal.status === 'approved' || modVal.status === 'active'))
+            ? extractAvatarFromDetails(modVal.details)
+            : null
+          const registrationAvatar = jugadorVal ? extractAvatarFromDetails(jugadorVal.details) : null
+          const resolvedAvatar = [p.avatar_url, p.avatar, approvedModAvatar, registrationAvatar]
+            .find((url): url is string => isStoredImageUrl(url)) || '/placeholder-user.jpg'
 
           // Priorizar nickname gaming legítimo (evitar que se use el nombre real como nickname)
           const nicknameCandidates = [
@@ -694,7 +658,11 @@ export function AdminPlayers() {
     const birthVal = editingDetails.birth_date?.trim() || ''
     const genderVal = editingDetails.gender?.trim() || 'Masculino'
 
-    const updates = {
+    // Imágenes: solo se guardan enlaces a archivos reales. Una imagen de respaldo
+    // ('/placeholder-user.jpg') o una vista previa base64 no deben escribirse en el perfil.
+    const storedImage = (value: any) => isStoredImageUrl(value) ? value.trim() : undefined
+
+    const updates: Record<string, any> = {
       name: nameVal,
       nickname: nickVal || gameNickVal,
       discord_handle: editingDetails.discord_handle?.trim() || null,
@@ -703,10 +671,10 @@ export function AdminPlayers() {
       player_status: editingDetails.player_status || 'active',
       is_featured: Boolean(editingDetails.is_featured),
       passport_number: editingDetails.passport_number?.trim() || null,
-      avatar_url: (editingDetails.avatar_url?.trim() && !editingDetails.avatar_url.includes('placehold.co')) ? editingDetails.avatar_url.trim() : null,
-      cover_url: editingDetails.cover_url?.trim() || null,
-      id_photo_url: editingDetails.id_photo_url?.trim() || null,
-      passport_photo_url: editingDetails.passport_photo_url?.trim() || null,
+      avatar_url: storedImage(editingDetails.avatar_url),
+      cover_url: storedImage(editingDetails.cover_url),
+      id_photo_url: storedImage(editingDetails.id_photo_url),
+      passport_photo_url: storedImage(editingDetails.passport_photo_url),
       social_x: editingDetails.social_x?.trim() || null,
       social_ig: editingDetails.social_ig?.trim() || null,
       social_tiktok: editingDetails.social_tiktok?.trim() || null,
@@ -715,6 +683,8 @@ export function AdminPlayers() {
       social_kick: editingDetails.social_kick?.trim() || null,
       social_fb: editingDetails.social_fb?.trim() || null,
     }
+    // Sin un archivo válido, no tocar la imagen que ya tiene el perfil
+    Object.keys(updates).forEach(key => { if (updates[key] === undefined) delete updates[key] })
 
     const { error } = await supabase.from('profiles').update(updates).eq('id', selectedPlayer.id)
     if (!error) {

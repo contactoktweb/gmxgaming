@@ -104,6 +104,13 @@ const EXCLUDED_FIELDS = new Set([
   'original_bio'
 ])
 
+// Imagen de una solicitud que se quiso cambiar pero nunca quedó guardada (vista previa blob:/data:
+// de una subida que falló antes de las correcciones): se ignora al aprobar y se avisa al admin
+function isLostImage(value: unknown, original: unknown): boolean {
+  return typeof value === 'string' && value.trim() !== '' && value !== original
+    && !value.includes('placehold.co') && !isStoredImageUrl(value)
+}
+
 function getAdminDisplayName(user: any): string {
   if (!user) return 'Admin Principal (Raúl)'
   const name = user.nickname || user.name || user.email?.split('@')[0] || 'Admin'
@@ -640,10 +647,10 @@ export function AdminValidations() {
             if (requestToUpdate.details?.discord || requestToUpdate.details?.discord_handle) {
               profileUpdates.discord_handle = requestToUpdate.details?.discord || requestToUpdate.details?.discord_handle
             }
-            if (requestToUpdate.details?.id_photo_url && !requestToUpdate.details.id_photo_url.includes('placehold.co')) {
+            if (isStoredImageUrl(requestToUpdate.details?.id_photo_url)) {
               profileUpdates.id_photo_url = requestToUpdate.details.id_photo_url
             }
-            if (requestToUpdate.details?.passport_photo_url) {
+            if (isStoredImageUrl(requestToUpdate.details?.passport_photo_url)) {
               profileUpdates.passport_photo_url = requestToUpdate.details.passport_photo_url
             }
 
@@ -820,6 +827,9 @@ export function AdminValidations() {
               // (no una vista previa blob: de una subida fallida, ni la copia del logo que ya había)
               if (isStoredImageUrl(details.logo_url) && details.logo_url !== details.original_logo) updates.logo_url = details.logo_url
               if (isStoredImageUrl(details.jersey_url) && details.jersey_url !== details.original_jersey) updates.jersey_url = details.jersey_url
+              if (isLostImage(details.logo_url, details.original_logo) || isLostImage(details.jersey_url, details.original_jersey)) {
+                toast.warning('El logo o jersey de esta solicitud no se guardó correctamente y no se aplicó. Pide al manager que lo vuelva a subir.')
+              }
               if (details.games !== undefined) updates.games = details.games
               if (details.social_ig !== undefined) updates.social_ig = details.social_ig
               if (details.social_tiktok !== undefined) updates.social_tiktok = details.social_tiktok
@@ -909,6 +919,9 @@ export function AdminValidations() {
               // que había al enviarla; aplicarla siempre regresaba cambios hechos después por un admin.
               if (isStoredImageUrl(details.avatar_url) && details.avatar_url !== details.original_avatar) updates.avatar_url = details.avatar_url
               if (isStoredImageUrl(details.id_photo_url) && details.id_photo_url !== details.original_id_photo_url) updates.id_photo_url = details.id_photo_url
+              if (isLostImage(details.avatar_url, details.original_avatar) || isLostImage(details.id_photo_url, details.original_id_photo_url)) {
+                toast.warning('La foto o identificación de esta solicitud no se guardó correctamente y no se aplicó. Pide al jugador que la vuelva a subir.')
+              }
               if (details.closest_airport !== undefined) updates.closest_airport = details.closest_airport
               if (details.country !== undefined) updates.country = details.country
               if (details.social_ig !== undefined) updates.social_ig = details.social_ig
@@ -979,22 +992,10 @@ export function AdminValidations() {
               }).eq('type', 'modificacion').eq('status', 'pending').filter('details->>user_id', 'eq', userId)
             } else {
               // Registrar rechazo con motivo obligatorio y cancelar edit_requested en profiles.
-              // La foto propuesta vive solo en la solicitud, así que rechazar no debe tocar la foto
-              // del perfil: solo se restaura si el perfil quedó con esa foto propuesta (datos
-              // antiguos). Restaurarla siempre borraba fotos más nuevas (de un admin o aprobadas).
+              // La foto propuesta vive solo en la solicitud (enviarla nunca la escribe en el perfil),
+              // así que rechazar no debe tocar la foto: "restaurarla" regresaba fotos más nuevas
+              // (de un admin o aprobadas) a la del registro.
               const revertUpdates: any = { edit_requested: false }
-              const proposedAvatar = details.avatar_url
-              const originalAvatar = details.original_avatar
-              if (isStoredImageUrl(proposedAvatar) && isStoredImageUrl(originalAvatar) && proposedAvatar !== originalAvatar) {
-                const { data: currentProfile } = await supabase
-                  .from('profiles')
-                  .select('avatar_url')
-                  .eq('id', userId)
-                  .maybeSingle()
-                if (currentProfile?.avatar_url === proposedAvatar) {
-                  revertUpdates.avatar_url = originalAvatar
-                }
-              }
 
               await supabase.from('profiles').update(revertUpdates).eq('id', userId)
 
@@ -1111,21 +1112,6 @@ export function AdminValidations() {
     if (cleanDetails.game_nickname) cleanDetails.game_nickname = formatNickname(cleanDetails.game_nickname).trim()
 
     let error = null;
-
-    // Imágenes: solo se copian al perfil/equipo si el admin las cambió en esta edición. Guardar
-    // una solicitud antigua (p. ej. para corregir un correo) reemplazaba la foto o el logo actual
-    // por los de la solicitud.
-    const originalDetails = selectedRequest.details || {}
-    const imageChangedHere = (key: string) =>
-      isStoredImageUrl((editingDetails as any)[key]) && (editingDetails as any)[key] !== (originalDetails as any)[key]
-    const stripUnchangedImages = (obj: Record<string, any>) => {
-      for (const key of ['logo_url', 'jersey_url', 'avatar_url', 'id_photo_url', 'passport_photo_url', 'cover_url']) {
-        if (key in obj && !imageChangedHere(key)) delete obj[key]
-      }
-      return obj
-    }
-    // Una modificación pendiente o rechazada no debe aplicarse sin aprobarla
-    const isApprovedRequest = selectedRequest.status === 'active' || selectedRequest.status === 'approved'
     
     try {
       if (selectedRequest.type === 'jugador') {
@@ -1144,10 +1130,9 @@ export function AdminValidations() {
           ]
           const profileDataToUpdate: any = {}
           const candidateAvatar = extractAvatarFromDetails(editingDetails)
-          if (isStoredImageUrl(candidateAvatar) && candidateAvatar !== extractAvatarFromDetails(originalDetails)) {
+          if (candidateAvatar) {
             profileDataToUpdate.avatar_url = candidateAvatar
           }
-          if (imageChangedHere('id_photo_url')) profileDataToUpdate.id_photo_url = (editingDetails as any).id_photo_url
 
           // Si la solicitud ya estaba aprobada, asegurar que no se degrade el player_status en profiles
           if (selectedRequest.status === 'active' || selectedRequest.status === 'approved') {
@@ -1163,15 +1148,13 @@ export function AdminValidations() {
         await supabase.from('validations').update({ details: editingDetails }).eq('id', selectedRequest.id)
       } else if (selectedRequest.type === 'equipo') {
         const targetTeamId = selectedRequest.details?.team_id || selectedRequest.details?.id || selectedRequest.id
-        const { error: err } = await supabase.from('teams').update(stripUnchangedImages({ ...cleanDetails })).eq('id', targetTeamId)
+        const { error: err } = await supabase.from('teams').update(cleanDetails).eq('id', targetTeamId)
         error = err;
         await supabase.from('validations').update({ details: editingDetails }).eq('id', selectedRequest.id)
       } else if (selectedRequest.type === 'modificacion') {
         const isTeamMod = Boolean(selectedRequest.details?.team_id)
-        if (!isApprovedRequest) {
-          // Pendiente o rechazada: solo se corrige la solicitud; se aplicará al aprobarla
-        } else if (isTeamMod) {
-          const { error: err } = await supabase.from('teams').update(stripUnchangedImages({ ...cleanDetails })).eq('id', selectedRequest.details.team_id)
+        if (isTeamMod) {
+          const { error: err } = await supabase.from('teams').update(cleanDetails).eq('id', selectedRequest.details.team_id)
           error = err;
         } else {
           let userId = selectedRequest.details?.user_id || selectedRequest.id
@@ -1192,9 +1175,8 @@ export function AdminValidations() {
               safeProfileUpdates[field] = (cleanDetails as any)[field]
             }
           })
-          stripUnchangedImages(safeProfileUpdates)
           const candidateAvatar = extractAvatarFromDetails(editingDetails)
-          if (isStoredImageUrl(candidateAvatar) && candidateAvatar !== extractAvatarFromDetails(originalDetails)) {
+          if (candidateAvatar) {
             safeProfileUpdates.avatar_url = candidateAvatar
           }
           const { error: err } = await supabase.from('profiles').update(safeProfileUpdates).eq('id', userId)

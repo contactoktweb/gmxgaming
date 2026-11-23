@@ -7,7 +7,7 @@ import { GmxButton } from '@/components/gmx-button'
 import { PhoneInput } from '@/components/forms/phone-input'
 import { FileUpload } from '@/components/forms/file-upload'
 import { cn, formatNickname, formatPersonName, DEFAULT_COUNTRIES } from '@/lib/utils'
-import { compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS } from '@/lib/image-compression'
+import { type CompressionOptions, compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS } from '@/lib/image-compression'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
 import { useDebounce } from '@/hooks/use-debounce'
@@ -249,47 +249,30 @@ function FormContent() {
       let urlPasaporte: string | null = null
       const safeNick = cleanNick.replace(/[^a-zA-Z0-9_-]/g, '') || 'jugador'
 
+      // Sube un archivo del registro. Cualquier fallo (formato que el navegador no puede leer, como
+      // HEIC, o error del almacenamiento) se informa con el mensaje del archivo correspondiente.
+      const uploadPlayerFile = async (file: File, preset: CompressionOptions, bucket: 'avatars' | 'documents', kind: string, failMessage: string) => {
+        try {
+          const compressed = await compressImage(file, preset)
+          const fileExt = compressed.name.split('.').pop()?.toLowerCase() || 'webp'
+          const fileName = `${Date.now()}_${kind}_${safeNick}.${fileExt}`
+          const { error: uploadError, data } = await supabase.storage.from(bucket).upload(fileName, compressed, SUPABASE_STORAGE_CACHE_OPTIONS)
+          if (uploadError || !data) throw uploadError || new Error('no response')
+          return supabase.storage.from(bucket).getPublicUrl(data.path).data.publicUrl
+        } catch (uploadErr: any) {
+          console.warn(`Error uploading ${kind}:`, uploadErr)
+          throw new Error(failMessage)
+        }
+      }
+
       try {
-        if (fotoFile) {
-          const compressedFoto = await compressImage(fotoFile, IMAGE_PRESETS.AVATAR)
-          const fileExt = compressedFoto.name.split('.').pop()?.toLowerCase() || 'webp'
-          const fileName = `${Date.now()}_foto_${safeNick}.${fileExt}`
-          const { error: uploadError, data } = await supabase.storage.from('avatars').upload(fileName, compressedFoto, SUPABASE_STORAGE_CACHE_OPTIONS)
-          if (!uploadError && data) {
-            const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(data.path)
-            urlFoto = publicUrlData.publicUrl
-          } else {
-            throw new Error(t.altaJugador.photoUploadFailed + (uploadError?.message ? ` (${uploadError.message})` : ''))
-          }
-        }
-
-        if (identidadFile) {
-          const compressedId = await compressImage(identidadFile, IMAGE_PRESETS.DOCUMENT)
-          const fileExt = compressedId.name.split('.').pop()?.toLowerCase() || 'webp'
-          const fileName = `${Date.now()}_ine_${safeNick}.${fileExt}`
-          const { error: uploadError, data } = await supabase.storage.from('documents').upload(fileName, compressedId, SUPABASE_STORAGE_CACHE_OPTIONS)
-          if (!uploadError && data) {
-            const { data: publicUrlData } = supabase.storage.from('documents').getPublicUrl(data.path)
-            urlIdentidad = publicUrlData.publicUrl
-          } else {
-            throw new Error(t.altaJugador.idUploadFailed + (uploadError?.message ? ` (${uploadError.message})` : ''))
-          }
-        }
-
-        if (pasaporteFile) {
-          const compressedPassport = await compressImage(pasaporteFile, IMAGE_PRESETS.DOCUMENT)
-          const fileExt = compressedPassport.name.split('.').pop()?.toLowerCase() || 'webp'
-          const fileName = `${Date.now()}_pasaporte_${safeNick}.${fileExt}`
-          const { error: uploadError, data } = await supabase.storage.from('documents').upload(fileName, compressedPassport, SUPABASE_STORAGE_CACHE_OPTIONS)
-          if (!uploadError && data) {
-            const { data: publicUrlData } = supabase.storage.from('documents').getPublicUrl(data.path)
-            urlPasaporte = publicUrlData.publicUrl
-          } else if (uploadError) {
-            console.warn('Warning uploading passport:', uploadError)
-          }
-        }
+        if (fotoFile) urlFoto = await uploadPlayerFile(fotoFile, IMAGE_PRESETS.AVATAR, 'avatars', 'foto', t.altaJugador.photoUploadFailed)
+        if (identidadFile) urlIdentidad = await uploadPlayerFile(identidadFile, IMAGE_PRESETS.DOCUMENT, 'documents', 'ine', t.altaJugador.idUploadFailed)
+        // El pasaporte es opcional, pero si se eligió debe guardarse: no descartarlo en silencio
+        if (pasaporteFile) urlPasaporte = await uploadPlayerFile(pasaporteFile, IMAGE_PRESETS.DOCUMENT, 'documents', 'pasaporte', t.altaJugador.passportUploadFailed)
       } catch (err: any) {
-        // Foto e identificación son obligatorias: no registrar al jugador sin ellas
+        // Los archivos elegidos (foto e identificación obligatorias) deben quedar guardados: no
+        // registrar al jugador sin ellos
         console.error('Error processing player files:', err)
         toast.error(err?.message || t.altaJugador.photoUploadFailed)
         setFormStatus('idle')

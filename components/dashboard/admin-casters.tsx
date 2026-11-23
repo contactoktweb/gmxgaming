@@ -292,6 +292,8 @@ export function AdminCasters() {
       fetchCasters()
     } catch (err: any) {
       console.error('Error al guardar caster:', err)
+      // Si la imagen no se pudo leer, el aviso de carga quedaría girando: sonner no lo cierra solo
+      toast.dismiss('caster-upload')
       toast.error('Error al guardar el caster: ' + (err.message || 'Error desconocido'))
     } finally {
       setIsSaving(false)

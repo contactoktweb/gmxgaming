@@ -31,7 +31,7 @@ import {
   Loader2,
   FileText
 } from 'lucide-react'
-import { cn, formatRoleTitle, formatRolesList, formatNickname, formatPersonName, extractCountry, extractAvatarFromDetails } from '@/lib/utils'
+import { cn, formatRoleTitle, formatRolesList, formatNickname, formatPersonName, extractCountry, extractAvatarFromDetails, isStoredImageUrl } from '@/lib/utils'
 import { compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS } from '@/lib/image-compression'
 import { GmxButton } from '@/components/gmx-button'
 import { useAuth } from '@/lib/auth-context'
@@ -98,7 +98,12 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
     social_kick: '',
     social_x: '',
     social_fb: '',
-    imagesChanged: false
+    imagesChanged: false,
+    // Foto e identificación vigentes al abrir el formulario: al aprobar, una imagen solo se
+    // aplica si es distinta de estas (así no se regresan cambios hechos mientras tanto)
+    originalPhoto: '',
+    originalIdPhoto: '',
+    idPhoto: ''
   })
 
   // Live Database States
@@ -118,7 +123,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
   const playerVal = userValidations.find((v: any) => v.type === 'jugador')
   const teamVal = userValidations.find((v: any) => v.type === 'equipo')
   const contractVal = userValidations.find((v: any) => v.type === 'contrato' || v.type === 'baja_contrato')
-  const modVal = userValidations.find((v: any) => v.type === 'modificacion')
+  const modVal = userValidations.find((v: any) => v.type === 'modificacion' && !v.details?.team_id)
 
   // 1. ESTADO DE JUGADOR PROFESIONAL
   const isPlayer = profileData?.is_player === true || user?.is_player === true
@@ -217,7 +222,6 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
           }
 
           const pVal = validations.find((v: any) => v.type === 'jugador')
-          const modValRecent = validations.find((v: any) => v.type === 'modificacion')
           const pValAvatar = pVal ? extractAvatarFromDetails(pVal.details) : null
 
           if (pVal) {
@@ -232,26 +236,19 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
             // al cargar, y usarlo aquí reemplazaba fotos más nuevas por la del registro.
             const dbAvatar = profile?.avatar_url || ''
             const dbAvatarMissing = !dbAvatar || dbAvatar.includes('placehold.co') || dbAvatar.includes('googleusercontent.com')
-            if (pValAvatar && dbAvatarMissing) {
-              setProfilePhoto(pValAvatar)
-              supabase.from('profiles').update({ avatar_url: pValAvatar }).eq('id', currentUser.id)
+            // Si hay una modificación de foto aprobada, esa es la foto vigente (más nueva que la del registro)
+            const approvedPlayerMod = validations.find((v: any) =>
+              v.type === 'modificacion' && !v.details?.team_id && (v.status === 'approved' || v.status === 'active')
+              && isStoredImageUrl(v.details?.avatar_url) && v.details.avatar_url !== v.details.original_avatar)
+            const fallbackAvatar = approvedPlayerMod?.details?.avatar_url || pValAvatar
+            if (isStoredImageUrl(fallbackAvatar) && dbAvatarMissing) {
+              setProfilePhoto(fallbackAvatar)
+              supabase.from('profiles').update({ avatar_url: fallbackAvatar }).eq('id', currentUser.id)
             }
           }
-
-          // Si hay una modificación que fue rechazada o está pendiente, DEBE mostrarse la imagen antigua
-          if (modValRecent) {
-            const proposedAvatar = modValRecent.details?.avatar_url
-            const originalOldAvatar = modValRecent.details?.original_avatar || pValAvatar
-
-            if ((modValRecent.status === 'rejected' || modValRecent.status === 'pending') && originalOldAvatar && proposedAvatar) {
-              // Si el perfil en BD o en estado local tiene la imagen que se mandó a modificar
-              if (profile?.avatar_url === proposedAvatar) {
-                setProfilePhoto(originalOldAvatar)
-                setProfileData((prev: any) => prev ? ({ ...prev, avatar_url: originalOldAvatar }) : prev)
-                supabase.from('profiles').update({ avatar_url: originalOldAvatar }).eq('id', currentUser.id)
-              }
-            }
-          }
+          // Nota: una modificación pendiente o rechazada no requiere "restaurar" la foto del perfil:
+          // enviarla nunca escribe la foto propuesta en el perfil. Restaurarla aquí regresaba fotos
+          // más nuevas (de un admin o aprobadas) a la del registro cada vez que se abría la cuenta.
         }
 
         // 3. Fetch Teams (Managed teams or Contracted teams)
@@ -421,13 +418,21 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
   const openEditPlayer = () => {
     const pendingDetails = (isRequested || hasRejectedModification) ? (modVal?.details || latestValidation?.details) : null
     const gameInfo = profileData?.player_game_info?.[0] || {}
+    // La solicitud anterior copia la foto/identificación vigentes aunque no las cambie; reutilizarlas
+    // sin más convertía una solicitud sin cambio de foto en un "cambio" que regresaba fotos nuevas
+    const currentPhoto = profileData?.avatar_url || ''
+    const currentIdPhoto = profileData?.id_photo_url || ''
+    const prevProposedPhoto = isStoredImageUrl(pendingDetails?.avatar_url) && pendingDetails.avatar_url !== pendingDetails.original_avatar
+      ? pendingDetails.avatar_url : null
+    const prevProposedIdPhoto = isStoredImageUrl(pendingDetails?.id_photo_url) && pendingDetails.id_photo_url !== pendingDetails.original_id_photo_url
+      ? pendingDetails.id_photo_url : null
 
     setPlayerEditForm({
       name: pendingDetails?.name || profileData?.name || name || '',
       nickname: pendingDetails?.nickname || pendingDetails?.game_nickname || profileData?.nickname || profileData?.game_nickname || '',
       discord_handle: pendingDetails?.discord_handle || profileData?.discord_handle || '',
       bio: pendingDetails?.bio || profileData?.bio || bio || '',
-      profilePhoto: pendingDetails?.avatar_url || profileData?.avatar_url || profilePhoto || null,
+      profilePhoto: prevProposedPhoto || currentPhoto || profilePhoto || null,
       game: pendingDetails?.game || gameInfo.game || 'Mobile Legends',
       game_id: pendingDetails?.game_id || gameInfo.game_id || '',
       server: pendingDetails?.server || gameInfo.server || '',
@@ -439,7 +444,10 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
       social_kick: pendingDetails?.social_kick || profileData?.social_kick || '',
       social_x: pendingDetails?.social_x || profileData?.social_x || '',
       social_fb: pendingDetails?.social_fb || profileData?.social_fb || '',
-      imagesChanged: false
+      imagesChanged: false,
+      originalPhoto: currentPhoto,
+      originalIdPhoto: currentIdPhoto,
+      idPhoto: prevProposedIdPhoto || currentIdPhoto
     })
     setPlayerFotoFile(null)
     setPlayerIdFile(null)
@@ -546,9 +554,11 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
 
         if (error) throw error
 
-        // Registro de jugador aún en revisión: al aprobarlo se aplica la foto de la solicitud,
-        // así que debe llevar la foto nueva o la aprobación la regresaría a la anterior
-        if (!isPlayerApproved && playerVal?.id && playerVal.status === 'pending' && avatarToPersist
+        // Registro de jugador aún no aprobado (pendiente o rechazado, que puede volver a aprobarse):
+        // al aprobarlo se aplica la foto de la solicitud, así que debe llevar la foto nueva o la
+        // aprobación la regresaría a la anterior
+        if (!isPlayerApproved && playerVal?.id && playerVal.status !== 'active' && playerVal.status !== 'approved'
+            && isStoredImageUrl(avatarToPersist)
             && avatarToPersist !== extractAvatarFromDetails(playerVal.details)) {
           await supabase.from('validations').update({
             details: { ...(playerVal.details || {}), avatar_url: avatarToPersist }
@@ -585,6 +595,8 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
       setFotoFile(null)
     } catch (err: any) {
       console.error('Error updating personal profile:', err)
+      // Si la imagen no se pudo leer, el aviso de carga quedaría girando: sonner no lo cierra solo
+      toast.dismiss('user-avatar-upload')
       toast.error('Error al guardar', {
         description: err.message || 'No se pudieron procesar los cambios. Intenta nuevamente.'
       })
@@ -619,7 +631,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
       let avatarUrl = playerEditForm.profilePhoto || profileData.avatar_url || profilePhoto
       // Una vista previa base64 (de una solicitud anterior con subida fallida) no es una foto guardada
       if (typeof avatarUrl === 'string' && avatarUrl.startsWith('data:') && !playerFotoFile) {
-        avatarUrl = profileData.avatar_url || ''
+        avatarUrl = playerEditForm.originalPhoto || ''
       }
 
       // Si subió un archivo nuevo, subirlo al storage bucket de Supabase
@@ -642,7 +654,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
       }
 
       // Documento de identidad (INE / acta / ID): se guarda en el perfil al aprobarse la solicitud
-      let idPhotoUrl: string = profileData?.id_photo_url || ''
+      let idPhotoUrl: string = playerEditForm.idPhoto || ''
       if (playerIdFile) {
         try {
           const compressedId = await compressImage(playerIdFile, IMAGE_PRESETS.DOCUMENT)
@@ -692,7 +704,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
         original_bio: latestValidation?.details?.original_bio || profileData?.bio || bio || '',
         // La foto vigente al enviar: al aprobar, la foto solo se aplica si es distinta de esta.
         // (Antes se tomaba la del registro, y una solicitud sin cambio de foto regresaba la foto.)
-        original_avatar: profileData?.avatar_url || '',
+        original_avatar: playerEditForm.originalPhoto,
         original_game: latestValidation?.details?.original_game || gameInfo.game || 'Mobile Legends',
         original_game_id: latestValidation?.details?.original_game_id || gameInfo.game_id || '',
         original_server: latestValidation?.details?.original_server || gameInfo.server || '',
@@ -704,24 +716,28 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
         original_social_kick: latestValidation?.details?.original_social_kick || profileData?.social_kick || '',
         original_social_x: latestValidation?.details?.original_social_x || profileData?.social_x || '',
         original_social_fb: latestValidation?.details?.original_social_fb || profileData?.social_fb || '',
-        original_id_photo_url: profileData?.id_photo_url || ''
+        original_id_photo_url: playerEditForm.originalIdPhoto
       }
 
       let valError = null
 
       // 1. Identificar validación de modificación previa (pendiente o rechazada)
-      let targetModId = modVal?.id
+      // Solo se reutiliza una solicitud de jugador pendiente o rechazada. Una aprobada es historial
+      // (sobrescribirla la regresaba a pendiente) y una con team_id es la del equipo del manager.
+      const isReusableMod = (v: any) => Boolean(v) && !v.details?.team_id && (v.status === 'pending' || v.status === 'rejected')
+      let targetModId = isReusableMod(modVal) ? modVal.id : undefined
       if (!targetModId) {
         const { data: existingMods } = await supabase
           .from('validations')
-          .select('id')
+          .select('id, status, details')
           .eq('type', 'modificacion')
           .or(`details->>user_id.eq.${user.id},submitted_by.eq.${user.id},submitted_by.eq.${user.email || 'none'}`)
           .order('created_at', { ascending: false })
-          .limit(1)
+          .limit(10)
 
-        if (existingMods && existingMods.length > 0) {
-          targetModId = existingMods[0].id
+        const reusable = (existingMods || []).find(isReusableMod)
+        if (reusable) {
+          targetModId = reusable.id
         }
       }
 
@@ -1990,7 +2006,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                 {/* Subir Documento de Identidad */}
                 <div className={cn(
                   "flex items-center gap-5 rounded-xl border p-3",
-                  !profileData?.id_photo_url && !playerIdFile ? "border-amber-500/40 bg-amber-500/5" : "border-border"
+                  !playerEditForm.idPhoto && !playerIdFile ? "border-amber-500/40 bg-amber-500/5" : "border-border"
                 )}>
                   <input
                     type="file"
@@ -2000,7 +2016,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                     className="hidden"
                   />
                   <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border-2 border-border bg-background">
-                    <FileText className={cn("h-6 w-6", playerIdFile || profileData?.id_photo_url ? "text-primary" : "text-amber-500")} />
+                    <FileText className={cn("h-6 w-6", playerIdFile || playerEditForm.idPhoto ? "text-primary" : "text-amber-500")} />
                   </div>
                   <div className="space-y-1.5 min-w-0">
                     <button
@@ -2009,12 +2025,12 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                       className="flex items-center gap-2 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2 text-xs font-600 uppercase tracking-wider text-white transition-colors cursor-pointer"
                     >
                       <Upload className="w-4 h-4 text-primary" />
-                      {profileData?.id_photo_url ? t.userProfile.replaceIdDocument : t.userProfile.uploadIdDocument}
+                      {playerEditForm.idPhoto ? t.userProfile.replaceIdDocument : t.userProfile.uploadIdDocument}
                     </button>
                     <p className="text-[11px] text-muted-foreground truncate">
                       {playerIdFile
                         ? playerIdFile.name
-                        : profileData?.id_photo_url
+                        : playerEditForm.idPhoto
                           ? t.userProfile.idDocumentOnFile
                           : t.userProfile.idDocumentMissing}
                     </p>

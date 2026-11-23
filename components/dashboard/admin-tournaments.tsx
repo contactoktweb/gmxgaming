@@ -317,16 +317,14 @@ export function AdminTournaments() {
         const fileExt = compressed.name.split('.').pop() || 'webp'
         const fileName = `tourney_${Date.now()}.${fileExt}`
         const { data: uploadData, error: uploadErr } = await supabase.storage.from('teams').upload(fileName, compressed, SUPABASE_STORAGE_CACHE_OPTIONS)
-        if (uploadErr) {
-          console.error('Error al subir imagen personalizada de torneo:', uploadErr)
-          toast.error('Error al subir imagen: ' + uploadErr.message)
-        } else if (uploadData) {
-          const { data: urlData } = supabase.storage.from('teams').getPublicUrl(uploadData.path)
-          logoToUse = urlData.publicUrl
-        }
+        if (uploadErr || !uploadData) throw uploadErr || new Error('Sin respuesta del almacenamiento')
+        const { data: urlData } = supabase.storage.from('teams').getPublicUrl(uploadData.path)
+        logoToUse = urlData.publicUrl
       } catch (uploadException: any) {
+        // No crear el torneo con otra imagen distinta a la que se eligió
         console.error('Error en upload de torneo:', uploadException)
         toast.error('Error al subir imagen: ' + (uploadException?.message || 'Inténtalo de nuevo'))
+        return
       }
     }
 
