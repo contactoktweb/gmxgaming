@@ -8,6 +8,7 @@ import { getTeamSlug } from '@/lib/utils'
 import { useLanguage } from '@/lib/language-context'
 import { ChevronLeft, ChevronRight, MapPin } from 'lucide-react'
 import Link from 'next/link'
+import { SafeImage } from '@/components/safe-image'
 
 export function Teams() {
   const [teams, setTeams] = useState<any[]>([])
@@ -94,7 +95,7 @@ export function Teams() {
             >
               {t.logo_url ? (
                 <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border border-border bg-background transition-transform duration-300 group-hover:scale-110 shadow-lg">
-                  <img src={t.logo_url} alt={t.name} className="h-full w-full object-cover" />
+                  <SafeImage src={t.logo_url} fallbackSrc="/placeholder-logo.png" alt={t.name} className="h-full w-full object-cover" />
                 </div>
               ) : (
                 <span className="flex h-20 w-20 items-center justify-center rounded-full bg-elevated font-display text-3xl font-700 text-primary transition-transform duration-300 group-hover:scale-110 shadow-lg border border-border">

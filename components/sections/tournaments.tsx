@@ -10,6 +10,7 @@ import { getTournamentSlug } from '@/lib/utils'
 import { useLanguage } from '@/lib/language-context'
 import Link from 'next/link'
 import { TOURNAMENTS as DEFAULT_TOURNAMENTS } from '@/lib/site-data'
+import { SafeImage } from '@/components/safe-image'
 
 const entrances = [
   { x: 80, y: 0 }, // left card enters from right
@@ -148,8 +149,9 @@ export function Tournaments() {
               >
                 <Link href={t.href || (t.id ? `/torneos/${getTournamentSlug(t)}` : '/torneos')} className="flex flex-col flex-1">
                   <div className="relative aspect-[16/11] overflow-hidden bg-surface">
-                    <img
-                      src={t.img || '/images/tournament-1.png'}
+                    <SafeImage
+                      src={t.img}
+                      fallbackSrc="/images/tournament-1.png"
                       alt={t.title}
                       className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
                     />

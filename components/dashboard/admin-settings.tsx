@@ -114,15 +114,21 @@ export function AdminSettings() {
     let imageUrl = ''
     if (newGameImage) {
       setSaving(true)
-      const compressed = await compressImage(newGameImage, IMAGE_PRESETS.GAME)
-      const fileExt = compressed.name.split('.').pop() || 'webp'
-      const fileName = `game_${Date.now()}.${fileExt}`
-      const { data, error } = await supabase.storage.from('teams').upload(fileName, compressed, SUPABASE_STORAGE_CACHE_OPTIONS)
-      if (data) {
+      try {
+        const compressed = await compressImage(newGameImage, IMAGE_PRESETS.GAME)
+        const fileExt = compressed.name.split('.').pop() || 'webp'
+        const fileName = `game_${Date.now()}.${fileExt}`
+        const { data, error } = await supabase.storage.from('teams').upload(fileName, compressed, SUPABASE_STORAGE_CACHE_OPTIONS)
+        if (error || !data) throw error || new Error('Sin respuesta del almacenamiento')
         const { data: urlData } = supabase.storage.from('teams').getPublicUrl(data.path)
         imageUrl = urlData.publicUrl
+      } catch (err: any) {
+        // No agregar el juego sin la imagen que se eligió
+        toast.error('Error al subir la imagen del juego: ' + (err?.message || 'Inténtalo de nuevo'))
+        return
+      } finally {
+        setSaving(false)
       }
-      setSaving(false)
     }
 
     setGames([...games, { name: newGame.trim(), image: imageUrl }])
@@ -178,16 +184,20 @@ export function AdminSettings() {
 
     let logoUrl = newTemplate.logo_url
     if (templateImage) {
-      const compressed = await compressImage(templateImage, IMAGE_PRESETS.BANNER)
-      const fileExt = compressed.name.split('.').pop() || 'webp'
-      const fileName = `tmpl_${Date.now()}.${fileExt}`
-      const { data: uploadData, error: uploadErr } = await supabase.storage.from('teams').upload(fileName, compressed, SUPABASE_STORAGE_CACHE_OPTIONS)
-      if (uploadErr) {
-        console.error('Error al subir imagen de plantilla:', uploadErr)
-        toast.error('Error al subir la imagen de la plantilla: ' + uploadErr.message)
-      } else if (uploadData) {
+      try {
+        const compressed = await compressImage(templateImage, IMAGE_PRESETS.BANNER)
+        const fileExt = compressed.name.split('.').pop() || 'webp'
+        const fileName = `tmpl_${Date.now()}.${fileExt}`
+        const { data: uploadData, error: uploadErr } = await supabase.storage.from('teams').upload(fileName, compressed, SUPABASE_STORAGE_CACHE_OPTIONS)
+        if (uploadErr || !uploadData) throw uploadErr || new Error('Sin respuesta del almacenamiento')
         const { data: urlData } = supabase.storage.from('teams').getPublicUrl(uploadData.path)
         logoUrl = urlData.publicUrl
+      } catch (err: any) {
+        // No crear la plantilla sin la imagen que se eligió
+        console.error('Error al subir imagen de plantilla:', err)
+        toast.error('Error al subir la imagen de la plantilla: ' + (err?.message || 'Inténtalo de nuevo'))
+        setSaving(false)
+        return
       }
     }
     const { data, error } = await supabase.from('tournament_templates').insert({

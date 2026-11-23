@@ -250,6 +250,11 @@ export function AltaEquipoForm() {
     const cleanTeamName = teamName.trim().toUpperCase()
     const cleanTag = teamTag.trim().toUpperCase()
 
+    if (!logoFile) {
+      toast.error('El logo del equipo es obligatorio.')
+      return
+    }
+
     if (!cleanTeamName) {
       toast.error('Por favor ingresa el nombre del equipo.')
       return
@@ -311,8 +316,8 @@ export function AltaEquipoForm() {
           if (!uploadError && data) {
             const { data: publicUrlData } = supabase.storage.from('teams').getPublicUrl(data.path)
             urlLogo = publicUrlData.publicUrl
-          } else if (uploadError) {
-            console.warn('Advertencia subiendo logo del equipo:', uploadError)
+          } else {
+            throw new Error('No se pudo subir el logo del equipo' + (uploadError?.message ? ` (${uploadError.message})` : '') + '. Intenta con otra imagen en JPG o PNG.')
           }
         }
 
@@ -324,12 +329,16 @@ export function AltaEquipoForm() {
           if (!uploadError && data) {
             const { data: publicUrlData } = supabase.storage.from('teams').getPublicUrl(data.path)
             urlJersey = publicUrlData.publicUrl
-          } else if (uploadError) {
-            console.warn('Advertencia subiendo jersey del equipo:', uploadError)
+          } else {
+            throw new Error('No se pudo subir el jersey' + (uploadError?.message ? ` (${uploadError.message})` : '') + '. Intenta con otra imagen en JPG o PNG.')
           }
         }
-      } catch (err) {
+      } catch (err: any) {
+        // El logo es obligatorio: no registrar el equipo con una imagen de relleno
         console.error('Error procesando archivos del equipo:', err)
+        toast.error(err?.message || 'No se pudo subir el logo del equipo.')
+        setFormStatus('idle')
+        return
       }
 
       const tipoEquipoVal = (formData.get('item_meta[782]') as string) || 'Varonil / Mixto'

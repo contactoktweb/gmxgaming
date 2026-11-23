@@ -8,6 +8,7 @@ import { Reveal } from '@/components/anim'
 import { PLAYERS } from '@/lib/site-data'
 import { createClient } from '@/utils/supabase/client'
 import { useLanguage } from '@/lib/language-context'
+import { SafeImage } from '@/components/safe-image'
 
 type FeaturedPlayer = {
   id: string
@@ -157,8 +158,9 @@ export function Players() {
                 className="group relative aspect-[3/4] overflow-hidden border border-border clip-corner"
                 data-cursor
               >
-                <img
-                  src={p.img || '/placeholder.svg'}
+                <SafeImage
+                  src={p.img}
+                  fallbackSrc="/placeholder.svg"
                   alt={`${p.name} — ${p.team}`}
                   className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
                 />

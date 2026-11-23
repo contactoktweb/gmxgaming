@@ -404,6 +404,14 @@ export function isValidPersonName(value: string): boolean {
  * arrays, formatos de WordPress/Formidable Forms y URLs directas del bucket de Supabase,
  * filtrando placeholders y documentos (INE, pasaporte, PDFs).
  */
+/**
+ * true solo para un enlace http(s) real a una imagen guardada. Descarta vistas previas
+ * locales (blob:, data:) e imágenes de relleno, que no deben escribirse en la base de datos.
+ */
+export function isStoredImageUrl(url: unknown): url is string {
+  return typeof url === 'string' && /^https?:\/\//i.test(url.trim()) && !url.includes('placehold.co')
+}
+
 export function extractAvatarFromDetails(details: any): string | null {
   if (!details || typeof details !== 'object') return null
 

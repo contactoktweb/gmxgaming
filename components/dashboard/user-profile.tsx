@@ -617,6 +617,10 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
     try {
       const gameInfo = profileData.player_game_info?.[0] || {}
       let avatarUrl = playerEditForm.profilePhoto || profileData.avatar_url || profilePhoto
+      // Una vista previa base64 (de una solicitud anterior con subida fallida) no es una foto guardada
+      if (typeof avatarUrl === 'string' && avatarUrl.startsWith('data:') && !playerFotoFile) {
+        avatarUrl = profileData.avatar_url || ''
+      }
 
       // Si subió un archivo nuevo, subirlo al storage bucket de Supabase
       if (playerFotoFile) {
@@ -686,9 +690,9 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
         original_game_nickname: latestValidation?.details?.original_game_nickname || profileData?.game_nickname || profileData?.nickname || '',
         original_discord_handle: latestValidation?.details?.original_discord_handle || profileData?.discord_handle || '',
         original_bio: latestValidation?.details?.original_bio || profileData?.bio || bio || '',
-        original_avatar: (latestValidation?.details?.original_avatar && latestValidation.details.original_avatar !== avatarUrl)
-          ? latestValidation.details.original_avatar
-          : (extractAvatarFromDetails(playerVal?.details) || profileData?.avatar_url || profilePhoto || ''),
+        // La foto vigente al enviar: al aprobar, la foto solo se aplica si es distinta de esta.
+        // (Antes se tomaba la del registro, y una solicitud sin cambio de foto regresaba la foto.)
+        original_avatar: profileData?.avatar_url || '',
         original_game: latestValidation?.details?.original_game || gameInfo.game || 'Mobile Legends',
         original_game_id: latestValidation?.details?.original_game_id || gameInfo.game_id || '',
         original_server: latestValidation?.details?.original_server || gameInfo.server || '',
@@ -1614,6 +1618,23 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                     )}
                   </div>
 
+                  {isPlayerApproved && profileData?.avatar_url ? (
+                    // La foto oficial de un jugador aprobado solo cambia con una solicitud aprobada;
+                    // aquí se ignoraría, así que se envía al formulario de modificación
+                    <div className="space-y-1.5">
+                      <button
+                        type="button"
+                        onClick={() => { setIsEditing(false); openEditPlayer() }}
+                        className="flex items-center gap-2 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2 text-xs font-600 uppercase tracking-wider text-white transition-colors cursor-pointer"
+                      >
+                        <Upload className="w-4 h-4 text-primary" />
+                        {t.userProfile.changePlayerPhoto}
+                      </button>
+                      <p className="text-[11px] text-muted-foreground">
+                        {t.userProfile.officialPhotoViaRequest}
+                      </p>
+                    </div>
+                  ) : (
                   <div className="space-y-1.5">
                     <button
                       type="button"
@@ -1627,6 +1648,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
                       {t.userProfile.recommendedFormats}
                     </p>
                   </div>
+                  )}
                 </div>
               </div>
 

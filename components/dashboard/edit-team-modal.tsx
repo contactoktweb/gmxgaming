@@ -7,7 +7,7 @@ import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
 import { useLanguage } from '@/lib/language-context'
 import { toast } from 'sonner'
-import { cn, formatNickname, formatPersonName, DEFAULT_COUNTRIES } from '@/lib/utils'
+import { cn, formatNickname, formatPersonName, DEFAULT_COUNTRIES, isStoredImageUrl } from '@/lib/utils'
 import { compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS } from '@/lib/image-compression'
 import { useDebounce } from '@/hooks/use-debounce'
 
@@ -353,9 +353,11 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
           setSelectedGames(['Mobile Legends'])
         }
 
-        setLogoUrl(d?.logo_url || team.logo_url || '')
+        // Solo se reutiliza la imagen de una solicitud previa si es un archivo realmente guardado
+        // (una vista previa blob:/data: de una subida fallida dejaría el logo roto)
+        setLogoUrl((isStoredImageUrl(d?.logo_url) ? d.logo_url : '') || team.logo_url || '')
         setLogoFile(null)
-        setJerseyUrl(d?.jersey_url || team.jersey_url || '')
+        setJerseyUrl((isStoredImageUrl(d?.jersey_url) ? d.jersey_url : '') || team.jersey_url || '')
         setJerseyFile(null)
 
         setSocialIg(d?.social_ig || team.social_ig || '')
@@ -453,31 +455,33 @@ export function EditTeamModal({ team, isOpen, onClose, onSuccess, validation }: 
 
     setIsSubmitting(true)
     try {
-      let finalLogoUrl = logoUrl
-      let finalJerseyUrl = jerseyUrl
+      // logoUrl/jerseyUrl pueden ser la vista previa local (blob:) del archivo elegido: si la
+      // subida falla hay que detenerse, porque guardar ese enlace dejaría la imagen rota
+      let finalLogoUrl = isStoredImageUrl(logoUrl) ? logoUrl : (team.logo_url || '')
+      let finalJerseyUrl = isStoredImageUrl(jerseyUrl) ? jerseyUrl : (team.jersey_url || '')
+      // Supabase rechaza nombres de archivo con acentos o símbolos (p. ej. "Ĕ", "#")
+      const safeName = name.trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'team'
 
       // Subir nuevo logo si se seleccionó archivo
       if (logoFile) {
         const compressedLogo = await compressImage(logoFile, IMAGE_PRESETS.LOGO)
         const fileExt = compressedLogo.name.split('.').pop() || 'webp'
-        const fileName = `${Date.now()}_logo_${name.trim().replace(/\s+/g, '_')}.${fileExt}`
+        const fileName = `${Date.now()}_logo_${safeName}.${fileExt}`
         const { data, error: uploadErr } = await supabase.storage.from('teams').upload(fileName, compressedLogo, SUPABASE_STORAGE_CACHE_OPTIONS)
-        if (!uploadErr && data) {
-          const { data: pUrl } = supabase.storage.from('teams').getPublicUrl(data.path)
-          finalLogoUrl = pUrl.publicUrl
-        }
+        if (uploadErr || !data) throw new Error('No se pudo subir el logo: ' + (uploadErr?.message || 'intenta con otra imagen'))
+        const { data: pUrl } = supabase.storage.from('teams').getPublicUrl(data.path)
+        finalLogoUrl = pUrl.publicUrl
       }
 
       // Subir nuevo jersey si se seleccionó archivo
       if (jerseyFile) {
         const compressedJersey = await compressImage(jerseyFile, IMAGE_PRESETS.JERSEY)
         const fileExt = compressedJersey.name.split('.').pop() || 'webp'
-        const fileName = `${Date.now()}_jersey_${name.trim().replace(/\s+/g, '_')}.${fileExt}`
+        const fileName = `${Date.now()}_jersey_${safeName}.${fileExt}`
         const { data, error: uploadErr } = await supabase.storage.from('teams').upload(fileName, compressedJersey, SUPABASE_STORAGE_CACHE_OPTIONS)
-        if (!uploadErr && data) {
-          const { data: pUrl } = supabase.storage.from('teams').getPublicUrl(data.path)
-          finalJerseyUrl = pUrl.publicUrl
-        }
+        if (uploadErr || !data) throw new Error('No se pudo subir el jersey: ' + (uploadErr?.message || 'intenta con otra imagen'))
+        const { data: pUrl } = supabase.storage.from('teams').getPublicUrl(data.path)
+        finalJerseyUrl = pUrl.publicUrl
       }
 
       const fullManagerName = `${managerFirstName.trim()} ${managerLastName.trim()}`.trim().toUpperCase()

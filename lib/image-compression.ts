@@ -59,15 +59,19 @@ export const IMAGE_PRESETS = {
 
 /**
  * Comprime un archivo de imagen en el navegador redimensionándolo y convirtiéndolo a WebP.
- * Si el archivo es un PDF u otro formato no imagen, o si la compresión falla,
- * devuelve el archivo original de forma segura.
+ * Si el archivo es un PDF u otro formato no imagen, lo devuelve sin cambios. Si la compresión
+ * falla, devuelve el original cuando es un formato que los navegadores muestran (JPG, PNG,
+ * WebP, GIF) y si no lo es (p. ej. HEIC) lanza un error para no subir una imagen que no se vería.
  */
 export async function compressImage(
   file: File,
   options: CompressionOptions = IMAGE_PRESETS.AVATAR
 ): Promise<File> {
+  // Fotos HEIC/HEIF (iPhone): algunos navegadores ni siquiera reportan su tipo
+  const isHeic = /hei[cf]/i.test(file?.type || '') || /\.hei[cf]$/i.test(file?.name || '')
+
   // Si no estamos en el navegador o el archivo no es una imagen compresible (ej: PDF, SVG, GIF animado), retornamos original
-  if (typeof window === 'undefined' || !file || !file.type.startsWith('image/')) {
+  if (typeof window === 'undefined' || !file || (!file.type.startsWith('image/') && !isHeic)) {
     return file
   }
 
@@ -84,7 +88,17 @@ export async function compressImage(
     fileNamePrefix,
   } = options
 
-  return new Promise((resolve) => {
+  // Formatos que cualquier navegador muestra aunque no se puedan recomprimir aquí
+  const WEB_DISPLAYABLE = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+  // Si el navegador no puede leer la imagen, solo se conserva el original cuando es un formato
+  // que se puede mostrar; subir un HEIC sin convertir dejaría la foto rota para casi todos
+  const unreadable = () => new Error('Este formato de imagen no es compatible (por ejemplo, HEIC de iPhone). Usa una foto en JPG o PNG.')
+
+  return new Promise((resolve, reject) => {
+    const keepOriginalOrFail = () => {
+      if (WEB_DISPLAYABLE.includes(file.type)) resolve(file)
+      else reject(unreadable())
+    }
     const reader = new FileReader()
 
     reader.onload = (e) => {
@@ -107,7 +121,7 @@ export async function compressImage(
 
           const ctx = canvas.getContext('2d')
           if (!ctx) {
-            resolve(file)
+            keepOriginalOrFail()
             return
           }
 
@@ -120,7 +134,7 @@ export async function compressImage(
           canvas.toBlob(
             (blob) => {
               if (!blob) {
-                resolve(file)
+                keepOriginalOrFail()
                 return
               }
 
@@ -149,19 +163,19 @@ export async function compressImage(
           )
         } catch (err) {
           console.warn('Error durante la compresión de imagen, usando archivo original:', err)
-          resolve(file)
+          keepOriginalOrFail()
         }
       }
 
       img.onerror = () => {
-        resolve(file)
+        keepOriginalOrFail()
       }
 
       img.src = e.target?.result as string
     }
 
     reader.onerror = () => {
-      resolve(file)
+      keepOriginalOrFail()
     }
 
     reader.readAsDataURL(file)

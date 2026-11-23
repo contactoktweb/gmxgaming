@@ -326,6 +326,7 @@ export function AdminTournaments() {
         }
       } catch (uploadException: any) {
         console.error('Error en upload de torneo:', uploadException)
+        toast.error('Error al subir imagen: ' + (uploadException?.message || 'Inténtalo de nuevo'))
       }
     }
 
