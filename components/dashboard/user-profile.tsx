@@ -227,8 +227,12 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
               supabase.from('profiles').update({ is_player: true, player_status: 'active' }).eq('id', currentUser.id)
             }
 
-            // Si el perfil no tiene avatar válido pero la validación sí tenía foto subida
-            if (pValAvatar && (!profile?.avatar_url || profile.avatar_url.includes('placehold.co') || !profilePhoto || profilePhoto.includes('placehold.co'))) {
+            // Si el perfil no tiene avatar válido pero la validación sí tenía foto subida.
+            // Se decide solo con el dato de la BD: el estado local (profilePhoto) puede estar vacío
+            // al cargar, y usarlo aquí reemplazaba fotos más nuevas por la del registro.
+            const dbAvatar = profile?.avatar_url || ''
+            const dbAvatarMissing = !dbAvatar || dbAvatar.includes('placehold.co') || dbAvatar.includes('googleusercontent.com')
+            if (pValAvatar && dbAvatarMissing) {
               setProfilePhoto(pValAvatar)
               supabase.from('profiles').update({ avatar_url: pValAvatar }).eq('id', currentUser.id)
             }
@@ -241,7 +245,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
 
             if ((modValRecent.status === 'rejected' || modValRecent.status === 'pending') && originalOldAvatar && proposedAvatar) {
               // Si el perfil en BD o en estado local tiene la imagen que se mandó a modificar
-              if (profile?.avatar_url === proposedAvatar || profilePhoto === proposedAvatar || !profile?.avatar_url) {
+              if (profile?.avatar_url === proposedAvatar) {
                 setProfilePhoto(originalOldAvatar)
                 setProfileData((prev: any) => prev ? ({ ...prev, avatar_url: originalOldAvatar }) : prev)
                 supabase.from('profiles').update({ avatar_url: originalOldAvatar }).eq('id', currentUser.id)
@@ -508,10 +512,17 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
           const { error: uploadError, data } = await supabase.storage.from('avatars').upload(fileName, compressed, SUPABASE_STORAGE_CACHE_OPTIONS)
           toast.dismiss('user-avatar-upload')
 
-          if (!uploadError && data) {
-            const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(data.path)
-            finalAvatarUrl = publicUrlData.publicUrl
+          if (uploadError || !data) {
+            // editForm.profilePhoto es la vista previa en base64: no debe guardarse como URL
+            toast.error('No se pudo subir la foto de perfil', {
+              description: uploadError?.message || 'Intenta con otra imagen en formato JPG o PNG.'
+            })
+            return
           }
+          const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(data.path)
+          finalAvatarUrl = publicUrlData.publicUrl
+        } else if (typeof finalAvatarUrl === 'string' && finalAvatarUrl.startsWith('data:')) {
+          finalAvatarUrl = profileData?.avatar_url || null
         }
 
         const formattedName = formatPersonName(editForm.name).trim()
@@ -534,6 +545,15 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
         }).eq('id', user.id)
 
         if (error) throw error
+
+        // Registro de jugador aún en revisión: al aprobarlo se aplica la foto de la solicitud,
+        // así que debe llevar la foto nueva o la aprobación la regresaría a la anterior
+        if (!isPlayerApproved && playerVal?.id && playerVal.status === 'pending' && avatarToPersist
+            && avatarToPersist !== extractAvatarFromDetails(playerVal.details)) {
+          await supabase.from('validations').update({
+            details: { ...(playerVal.details || {}), avatar_url: avatarToPersist }
+          }).eq('id', playerVal.id)
+        }
 
         setName(formattedName)
         setBio(editForm.bio.trim())
