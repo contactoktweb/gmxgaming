@@ -7,6 +7,7 @@ import { GmxButton } from '@/components/gmx-button'
 import { createClient } from '@/utils/supabase/client'
 import { toast } from 'sonner'
 import { cn, formatNickname, formatPersonName, extractAvatarFromDetails, isStoredImageUrl } from '@/lib/utils'
+import { ViewableImg, ViewableFileLink } from '@/components/viewable-file'
 import { useDebounce } from '@/hooks/use-debounce'
 import { AdminPagination } from '@/components/dashboard/admin-pagination'
 
@@ -1746,7 +1747,7 @@ export function AdminValidations() {
                                     <div className="flex items-center gap-3">
                                       <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-border bg-background shrink-0">
                                         {diff.originalValue ? (
-                                          <img src={diff.originalValue} alt="Original" className="w-full h-full object-cover" />
+                                          <ViewableImg src={diff.originalValue} alt="Original" className="w-full h-full object-cover" />
                                         ) : (
                                           <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground text-center p-1">Sin imagen</div>
                                         )}
@@ -1777,7 +1778,7 @@ export function AdminValidations() {
                                     <div className="flex items-center gap-3">
                                       <div className="relative w-16 h-16 rounded-xl overflow-hidden border-2 border-emerald-500/40 bg-background shrink-0 shadow-md">
                                         {diff.newValue ? (
-                                          <img src={diff.newValue} alt="Nuevo" className="w-full h-full object-cover" />
+                                          <ViewableImg src={diff.newValue} alt="Nuevo" className="w-full h-full object-cover" />
                                         ) : (
                                           <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground text-center p-1">Sin imagen</div>
                                         )}
@@ -1926,7 +1927,7 @@ export function AdminValidations() {
                           {isImage ? (
                             <div className="rounded-xl border border-border bg-background p-4 flex flex-col sm:flex-row items-start sm:items-center gap-5">
                               <div className="relative w-24 h-24 shrink-0 rounded-xl overflow-hidden border-2 border-border bg-surface shadow-md">
-                                <img src={value as string} alt={labelTitle} className="w-full h-full object-cover" />
+                                <ViewableImg src={value as string} alt={labelTitle} className="w-full h-full object-cover" />
                               </div>
                               <div className="flex flex-col gap-2">
                                 <button 
@@ -1940,7 +1941,7 @@ export function AdminValidations() {
                               </div>
                             </div>
                           ) : isPdf ? (
-                            <a 
+                            <ViewableFileLink 
                               href={value as string} 
                               target="_blank" 
                               rel="noopener noreferrer" 
@@ -1951,7 +1952,7 @@ export function AdminValidations() {
                                 <span className="text-sm font-600 truncate">{labelTitle}</span>
                               </div>
                               <ScrollText className="w-4 h-4 shrink-0 opacity-50 group-hover:opacity-100" />
-                            </a>
+                            </ViewableFileLink>
                           ) : isBoolean ? (
                             <div className="rounded-xl border border-border bg-background/80 px-4 py-3 text-white text-sm font-600">
                               {value ? 'Sí' : 'No'}
@@ -2140,7 +2141,7 @@ export function AdminValidations() {
           <p className="absolute top-6 left-6 text-xs font-600 uppercase tracking-widest text-white/50">
             {lightboxImage.label}
           </p>
-          <img 
+          <ViewableImg 
             src={lightboxImage.src} 
             alt={lightboxImage.label} 
             className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl animate-in zoom-in-95 duration-200"

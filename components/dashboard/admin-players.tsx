@@ -7,7 +7,8 @@ import { useAuth } from '@/lib/auth-context'
 import { GmxButton } from '@/components/gmx-button'
 import { toast } from 'sonner'
 import { cn, formatNickname, formatPersonName, formatRoleTitle, extractCountry, DEFAULT_COUNTRIES, extractAvatarFromDetails, isStoredImageUrl } from '@/lib/utils'
-import { compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS } from '@/lib/image-compression'
+import { ViewableImg, ViewableFileLink } from '@/components/viewable-file'
+import { compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS, SUPABASE_STORAGE_DOCUMENT_OPTIONS } from '@/lib/image-compression'
 import { AdminPagination } from '@/components/dashboard/admin-pagination'
 
 const FIELD_LABELS: Record<string, string> = {
@@ -636,7 +637,8 @@ export function AdminPlayers() {
       const fileExt = compressed.name.split('.').pop() || 'webp'
       const bucket = isAvatar ? 'avatars' : 'documents'
       const fileName = `player_${fieldKey}_${Date.now()}.${fileExt}`
-      const { data, error } = await supabase.storage.from(bucket).upload(fileName, compressed, SUPABASE_STORAGE_CACHE_OPTIONS)
+      const uploadOptions = bucket === 'documents' ? SUPABASE_STORAGE_DOCUMENT_OPTIONS : SUPABASE_STORAGE_CACHE_OPTIONS
+      const { data, error } = await supabase.storage.from(bucket).upload(fileName, compressed, uploadOptions)
       if (error) throw error
       const { data: pUrl } = supabase.storage.from(bucket).getPublicUrl(data.path)
       setEditingDetails((prev: any) => ({ ...prev, [fieldKey]: pUrl.publicUrl }))
@@ -1533,12 +1535,12 @@ export function AdminPlayers() {
                             <label className="text-xs font-600 text-muted-foreground uppercase block">{item.label}</label>
                             <div className="relative w-full h-36 rounded-xl border border-border bg-surface overflow-hidden flex items-center justify-center group">
                               {url && /\.pdf($|\?)/i.test(url) ? (
-                                <a href={url} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-1.5 text-xs font-600 text-primary hover:underline">
+                                <ViewableFileLink href={url} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-1.5 text-xs font-600 text-primary hover:underline">
                                   <FileText className="w-7 h-7" />
                                   Ver PDF
-                                </a>
+                                </ViewableFileLink>
                               ) : url ? (
-                                <img src={url} alt={item.label} className="w-full h-full object-cover" />
+                                <ViewableImg src={url} alt={item.label} className="w-full h-full object-cover" />
                               ) : (
                                 <div className="text-center p-3 text-muted-foreground text-xs">
                                   <ImageIcon className="w-6 h-6 mx-auto mb-1 opacity-50" />
@@ -1928,7 +1930,7 @@ export function AdminPlayers() {
           <p className="absolute top-6 left-6 text-xs font-600 uppercase tracking-widest text-white/50">
             {lightboxImage.label}
           </p>
-          <img 
+          <ViewableImg 
             src={lightboxImage.src} 
             alt={lightboxImage.label} 
             className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl animate-in zoom-in-95 duration-200"

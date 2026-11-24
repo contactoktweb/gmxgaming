@@ -7,7 +7,7 @@ import { GmxButton } from '@/components/gmx-button'
 import { PhoneInput } from '@/components/forms/phone-input'
 import { FileUpload } from '@/components/forms/file-upload'
 import { cn, formatNickname, formatPersonName, DEFAULT_COUNTRIES } from '@/lib/utils'
-import { type CompressionOptions, compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS } from '@/lib/image-compression'
+import { type CompressionOptions, compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS, SUPABASE_STORAGE_DOCUMENT_OPTIONS } from '@/lib/image-compression'
 import { createClient } from '@/utils/supabase/client'
 import { useAuth } from '@/lib/auth-context'
 import { useDebounce } from '@/hooks/use-debounce'
@@ -256,7 +256,8 @@ function FormContent() {
           const compressed = await compressImage(file, preset)
           const fileExt = compressed.name.split('.').pop()?.toLowerCase() || 'webp'
           const fileName = `${Date.now()}_${kind}_${safeNick}.${fileExt}`
-          const { error: uploadError, data } = await supabase.storage.from(bucket).upload(fileName, compressed, SUPABASE_STORAGE_CACHE_OPTIONS)
+          const uploadOptions = bucket === 'documents' ? SUPABASE_STORAGE_DOCUMENT_OPTIONS : SUPABASE_STORAGE_CACHE_OPTIONS
+          const { error: uploadError, data } = await supabase.storage.from(bucket).upload(fileName, compressed, uploadOptions)
           if (uploadError || !data) throw uploadError || new Error('no response')
           return supabase.storage.from(bucket).getPublicUrl(data.path).data.publicUrl
         } catch (uploadErr: any) {

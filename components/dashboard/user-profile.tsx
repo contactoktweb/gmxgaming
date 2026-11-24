@@ -32,7 +32,7 @@ import {
   FileText
 } from 'lucide-react'
 import { cn, formatRoleTitle, formatRolesList, formatNickname, formatPersonName, extractCountry, extractAvatarFromDetails, isStoredImageUrl } from '@/lib/utils'
-import { compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS } from '@/lib/image-compression'
+import { compressImage, IMAGE_PRESETS, SUPABASE_STORAGE_CACHE_OPTIONS, SUPABASE_STORAGE_DOCUMENT_OPTIONS } from '@/lib/image-compression'
 import { GmxButton } from '@/components/gmx-button'
 import { useAuth } from '@/lib/auth-context'
 import { createClient } from '@/utils/supabase/client'
@@ -668,7 +668,7 @@ export function UserProfile({ onNavigateTab }: UserProfileProps) {
           const compressedId = await compressImage(playerIdFile, IMAGE_PRESETS.DOCUMENT)
           const fileExt = compressedId.name.split('.').pop()?.toLowerCase() || 'webp'
           const fileName = `${Date.now()}_ine_${user.id}.${fileExt}`
-          const { error: uploadError, data } = await supabase.storage.from('documents').upload(fileName, compressedId, SUPABASE_STORAGE_CACHE_OPTIONS)
+          const { error: uploadError, data } = await supabase.storage.from('documents').upload(fileName, compressedId, SUPABASE_STORAGE_DOCUMENT_OPTIONS)
           if (uploadError || !data) throw uploadError || new Error('Sin respuesta del almacenamiento')
           const { data: publicUrlData } = supabase.storage.from('documents').getPublicUrl(data.path)
           idPhotoUrl = publicUrlData.publicUrl
