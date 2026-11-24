@@ -183,20 +183,21 @@ export async function compressImage(
 }
 
 /**
- * Opciones estándar de caché para Supabase Storage (1 año = 31536000 segundos)
+ * Opciones para subir fotos e imágenes públicas (buckets 'avatars' y 'teams'): caché de 1 año.
+ * Sin upsert: con upsert Supabase exige además permiso para leer y reemplazar archivos, que solo
+ * tienen los administradores, y la subida de un jugador o manager fallaría. Cada archivo se sube
+ * con un nombre único, así que nunca hace falta sobrescribir uno existente.
  */
+export const SUPABASE_STORAGE_CACHE_OPTIONS = {
+  cacheControl: '31536000',
+  upsert: false,
+} as const
+
 /**
- * Opciones para subir documentos privados (INE, pasaporte) al bucket 'documents'. Sin upsert: con
- * upsert Supabase exige además permiso de lectura y de modificación, que en ese bucket solo tienen
- * los administradores, y la subida de un jugador fallaría. Los nombres son únicos, así que no hace
- * falta sobrescribir.
+ * Opciones para subir documentos privados (INE, pasaporte) al bucket 'documents'. Sin upsert, por
+ * lo mismo: en ese bucket solo los administradores pueden leer o reemplazar archivos.
  */
 export const SUPABASE_STORAGE_DOCUMENT_OPTIONS = {
   cacheControl: '3600',
   upsert: false,
-} as const
-
-export const SUPABASE_STORAGE_CACHE_OPTIONS = {
-  cacheControl: '31536000',
-  upsert: true,
 } as const
